@@ -1,0 +1,251 @@
+-- Beacon.lua
+local addonName, addonTable = ...
+local Beacon = addonTable.Beacon
+local Engine = addonTable.Engine
+local PathPlanner = addonTable.PathPlanner
+local Helpers = addonTable.Helpers
+
+local frame = nil
+local arrow = nil
+local textDistance = nil
+local textNode = nil
+local updateInterval = 0.05 -- 20 FPS for smoothness
+
+local PATH_CHECK_INTERVAL = 0.5 -- how often to judge "closer or farther", not every tick (avoids jitter)
+local PATH_DEADBAND_YARDS = 1.5 -- ignore tiny fluctuations smaller than this
+local pathCheckTimer = 0
+local lastPathDistance = nil
+local isOnPath = true
+local ON_PATH_COLOR = { 0.25, 0.95, 0.35 }
+local OFF_PATH_COLOR = { 0.95, 0.25, 0.25 }
+
+local ARROW_STYLES = {
+    custom1 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow1",
+    custom2 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow2",
+    custom3 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow3",
+    blizzard = "Interface\\Minimap\\MiniMap-DeadArrow",
+}
+Beacon.ARROW_STYLES = { "custom3", "custom1", "custom2", "blizzard" }
+Beacon.ARROW_STYLE_LABELS = {
+    custom1 = "Custom Arrow 1",
+    custom2 = "Custom Arrow 2",
+    custom3 = "Custom Arrow 3 (default)",
+    blizzard = "Default (Blizzard)",
+}
+
+-- Applies whichever arrow texture is currently selected. Safe to call any time,
+-- including before the frame exists yet (no-op in that case).
+function Beacon:ApplyArrowStyle()
+    if not arrow then return end
+    local styleKey = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom3"
+    arrow:SetTexture(ARROW_STYLES[styleKey] or ARROW_STYLES.custom3)
+    arrow:SetVertexColor(1, 1, 1, 1)
+    self:Retarget()
+end
+
+function Beacon:Init()
+    if frame then return end
+    
+    -- Create the main frame
+    frame = CreateFrame("Frame", "XalsXRCompassFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(70, 70)
+    
+    -- Configure dragging and position
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    
+    local pos = XalsXRDB.compassPosition
+    if pos and pos.y == 100 and pos.x == 0 and pos.point == "CENTER" then
+        pos.y = 180
+    end
+    pos = Helpers.SanitizePoint(pos, { point = "CENTER", x = 0, y = 180 })
+    XalsXRDB.compassPosition = pos
+    frame:ClearAllPoints()
+    frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
+    
+    frame:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    
+    frame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, _, x, y = self:GetPoint()
+        if Helpers.IsValidPoint({ point = point, x = x, y = y }) then
+            XalsXRDB.compassPosition = { point = point, x = x, y = y }
+        end
+        -- If GetPoint() came back malformed (interrupted drag), leave the last
+        -- known-good saved position alone rather than saving something broken.
+    end)
+    
+    -- Right-click to skip the current node
+    frame:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" then
+            PathPlanner:SkipPin()
+        end
+    end)
+    
+    -- Explanatory tooltip
+    frame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("|cff00ccffXal's XR: Beacon|r")
+        GameTooltip:AddLine("Drag with |cff00ff00Left-Click|r to move.")
+        GameTooltip:AddLine("|cffff9900Right-Click|r to skip this node.")
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    -- Navigation arrow in the center
+    arrow = frame:CreateTexture(nil, "ARTWORK")
+    arrow:SetSize(52, 52)
+    arrow:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    Beacon:ApplyArrowStyle()
+    
+    -- Distance text
+    textDistance = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local fontName, fontSize, fontFlags = textDistance:GetFont()
+    textDistance:SetFont(fontName, 15, "OUTLINE")
+    textDistance:SetPoint("BOTTOM", frame, "BOTTOM", 0, -18)
+    textDistance:SetTextColor(1, 1, 1, 1) -- White
+    
+    -- Node name text
+    textNode = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local fontNameN, fontSizeN, fontFlagsN = textNode:GetFont()
+    textNode:SetFont(fontNameN, 11, "OUTLINE")
+    textNode:SetPoint("TOP", frame, "TOP", 0, 14)
+    textNode:SetTextColor(0, 0.8, 1, 1) -- Bright blue
+    
+    frame:Hide()
+    
+    -- Update loop
+    local elapsedTimer = 0
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        elapsedTimer = elapsedTimer + elapsed
+        if elapsedTimer >= updateInterval then
+            elapsedTimer = 0
+            Beacon:RunUpdateLoop()
+        end
+    end)
+end
+
+function Beacon:Show()
+    if not frame then self:Init() end
+    frame:Show()
+    self:Retarget()
+end
+
+function Beacon:Hide()
+    if frame then
+        frame:Hide()
+    end
+end
+
+function Beacon:Retarget()
+    if not frame or not frame:IsShown() then return end
+    
+    local target = PathPlanner:CurrentStop()
+    if not target then
+        self:Hide()
+        return
+    end
+    
+    local nodeLabel = (target.type == "mine" and "Mine" or "Herb")
+    local total = #PathPlanner.currentPath
+    local index = PathPlanner.stopCursor
+    textNode:SetText(string.format("%s (%d/%d)", nodeLabel, index, total))
+    
+    -- New target: don't judge progress against the previous node's distance
+    lastPathDistance = nil
+    pathCheckTimer = 0
+end
+
+function Beacon:RunUpdateLoop()
+    if not PathPlanner:InProgress() then
+        self:Hide()
+        return
+    end
+    
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then return end
+    
+    local px, py = nil, nil
+    if Engine.HBD then
+        px, py = Engine.HBD:GetPlayerZonePosition()
+    end
+    
+    if not px or not py then
+        local position = C_Map.GetPlayerMapPosition(mapID, "player")
+        if position then
+            px, py = position:GetXY()
+        end
+    end
+    
+    if not px or not py then return end
+    
+    local target = PathPlanner:CurrentStop()
+    if not target then return end
+    
+    local distance = nil
+    local deltaX, deltaY = nil, nil
+    
+    if Engine.HBD then
+        distance, deltaX, deltaY = Engine.HBD:GetZoneDistance(mapID, px, py, target.x, target.y)
+    end
+    
+    -- Fallback if HereBeDragons can't calculate distances - shares the same
+    -- approximation constant Helpers.NodeDistanceYards uses elsewhere in the
+    -- addon, rather than each spot picking its own separate number.
+    if not distance or not deltaX or not deltaY then
+        deltaX = target.x - px
+        deltaY = py - target.y
+        distance = math.sqrt(deltaX^2 + deltaY^2) * Helpers.FALLBACK_YARDS_PER_UNIT
+    end
+    
+    -- Display the distance in yards
+    textDistance:SetText(string.format("%.0f yd", distance))
+    
+    -- Green when the distance to target is shrinking (on path), red when it's
+    -- growing (off path) - checked every half-second rather than every tick so
+    -- normal minor position jitter doesn't flicker the color back and forth.
+    if XalsXRDB and XalsXRDB.arrowProgressColor ~= false then
+        pathCheckTimer = pathCheckTimer + updateInterval
+        if pathCheckTimer >= PATH_CHECK_INTERVAL then
+            pathCheckTimer = 0
+            if lastPathDistance then
+                local delta = distance - lastPathDistance
+                if delta < -PATH_DEADBAND_YARDS then
+                    isOnPath = true
+                elseif delta > PATH_DEADBAND_YARDS then
+                    isOnPath = false
+                end
+                -- else: no significant change - keep whatever state it already was
+            end
+            lastPathDistance = distance
+            local color = isOnPath and ON_PATH_COLOR or OFF_PATH_COLOR
+            arrow:SetVertexColor(color[1], color[2], color[3], 1)
+        end
+    else
+        arrow:SetVertexColor(1, 1, 1, 1)
+    end
+    
+    -- If we're within range, we've arrived! (Default 30 yards; configurable in Options for comfort on fast mounts)
+    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
+    if distance <= advanceDistance then
+        PathPlanner:StepForward()
+        return
+    end
+    
+    -- The arrow texture points "up" (north, 0 degrees) by default. SetRotation()
+    -- spins textures counterclockwise for positive radians, and both
+    -- GetPlayerFacing() and our own bearing-to-target calculation increase
+    -- counterclockwise too - so pointing the arrow at the target means undoing
+    -- both of those rotations together.
+    local playerFacing = GetPlayerFacing()
+    if not playerFacing then return end
+    
+    local bearingToTarget = math.atan2(deltaX, deltaY)
+    local totalRotationNeeded = playerFacing + bearingToTarget
+    arrow:SetRotation(-totalRotationNeeded)
+end

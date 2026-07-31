@@ -1,0 +1,24 @@
+name: Release AddOn
+
+# Runs whenever you push a tag (e.g. v1.0.0) - not on every regular commit
+on:
+  push:
+    tags:
+      - '**'
+
+env:
+  CF_API_KEY: ${{ secrets.CF_API_KEY }}
+  # GITHUB_TOKEN is provided automatically by GitHub Actions - no need to create
+  # your own secret for this one, just make sure the repo's Settings -> Actions
+  # -> General -> Workflow permissions is set to "Read and write permissions"
+  GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needed so the packager can generate a changelog from commit history
+
+      - uses: BigWigsMods/packager@v2

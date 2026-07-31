@@ -1,0 +1,7 @@
+package-as: XalsXpeditedRoutes
+
+# Files/folders in the repo that shouldn't end up inside the distributed addon
+# zip - players don't need CI config or git's own housekeeping files.
+ignore:
+  - .github
+  - .gitignore
