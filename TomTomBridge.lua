@@ -22,6 +22,13 @@ local TomTomBridge = addonTable.TomTomBridge
 
 local currentWaypointUID = nil
 
+-- True once this addon has successfully handed TomTom an active waypoint.
+-- Used to decide whether our own compass should show itself, so the two
+-- arrows don't both display for the same destination at once.
+function TomTomBridge:IsActive()
+    return currentWaypointUID ~= nil
+end
+
 -- Removes whatever waypoint this addon currently has active in TomTom. Safe to
 -- call even if TomTom isn't installed or nothing was ever set.
 function TomTomBridge:ClearWaypoints()
