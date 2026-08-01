@@ -36,7 +36,7 @@ Open it any of these ways:
 It's split into three sections (shown as sub-items under Xal's Xpedited Routes in the AddOns category list) rather than one long page:
 
 *   **General** — show/hide the floating helper button (+ reset its position), auto-advance distance, compass arrow style/coloring
-*   **Map Markers** — marker style, size, opacity, glow, proximity hide distance, route trail
+*   **Map Markers** — marker style, size, opacity, glow, proximity hide distance
 *   **Database** — stats, duplicate detection distance, cleanup/reset
 
 Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` still work from chat if you'd rather not use the floater.
@@ -106,7 +106,7 @@ This only applies to the minimap, not the world map - the zone you're viewing on
 
 While a route is active, a solid chained path is drawn on the minimap: you -> current target -> next stop -> the stop after that, through the **entire remaining route**. It's built out of small rotated rectangle textures, the same technique used to draw the shape-based marker styles, just in screen space so it can connect a chain of points instead of drawing one shape.
 
-Toggle it in Settings -> Map Markers -> Route Trail, or from chat with `/xxr trail`.
+Always on - no setting to turn it off.
 
 This only applies to the minimap, same as the proximity hide above - the world map isn't necessarily the zone you're standing in.
 
@@ -148,7 +148,6 @@ Use `/xxr` or `/xalmoras` in chat followed by an option:
 *   `/xxr pinalpha <30-100>`: Sets marker opacity as a percentage.
 *   `/xxr glow`: Toggles the colored glow behind markers.
 *   `/xxr proximity <20-500>`: Sets the distance (yards) at which markers hide when close - always on, this just sets the distance.
-*   `/xxr trail`: Toggles the solid route trail line on the minimap.
 *   `/xxr dupdistance <5-50>`: Sets how close two nodes must be to count as the same one.
 *   `/xxr arrowstyle <name>`: Sets the compass arrow style (`custom1`, `custom2`, `custom3`, `blizzard`).
 *   `/xxr arrowprogress`: Toggles green/red arrow coloring based on whether you're closing in on the target.
