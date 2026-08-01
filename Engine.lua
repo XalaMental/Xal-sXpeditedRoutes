@@ -84,9 +84,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.proximityDistanceYards == nil then
                 XalsXRDB.proximityDistanceYards = 200
             end
-            if XalsXRDB.showRouteTrail == nil then
-                XalsXRDB.showRouteTrail = true
-            end
             if XalsXRDB.arrowProgressColor == nil then
                 XalsXRDB.arrowProgressColor = true
             end
