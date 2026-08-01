@@ -196,7 +196,7 @@ function PathPlanner:PlotCourse(typeFilter)
     -- If TomTom is installed, point its crazy arrow at our current stop - kept
     -- in sync as the route advances (see TomTomBridge.lua).
     if addonTable.TomTomBridge.SyncCurrentStop then
-        addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop())
+        addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
     end
 end
 
@@ -216,7 +216,7 @@ function PathPlanner:StepForward()
             addonTable.Markers:UpdatePins()
         end
         if addonTable.TomTomBridge.SyncCurrentStop then
-            addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop())
+            addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
         end
     end
 end
