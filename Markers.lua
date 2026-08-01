@@ -140,7 +140,7 @@ end
 local function UpdateTrail()
     EnsureTrailParts()
 
-    if not XalsXRDB or XalsXRDB.showRouteTrail == false or not PathPlanner:InProgress() then
+    if not PathPlanner:InProgress() then
         HideTrail()
         return
     end
