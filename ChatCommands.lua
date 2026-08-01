@@ -99,9 +99,6 @@ SlashCmdList["XALMORASXR"] = function(msg)
             print("|cff00ccffXal's XR:|r Current duplicate detection distance: |cff00ff00" .. (XalsXRDB.duplicateDistanceYards or 15) .. " yd|r")
             print("|cff888888/xxr dupdistance <5-50>|r - Sets the distance in yards.")
         end
-    elseif command == "trail" then
-        XalsXRDB.showRouteTrail = not (XalsXRDB.showRouteTrail ~= false)
-        print("|cff00ccffXal's XR:|r Route trail line is now " .. (XalsXRDB.showRouteTrail and "|cff00ff00ON|r" or "|cffff9900OFF|r") .. ".")
     elseif command == "pinalpha" then
         local n = tonumber(subcommand)
         if n and n >= 30 and n <= 100 then
@@ -181,7 +178,6 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr pinsize <8-28>|r - Sets the map marker size in pixels.")
         print("  |cff00ff00/xxr pinalpha <30-100>|r - Sets marker opacity as a percentage.")
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
-        print("  |cff00ff00/xxr trail|r - Toggles the solid route trail line on the minimap.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
         print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom1, custom2, blizzard).")
