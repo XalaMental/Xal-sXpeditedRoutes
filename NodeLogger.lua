@@ -30,7 +30,7 @@ end
 local function OnGatherSpellSucceeded(spellID)
     if EXCLUDED_SPELL_IDS[spellID] then return end
 
-    local gatherType = Helpers.DetectGatherType(spellID, Helpers.GetSpellName(spellID))
+    local gatherType = Helpers.DetectGatherType(spellID)
     if not gatherType then return end
 
     local uiMapID = C_Map.GetBestMapForUnit("player")
