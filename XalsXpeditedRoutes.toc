@@ -4,7 +4,7 @@
 ## Author: XalaMental
 ## X-Credits: Concept inspired by node-recording addons GatherMate2/Gatherer and route-optimization addon Routes.
 ## X-License: MIT (code) - see LICENSE.md for full terms, including the custom-art exception
-## X-Curse-Project-ID: PUT_YOUR_PROJECT_ID_HERE
+## X-Curse-Project-ID: 1632781
 ## SavedVariables: XalsXRDB
 ## SavedVariablesPerCharacter: XalsXRCharDB
 ## IconTexture: Interface\AddOns\XalsXpeditedRoutes\Textures\AddonIcon
