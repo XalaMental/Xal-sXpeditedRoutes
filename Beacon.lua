@@ -119,9 +119,16 @@ function Beacon:Init()
     
     frame:Hide()
     
-    -- Update loop
+    -- Update loop runs on its OWN frame, deliberately never hidden - if it lived
+    -- on `frame` itself, WoW simply stops firing OnUpdate on a hidden frame,
+    -- which would silently stop route progression (the auto-advance check)
+    -- entirely whenever the arrow itself is hidden, e.g. while TomTom is
+    -- handling navigation instead. The visual arrow updates inside
+    -- RunUpdateLoop still only apply while `frame` is actually shown; only the
+    -- distance-check/auto-advance logic needs to keep running regardless.
+    local driver = CreateFrame("Frame")
     local elapsedTimer = 0
-    frame:SetScript("OnUpdate", function(self, elapsed)
+    driver:SetScript("OnUpdate", function(self, elapsed)
         elapsedTimer = elapsedTimer + elapsed
         if elapsedTimer >= updateInterval then
             elapsedTimer = 0
@@ -137,9 +144,8 @@ function Beacon:Show()
 end
 
 function Beacon:Hide()
-    if frame then
-        frame:Hide()
-    end
+    if not frame then self:Init() end
+    frame:Hide()
 end
 
 function Beacon:Retarget()
@@ -203,6 +209,19 @@ function Beacon:RunUpdateLoop()
         distance = math.sqrt(deltaX^2 + deltaY^2) * Helpers.FALLBACK_YARDS_PER_UNIT
     end
     
+    -- Arrival check runs regardless of whether the arrow itself is visible -
+    -- route progression can't depend on the visual arrow being shown, since
+    -- e.g. TomTom may be handling navigation instead while this stays hidden.
+    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
+    if distance <= advanceDistance then
+        PathPlanner:StepForward()
+        return
+    end
+    
+    -- Everything below here is purely visual (arrow color/rotation, distance
+    -- text) - only worth doing while the arrow is actually shown.
+    if not frame or not frame:IsShown() then return end
+    
     -- Display the distance in yards
     textDistance:SetText(string.format("%.0f yd", distance))
     
@@ -228,13 +247,6 @@ function Beacon:RunUpdateLoop()
         end
     else
         arrow:SetVertexColor(1, 1, 1, 1)
-    end
-    
-    -- If we're within range, we've arrived! (Default 30 yards; configurable in Options for comfort on fast mounts)
-    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
-    if distance <= advanceDistance then
-        PathPlanner:StepForward()
-        return
     end
     
     -- The arrow texture points "up" (north, 0 degrees) by default. SetRotation()
