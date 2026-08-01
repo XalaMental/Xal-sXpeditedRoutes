@@ -34,17 +34,38 @@ end
 -- Called whenever our own route's current target changes - on generating a
 -- route, advancing to the next stop, or skipping one. Points TomTom's crazy
 -- arrow at that same stop. Does nothing if TomTom isn't installed.
-function TomTomBridge:SyncCurrentStop(node)
+function TomTomBridge:SyncCurrentStop(node, mapID)
     self:ClearWaypoints()
 
-    if not (TomTom and TomTom.AddWaypoint) then return end
-    if not node then return end
+    if not TomTom then
+        print("|cff888888Xal's XR:|r (TomTom not detected - global TomTom table doesn't exist)")
+        return
+    end
+    if not TomTom.AddWaypoint then
+        print("|cffff9900Xal's XR:|r TomTom detected, but TomTom.AddWaypoint doesn't exist - its API may have changed.")
+        return
+    end
+    if not node or not mapID then
+        print("|cffff9900Xal's XR:|r TomTom sync called with no current stop/map to point at.")
+        return
+    end
 
     local label = (node.type == "mine" and "Xal's Mining" or "Xal's Herbalism")
-    local ok, uid = pcall(function()
-        return TomTom:AddWaypoint(node.x * 100, node.y * 100, label, false, true, true, true)
+    local ok, uidOrErr = pcall(function()
+        return TomTom:AddWaypoint(mapID, node.x, node.y, {
+            title = label,
+            persistent = false,
+            minimap = true,
+            world = true,
+            silent = true,
+        })
     end)
-    if ok and uid then
-        currentWaypointUID = uid
+    if ok and uidOrErr then
+        currentWaypointUID = uidOrErr
+        print("|cff00ccffXal's XR:|r TomTom waypoint set: " .. label)
+    elseif ok then
+        print("|cffff9900Xal's XR:|r TomTom:AddWaypoint() ran without error but returned nothing.")
+    else
+        print("|cffcc0000Xal's XR:|r TomTom:AddWaypoint() errored: " .. tostring(uidOrErr))
     end
 end
