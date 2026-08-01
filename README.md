@@ -25,7 +25,7 @@ No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is
 *   **In-Game Settings Panel:** No need to memorize chat commands — split into three sections (General, Map Markers, Database) instead of one long page.
 *   **Floating Helper Button:** A small draggable button (like a minimap button) that generates or stops a route for your current zone in a single click — no chat commands required.
 *   **Independent Mine/Herb Route Control on the Floater:** A dual-gathering character gets two buttons — click either to route just that type, click both to merge into one combined route. Recording new gathers happens unconditionally regardless of these buttons.
-*   **Automatic TomTom Hand-off (optional):** If TomTom is installed, generating a route automatically pops up a ready-to-paste list of that route's nodes for TomTom's own `/ttpaste` — no button to remember, no API calls.
+*   **Automatic TomTom Hand-off (optional):** If TomTom is installed, its crazy arrow automatically follows your route stop by stop — no popup, no copy/paste, nothing to click.
 
 ## Settings Panel
 
@@ -124,11 +124,13 @@ If you were seeing "this node is already recorded" with no marker anywhere nearb
 
 ## TomTom Hand-off (optional)
 
-If [TomTom](https://www.curseforge.com/wow/addons/tomtom) is installed, generating a route automatically opens a window with that route's nodes as a list of TomTom-compatible `/way` commands, ready to paste into TomTom's own `/ttpaste` bulk-import window - no button to click, no setting to turn on, it just happens.
+If [TomTom](https://www.curseforge.com/wow/addons/tomtom) is installed, its crazy arrow automatically follows your route, stop by stop, staying in sync as you advance through it - no popup, no copy/paste, nothing to click.
 
-This is intentionally simple: the only thing checked is whether the global `TomTom` table exists at all. There are no calls into TomTom's actual API (no `AddWaypoint`, no reading anything back from it) - just a plain-text list you copy and paste, the same as handing someone directions. If TomTom isn't installed, nothing happens; no error, no popup.
+This works a specific way worth understanding: TomTom's crazy arrow is built around a single active target, not an internal list it steps through on its own (confirmed by reading TomTom's own source - its `SetCrazyArrow` function just replaces one active waypoint, it doesn't manage a queue). So rather than dumping the whole route into TomTom at once and hoping it sorts out the order, this addon keeps re-pointing TomTom's one active waypoint at whatever stop it currently considers "next" - updating it every time the route advances, the same moment its own compass does. The result looks and feels like TomTom is following your whole route, because it's being actively kept in sync with it the entire time.
 
-The window shows up with the text already selected - Ctrl+C to copy, then `/ttpaste` in-game to paste it into TomTom.
+This calls TomTom's real API (`AddWaypoint`/`RemoveWaypoint`) - a function it exposes specifically for other addons to use, the same category of thing as this addon calling HereBeDragons' API elsewhere. No code of TomTom's is used or bundled, just normal addon interoperability. It's still one-way: this addon only ever pushes to TomTom, it never reads anything back from it or reacts to its own state. If TomTom isn't installed, nothing happens - no error, no popup, just a quiet no-op.
+
+Stopping the route clears the waypoint TomTom was given.
 
 ## Chat Commands
 
@@ -180,7 +182,7 @@ The addon is structured following the best WoW development practices, split into
 *   `MarkerRenderer.lua`: Shared marker-shape drawing, used by both the map pins and the floating helper button.
 *   `QuickButton.lua`: Floating draggable button for one-click route/unroute control.
 *   `Markers.lua`: Pin pooling/placement on the minimap and world map via the optional `HereBeDragons-Pins-2.0` library, plus the proximity-hide and route trail line.
-*   `TomTomBridge.lua`: Automatically shows a copy-paste TomTom `/way` list for the current route when TomTom is detected.
+*   `TomTomBridge.lua`: Keeps TomTom's crazy arrow synced to the current route stop via its API when TomTom is detected.
 *   `SettingsPanel.lua`: In-game Settings panel.
 *   `ChatCommands.lua`: Processing of console commands.
 
