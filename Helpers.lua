@@ -172,25 +172,18 @@ local KNOWN_GATHER_SPELLS = {
     [32606] = "mine", [2575] = "mine",
     [2366] = "herb",
 }
-local NAME_HINTS = {
-    mine = { "mining", "miner" },
-    herb = { "herbalism", "herbo", "recolect", "gather", "hierba", "planta", "herb" },
-}
 
-function Helpers.DetectGatherType(spellID, spellName)
-    if KNOWN_GATHER_SPELLS[spellID] then
-        return KNOWN_GATHER_SPELLS[spellID]
-    end
-    if not spellName or spellName == "" then return nil end
-    local lowered = spellName:lower()
-    for gatherType, hints in pairs(NAME_HINTS) do
-        for _, hint in ipairs(hints) do
-            if lowered:find(hint, 1, true) then
-                return gatherType
-            end
-        end
-    end
-    return nil
+-- Spell ID is the only thing checked here - deliberately not falling back to
+-- matching on the spell's name. A name-substring match sounds harmless but
+-- isn't: something as generic as "gather" appearing anywhere in an unrelated
+-- spell/buff/proc name would misfire as a gather action every time it
+-- triggered, which in practice meant chat getting spammed with "already
+-- recorded" every time some unrelated ability fired near a node you'd already
+-- picked up. The known spell IDs above are stable and precise; if a real
+-- gathering spell turns out to be missing, add its exact ID rather than a
+-- name pattern.
+function Helpers.DetectGatherType(spellID)
+    return KNOWN_GATHER_SPELLS[spellID]
 end
 
 -- Searches `nodeList` for an entry within `thresholdYards` of (x, y), returning
