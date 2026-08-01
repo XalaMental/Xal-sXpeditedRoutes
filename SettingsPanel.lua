@@ -369,16 +369,15 @@ local function BuildMarkersPanel()
     end)
     markersPanel.proximitySlider = proximitySlider
 
-    -- Route trail line
+    -- Route trail line - always on, no checkbox. If enough people ask for an
+    -- off switch this can be revisited, but it's not something to opt out of by default.
     local trailHeader = CreateHeader(markersPanel, proximitySlider, "Route Trail", -30)
 
-    local trailCheck = CreateFrame("CheckButton", nil, markersPanel, "UICheckButtonTemplate")
-    trailCheck:SetPoint("TOPLEFT", trailHeader, "BOTTOMLEFT", 2, -6)
-    trailCheck.Text:SetText("Draw a solid line on the minimap through your route")
-    trailCheck:SetScript("OnClick", function(self)
-        XalsXRDB.showRouteTrail = self:GetChecked() and true or false
-    end)
-    markersPanel.trailCheck = trailCheck
+    local trailNote = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    trailNote:SetPoint("TOPLEFT", trailHeader, "BOTTOMLEFT", 0, -6)
+    trailNote:SetWidth(400)
+    trailNote:SetJustifyH("LEFT")
+    trailNote:SetText("A solid line is always drawn on the minimap through your active route. Always on.")
 
     markersPanel:SetScript("OnShow", function()
         local currentStyle = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
@@ -395,7 +394,6 @@ local function BuildMarkersPanel()
         local dist = (XalsXRDB and XalsXRDB.proximityDistanceYards) or 200
         proximitySlider:SetValue(dist)
         _G[proximitySlider:GetName() .. "Text"]:SetText("Hide distance: " .. dist .. " yd")
-        trailCheck:SetChecked(not (XalsXRDB and XalsXRDB.showRouteTrail == false))
     end)
 
     return markersPanel
