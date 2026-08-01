@@ -185,18 +185,24 @@ function PathPlanner:PlotCourse(typeFilter)
     local typeLabel = (typeFilter == "mine" and "Mining ") or (typeFilter == "herb" and "Herbalism ") or ""
     print("|cff00ccffXal's XR:|r " .. typeLabel .. "gathering route generated with |cff00ff00" .. #route .. "|r nodes.")
 
-    if addonTable.Beacon.Show then
-        addonTable.Beacon:Show()
-    end
-
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
     end
 
     -- If TomTom is installed, point its crazy arrow at our current stop - kept
-    -- in sync as the route advances (see TomTomBridge.lua).
+    -- in sync as the route advances (see TomTomBridge.lua). Checked BEFORE
+    -- showing our own compass, since if TomTom is handling it, showing our own
+    -- arrow too would just be a second arrow pointing at the same thing.
     if addonTable.TomTomBridge.SyncCurrentStop then
         addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
+    end
+
+    if addonTable.Beacon.Show then
+        if not (addonTable.TomTomBridge.IsActive and addonTable.TomTomBridge:IsActive()) then
+            addonTable.Beacon:Show()
+        else
+            addonTable.Beacon:Hide()
+        end
     end
 end
 
