@@ -25,7 +25,7 @@ local function DistanceBetween(mapID, ax, ay, bx, by)
         if d then return d end
     end
     local dx, dy = bx - ax, by - ay
-    return math.sqrt(dx * dx + dy * dy)
+    return math.sqrt(dx * dx + dy * dy) * Helpers.FALLBACK_YARDS_PER_UNIT
 end
 
 -- Builds an initial ordering by always stepping to whichever remaining stop is
