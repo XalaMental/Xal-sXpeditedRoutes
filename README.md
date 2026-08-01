@@ -6,19 +6,25 @@ Additionally, it features an intelligent navigation system that guides you throu
 
 > The idea behind this addon: combine gathering-node tracking and route optimization - concepts pioneered separately by GatherMate2/Gatherer (node recording) and Routes (route optimization) - into a single, beneficial tool instead of requiring multiple separate addons.
 
+## Requirements
+
+**Requires [HereBeDragons](https://www.curseforge.com/wow/addons/herebedragons) for minimap and world map markers to show at all** - not bundled, install it separately. Without it, recording, routing, the compass, and the floating helper button all still work fine, but no pins will be drawn on either map. See "HereBeDragons Dependency" further down for the full breakdown of what does and doesn't need it.
+
+No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is fully optional and only adds the automatic route hand-off described below.
+
 ## Key Features
 
 *   **Automatic Recording:** Listens to your gathering spells cast in real-time and saves the exact coordinates.
 *   **Local Database:** Data is stored in your personal `SavedVariables`, ensuring that your gathering database remains private and persistent.
 *   **False Nodes Filtering:** Automatically excludes corpse-based herbalism (such as those in Midnight) to avoid registering invalid coordinates.
 *   **Duplicate Cleanup:** Built-in algorithm to automatically detect and remove duplicate or extremely close node records.
-*   **Route Optimization:** Uses the **Nearest Neighbor** algorithm to calculate the optimal gathering path starting from your current position, utilizing physical distance in yards.
-*   **Premium HUD Compass:** A floating, dynamic arrow that rotates based on the direction your character is facing and shows the exact distance to the next node.
+*   **Route Optimization:** Builds an initial path with a greedy nearest-neighbor approach, then improves it with a 2-opt pass that un-crosses and shortens the route further, using real distances in yards when HereBeDragons is installed (an approximation otherwise).
+*   **HUD Compass:** A floating, dynamic arrow that rotates based on the direction your character is facing and shows the exact distance to the next node.
 *   **Simple Map Markers:** A hollow X (default) or hollow star, green for Herbalism and red for Mining, with a small dot marking your active route target. Fully hides itself once you're close to a node, since the real node model in the world is what matters at that range.
 *   **Route Trail Line:** While a route is active, a solid chained path is drawn on the minimap from you through your current target and on through the entire remaining route.
 *   **In-Game Settings Panel:** No need to memorize chat commands — split into three sections (General, Map Markers, Database) instead of one long page.
 *   **Floating Helper Button:** A small draggable button (like a minimap button) that generates or stops a route for your current zone in a single click — no chat commands required.
-*   **Independent Mine/Herb Toggles on the Floater:** A dual-gathering character gets two on/off buttons — either alone routes just that type, both on at once merges into a single combined route.
+*   **Independent Mine/Herb Route Control on the Floater:** A dual-gathering character gets two buttons — click either to route just that type, click both to merge into one combined route. Recording new gathers happens unconditionally regardless of these buttons.
 *   **Automatic TomTom Hand-off (optional):** If TomTom is installed, generating a route automatically pops up a ready-to-paste list of that route's nodes for TomTom's own `/ttpaste` — no button to remember, no API calls.
 
 ## Settings Panel
@@ -37,20 +43,23 @@ Route control itself (Generate/Stop/Skip) doesn't have its own settings page —
 
 ## Floating Helper Button
 
+**Recording new gathers is always on, unconditionally, no matter what this button is doing.** The moment you successfully gather a mining or herb node, it's saved - that has nothing to do with this button or with routing at all. This button only controls navigation: which nodes you're actively being routed to.
+
 A small draggable control, on by default, that puts route control one click away — and it adapts to what your current character can actually gather:
 
-*   **Knows both Mining and Herbalism:** two buttons stacked vertically, Mine on top and Herb below — each an independent on/off toggle.
+*   **Knows both Mining and Herbalism:** two buttons stacked vertically, Mine on top and Herb below.
 *   **Knows only one:** a single button for that profession.
 *   **Knows neither:** a single greyed placeholder with nothing to click (tooltip explains why).
 
 Each button is drawn using whatever **Map Marker Style** you've selected in Settings — same shape, same green/red color logic — just larger, so the floater always visually matches your map pins instead of being a generic shape of its own.
 
-*   **Click a button:** Toggles that node type on or off. Both toggled on = one combined route through everything this character can gather. Only one toggled on = a route restricted to just that type. Toggle the last one off = the route stops.
+*   **Click a button:** Starts (or updates) a route including that node type — the HUD compass appears, the minimap trail line is drawn through the whole route, and if TomTom is installed, its `/way` list pops up automatically. If both Mine and Herb are on, it's one combined route through everything this character can gather. If only one is on, the route is restricted to just that type.
+*   **Click an already-on button again:** Removes that type from the route. If that was the only type included, the route stops entirely (compass and trail disappear).
 *   Whichever type(s) are currently included in the active route get a small dot marked at their center, matching how the map highlights your active target. A small number under each button shows how many of that node type are saved in your current zone.
 
-The whole thing can be dragged from anywhere on it (buttons included) — position is saved. Toggle it on/off from the Settings panel or with `/xxr button`. Reset its position with `/xxr button reset` or the Settings panel.
+The whole thing can be dragged from anywhere on it (buttons included) — position is saved. Show/hide the button itself from the Settings panel or with `/xxr button`. Reset its position with `/xxr button reset` or the Settings panel.
 
-It re-checks your known professions periodically, so if you learn a new gathering profession mid-session it'll pick that up and add the second button without needing a reload.
+Profession detection is checked a few times right after login until it gets a confirmed answer, then it stops re-checking for the rest of the session (see "Markers/Routes Automatically Match Your Professions" below for why). If you train a new gathering profession mid-session, `/reload` to have the floater pick it up - it won't add the second button automatically without one.
 
 ## HUD Compass Interaction
 
@@ -145,7 +154,7 @@ Use `/xxr` or `/xalmoras` in chat followed by an option:
 *   `/xxr arrowprogress`: Toggles green/red arrow coloring based on whether you're closing in on the target.
 *   `/xxr button`: Shows or hides the floating helper button.
 *   `/xxr button reset`: Resets the helper button to its default position.
-*   `/xxr options`: Opens the Settings panel.
+*   `/xxr options` (or `/xxr config` or `/xxr settings`): Opens the Settings panel.
 *   `/xxr help`: Displays an interactive guide with the list of available commands in chat.
 
 ## License
@@ -158,7 +167,7 @@ The addon code is MIT-licensed - free to use, modify, and redistribute, with att
 2.  Copy the folder into your World of Warcraft addons directory:
     `World of Warcraft\_retail_\Interface\AddOns\XalsXpeditedRoutes`
 3.  Ensure the destination folder is named exactly `XalsXpeditedRoutes`.
-4.  *Note*: If you are adding the addon for the first time or after this update, it is recommended to completely restart the game (or log out to the character selection screen) so that the WoW client registers the new files listed in the `.toc` file.
+4.  *Note*: After installing or updating, it's recommended to fully restart the game (or log out to the character selection screen) so the WoW client registers any changed files listed in the `.toc`.
 
 ## Modular Structure and Code
 
@@ -176,14 +185,14 @@ The addon is structured following the best WoW development practices, split into
 *   `SettingsPanel.lua`: In-game Settings panel.
 *   `ChatCommands.lua`: Processing of console commands.
 
-## About HereBeDragons (optional)
+## HereBeDragons Dependency
 
-This addon bundles `LibStub` and `CallbackHandler-1.0` (both public-domain/permissively-licensed libraries meant for embedding), but **does not bundle HereBeDragons** - that library is large and map-data-heavy, and is best kept up to date on its own. It's treated as a soft dependency:
+This addon bundles `LibStub` and `CallbackHandler-1.0` (both public-domain/permissively-licensed libraries meant for embedding), but **does not bundle HereBeDragons** - that library is large and map-data-heavy, and is best kept up to date on its own. Install it separately.
 
-*   **Without HereBeDragons installed:** everything still works - recording, route generation, the compass, the helper button. Distance calculations fall back to straight-line math within your current zone, and map/minimap pins are simply not drawn (there's no reliable fallback for pin placement without it).
-*   **With HereBeDragons installed:** (search "HereBeDragons" by Nevcairiel on CurseForge/Wago) you additionally get more accurate cross-zone distances and pins on the minimap/world map.
+*   **Without HereBeDragons installed:** recording, route generation, the compass, and the helper button all still work. Distance calculations fall back to an approximation within your current zone. **Map/minimap pins are not drawn at all** - there's no reliable fallback for pin placement without it.
+*   **With HereBeDragons installed:** (search "HereBeDragons" by Nevcairiel on CurseForge/Wago) you get pins on the minimap/world map, plus more accurate cross-zone distances everywhere else.
 
-If you install HereBeDragons, no configuration is needed - Xal's Xpedited Routes detects and uses it automatically.
+No configuration needed either way - Xal's Xpedited Routes detects and uses it automatically if it's present.
 
 ## Credits
 
