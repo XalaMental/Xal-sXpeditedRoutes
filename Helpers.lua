@@ -86,7 +86,11 @@ function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
     -- at login actually rely on for that reason.
     if _G.GetProfessions and _G.GetProfessionInfo then
         local prof1, prof2 = GetProfessions()
-        for _, idx in ipairs({ prof1, prof2 }) do
+        -- Checked explicitly rather than via ipairs({prof1, prof2}) - ipairs stops
+        -- at the first nil it sees, so if prof1 is nil and prof2 holds a real
+        -- profession (entirely possible depending on which slot a profession
+        -- landed in), ipairs would skip it and never check it at all.
+        for _, idx in ipairs({ prof1 or false, prof2 or false }) do
             if idx then
                 local name, icon, skillLevel, maxSkillLevel, numAbilities, spellOffset, skillLine = GetProfessionInfo(idx)
                 local matches = (skillLine == parentSkillLineID) or NameMatches(name, matchNames)
