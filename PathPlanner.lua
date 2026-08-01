@@ -193,11 +193,10 @@ function PathPlanner:PlotCourse(typeFilter)
         addonTable.Markers:UpdatePins()
     end
 
-    -- If TomTom is installed, automatically pop up a copy-paste /way list for
-    -- this route (see TomTomBridge.lua) - no API calls into TomTom, just a plain-text
-    -- export the same as handing someone directions.
-    if addonTable.TomTomBridge.ShowRouteExport then
-        addonTable.TomTomBridge:ShowRouteExport(route, mapID)
+    -- If TomTom is installed, point its crazy arrow at our current stop - kept
+    -- in sync as the route advances (see TomTomBridge.lua).
+    if addonTable.TomTomBridge.SyncCurrentStop then
+        addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop())
     end
 end
 
@@ -215,6 +214,9 @@ function PathPlanner:StepForward()
         end
         if addonTable.Markers.UpdatePins then
             addonTable.Markers:UpdatePins()
+        end
+        if addonTable.TomTomBridge.SyncCurrentStop then
+            addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop())
         end
     end
 end
@@ -236,6 +238,9 @@ function PathPlanner:CancelPath()
     end
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
+    end
+    if addonTable.TomTomBridge.ClearWaypoints then
+        addonTable.TomTomBridge:ClearWaypoints()
     end
 end
 
