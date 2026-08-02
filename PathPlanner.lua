@@ -189,11 +189,12 @@ function PathPlanner:PlotCourse(typeFilter)
         addonTable.Markers:UpdatePins()
     end
 
-    -- If TomTom is installed, point its crazy arrow at our current stop - kept
-    -- in sync as the route advances (see TomTomBridge.lua). Checked BEFORE
+    -- If TomTom is installed AND you've opted into this in Settings ->
+    -- Integrations, point its crazy arrow at our current stop - kept in sync as
+    -- the route advances (see TomTomBridge.lua). Off by default. Checked BEFORE
     -- showing our own compass, since if TomTom is handling it, showing our own
     -- arrow too would just be a second arrow pointing at the same thing.
-    if addonTable.TomTomBridge.SyncCurrentStop then
+    if XalsXRDB and XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.SyncCurrentStop then
         addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
     end
 
@@ -221,7 +222,7 @@ function PathPlanner:StepForward()
         if addonTable.Markers.UpdatePins then
             addonTable.Markers:UpdatePins()
         end
-        if addonTable.TomTomBridge.SyncCurrentStop then
+        if XalsXRDB and XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.SyncCurrentStop then
             addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
         end
     end
