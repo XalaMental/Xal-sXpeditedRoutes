@@ -20,26 +20,30 @@ local ON_PATH_COLOR = { 0.25, 0.95, 0.35 }
 local OFF_PATH_COLOR = { 0.95, 0.25, 0.25 }
 
 local ARROW_STYLES = {
-    custom1 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow1",
-    custom2 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow2",
     custom3 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Arrow3",
+    custom4 = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RoutesArrow",
     blizzard = "Interface\\Minimap\\MiniMap-DeadArrow",
 }
-Beacon.ARROW_STYLES = { "custom3", "custom1", "custom2", "blizzard" }
+Beacon.ARROW_STYLES = { "custom4", "custom3", "blizzard" }
 Beacon.ARROW_STYLE_LABELS = {
-    custom1 = "Custom Arrow 1",
-    custom2 = "Custom Arrow 2",
-    custom3 = "Custom Arrow 3 (default)",
-    blizzard = "Default (Blizzard)",
+    custom3 = "Topdown 2D Arrow",
+    custom4 = "Chevron (default)",
+    blizzard = "Blizzard (Default)",
 }
 
 -- Applies whichever arrow texture is currently selected. Safe to call any time,
 -- including before the frame exists yet (no-op in that case).
+local BASE_ARROW_SIZE = 52
 function Beacon:ApplyArrowStyle()
     if not arrow then return end
-    local styleKey = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom3"
-    arrow:SetTexture(ARROW_STYLES[styleKey] or ARROW_STYLES.custom3)
+    local styleKey = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
+    arrow:SetTexture(ARROW_STYLES[styleKey] or ARROW_STYLES.custom4)
     arrow:SetVertexColor(1, 1, 1, 1)
+    local scale = (XalsXRDB and XalsXRDB.arrowScale) or 1
+    local size = BASE_ARROW_SIZE * scale
+    arrow:SetSize(size, size)
+    arrow:SetTexCoord(0, 1, 0, 1)
+    arrow:SetRotation(0)
     self:Retarget()
 end
 
@@ -99,7 +103,6 @@ function Beacon:Init()
     
     -- Navigation arrow in the center
     arrow = frame:CreateTexture(nil, "ARTWORK")
-    arrow:SetSize(52, 52)
     arrow:SetPoint("CENTER", frame, "CENTER", 0, 0)
     Beacon:ApplyArrowStyle()
     
