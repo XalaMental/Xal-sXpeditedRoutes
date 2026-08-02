@@ -6,6 +6,7 @@ local Markers = addonTable.Markers
 local SettingsPanel = addonTable.SettingsPanel
 local QuickButton = addonTable.QuickButton
 local Beacon = addonTable.Beacon
+local TomTomBridge = addonTable.TomTomBridge
 
 SLASH_XALMORASXR1 = "/xxr"
 SLASH_XALMORASXR2 = "/xalmoras"
@@ -15,7 +16,7 @@ local EXCLUDED_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, compassArrowStyle = true,
+    duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
@@ -83,13 +84,29 @@ SlashCmdList["XALMORASXR"] = function(msg)
         if Beacon.ARROW_STYLE_LABELS[subcommand] then
             XalsXRDB.compassArrowStyle = subcommand
             Beacon:ApplyArrowStyle()
-            print("|cff00ccffXal's XR:|r Beacon arrow style set to |cff00ff00" .. Beacon.ARROW_STYLE_LABELS[subcommand] .. "|r.")
+            print("|cff00ccffXal's XR:|r Waypoint arrow style set to |cff00ff00" .. Beacon.ARROW_STYLE_LABELS[subcommand] .. "|r.")
         else
             print("|cff00ccffXal's XR:|r Current arrow style: |cff00ff00" .. (Beacon.ARROW_STYLE_LABELS[XalsXRDB.compassArrowStyle] or "Custom Arrow (default)") .. "|r")
             for _, key in ipairs(Beacon.ARROW_STYLES) do
                 print("  |cff00ff00" .. key .. "|r - " .. Beacon.ARROW_STYLE_LABELS[key])
             end
         end
+    elseif command == "arrowscale" then
+        local n = tonumber(subcommand)
+        if n and n >= 50 and n <= 150 then
+            XalsXRDB.arrowScale = n / 100
+            Beacon:ApplyArrowStyle()
+            print("|cff00ccffXal's XR:|r Arrow scale set to |cff00ff00" .. n .. "%|r.")
+        else
+            print("|cff00ccffXal's XR:|r Current arrow scale: |cff00ff00" .. math.floor(((XalsXRDB.arrowScale or 1) * 100) + 0.5) .. "%|r")
+            print("|cff888888/xxr arrowscale <50-150>|r - Sets the arrow's size as a percentage.")
+        end
+    elseif command == "tomtom" then
+        XalsXRDB.tomtomSyncEnabled = not (XalsXRDB.tomtomSyncEnabled == true)
+        if not XalsXRDB.tomtomSyncEnabled and TomTomBridge.ClearWaypoints then
+            TomTomBridge:ClearWaypoints()
+        end
+        print("|cff00ccffXal's XR:|r TomTom sync is now " .. (XalsXRDB.tomtomSyncEnabled and "|cff00ff00ON|r" or "|cffff9900OFF|r") .. ". Does nothing if TomTom isn't installed.")
     elseif command == "dupdistance" then
         local n = tonumber(subcommand)
         if n and n >= 5 and n <= 50 then
@@ -180,7 +197,9 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
-        print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom1, custom2, blizzard).")
+        print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom3, custom4, blizzard).")
+        print("  |cff00ff00/xxr arrowscale <50-150>|r - Sets the arrow's size as a percentage.")
+        print("  |cff00ff00/xxr tomtom|r - Toggles syncing TomTom's arrow to your route (off by default, does nothing without TomTom installed).")
         print("  |cff00ff00/xxr arrowprogress|r - Toggles green/red arrow coloring based on whether you're closing in.")
         print("  |cff00ff00/xxr button|r - Shows or hides the floating helper button.")
         print("  |cff00ff00/xxr button reset|r - Resets the helper button to its default position.")
