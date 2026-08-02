@@ -27,7 +27,7 @@ local function GetStatsString()
             if mapID ~= "showPins" and mapID ~= "compassPosition" and mapID ~= "autoAdvanceDistance"
                 and mapID ~= "pinStyle" and mapID ~= "pinSize" and mapID ~= "showHelperButton"
                 and mapID ~= "helperButtonPosition" and mapID ~= "showGlow"
-                and mapID ~= "proximityDistanceYards" and mapID ~= "showRouteTrail"
+                and mapID ~= "proximityDistanceYards"
                 and mapID ~= "arrowProgressColor" and mapID ~= "pinAlpha"
                 and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and type(nodes) == "table" then
                 mapCount = mapCount + 1
@@ -53,7 +53,7 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
             if key ~= "showPins" and key ~= "compassPosition" and key ~= "autoAdvanceDistance"
                 and key ~= "pinStyle" and key ~= "pinSize" and key ~= "showHelperButton"
                 and key ~= "helperButtonPosition" and key ~= "showGlow"
-                and key ~= "proximityDistanceYards" and key ~= "showRouteTrail"
+                and key ~= "proximityDistanceYards"
                 and key ~= "arrowProgressColor" and key ~= "pinAlpha"
                 and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" then
                 XalsXRDB[key] = nil
@@ -246,7 +246,7 @@ local function BuildRootPanel()
 end
 
 --------------------------------------------------------------------------------
--- Map Markers panel: marker style picker, size, opacity, proximity hide, trail
+-- Map Markers panel: marker style picker, size, opacity, proximity hide
 --------------------------------------------------------------------------------
 local function BuildMarkersPanel()
     markersPanel = CreateFrame("Frame")
@@ -368,16 +368,6 @@ local function BuildMarkersPanel()
         _G[self:GetName() .. "Text"]:SetText("Hide distance: " .. value .. " yd")
     end)
     markersPanel.proximitySlider = proximitySlider
-
-    -- Route trail line - always on, no checkbox. If enough people ask for an
-    -- off switch this can be revisited, but it's not something to opt out of by default.
-    local trailHeader = CreateHeader(markersPanel, proximitySlider, "Route Trail", -30)
-
-    local trailNote = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    trailNote:SetPoint("TOPLEFT", trailHeader, "BOTTOMLEFT", 0, -6)
-    trailNote:SetWidth(400)
-    trailNote:SetJustifyH("LEFT")
-    trailNote:SetText("A solid line is always drawn on the minimap through your active route. Always on.")
 
     markersPanel:SetScript("OnShow", function()
         local currentStyle = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
