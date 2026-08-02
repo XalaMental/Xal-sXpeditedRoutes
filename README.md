@@ -24,7 +24,7 @@ No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is
 *   **In-Game Settings Panel:** No need to memorize chat commands — split into three sections (General, Map Markers, Database) instead of one long page.
 *   **Floating Helper Button:** A small draggable button (like a minimap button) that generates or stops a route for your current zone in a single click — no chat commands required.
 *   **Independent Mine/Herb Route Control on the Floater:** A dual-gathering character gets two buttons — click either to route just that type, click both to merge into one combined route. Recording new gathers happens unconditionally regardless of these buttons.
-*   **Automatic TomTom Hand-off (optional):** If TomTom is installed, its crazy arrow automatically follows your route stop by stop — no popup, no copy/paste, nothing to click.
+*   **TomTom Hand-off (optional, off by default):** Turn it on and, if TomTom is installed, its crazy arrow automatically follows your route stop by stop — no popup, no copy/paste, nothing to click.
 
 ## Settings Panel
 
@@ -32,11 +32,13 @@ Open it any of these ways:
 *   `Escape` -> **Options** -> **AddOns** -> **Xal's Xpedited Routes**
 *   `/xxr options` (or `/xxr config`)
 
-It's split into three sections (shown as sub-items under Xal's Xpedited Routes in the AddOns category list) rather than one long page:
+It's split into five sections (shown as sub-items under Xal's Xpedited Routes in the AddOns category list) rather than one long page:
 
-*   **General** — show/hide the floating helper button (+ reset its position), auto-advance distance, compass arrow style/coloring
+*   **General** — show/hide the floating helper button (+ reset its position), auto-advance distance
+*   **Waypoint** — compass arrow style, arrow scale, progress coloring
 *   **Map Markers** — marker style, size, opacity, glow, proximity hide distance
 *   **Database** — stats, duplicate detection distance, cleanup/reset
+*   **Integrations** — optional hand-offs to other addons (currently just TomTom); home for any future ones too
 
 Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` still work from chat if you'd rather not use the floater.
 
@@ -65,10 +67,10 @@ Profession detection is checked a few times right after login until it gets a co
 *   **Move the HUD:** Hold **Left-Click** on the compass and drag it anywhere on your screen. Its position will be saved automatically for future sessions.
 *   **Skip Node:** **Right-Click** on the compass to skip the current node and immediately point to the next one.
 *   **Auto-Advance:** When you get within your configured distance (30 yards by default) of your current target node, the compass will automatically advance to the next node in the route.
-*   **Arrow style:** Three custom arrows are bundled (`Textures\Arrow1.tga` / `Arrow2.tga` / `Arrow3.tga`, the last being plain white/gray and the default), plus the original Blizzard arrow as a fallback option. Pick one in Settings → General → Compass Arrow, or with `/xxr arrowstyle <custom1|custom2|custom3|blizzard>`.
+*   **Arrow style:** Two custom arrows are bundled (`RoutesArrow.tga` - "Chevron", a chunky glossy 3D-style arrow, and the default; and `Arrow3.tga` - "Topdown 2D Arrow", plain white/gray), plus the original Blizzard arrow as a fallback option. Pick one in Settings → General → Compass Arrow, or with `/xxr arrowstyle <custom3|custom4|blizzard>`.
 *   **Progress coloring:** The arrow turns **green** when your distance to the target is shrinking (checked every 0.5s, with a small deadband so it doesn't flicker on minor jitter) and **red** when it's growing, i.e. you've wandered off course. Toggle it in Settings → General or with `/xxr arrowprogress`. This works best with plain/light-colored arrow art — tinting already-colorful art can look muddy, since the tint multiplies the existing colors rather than replacing them.
 
-Want different custom arrow art? Send it over (same spec as the marker icons: square-ish, transparent background, drawn pointing straight up) and it can be swapped into any of the `Textures\Arrow*.tga` files the same way these were. If you want the green/red progress coloring to read cleanly, ask for the art in mostly white/light gray rather than richly colored — that's exactly what `Arrow3.tga` (the default) is.
+Want different custom arrow art? Send it over (same spec as the marker icons: square-ish, transparent background, drawn pointing straight up) and it can be swapped into `Textures\RoutesArrow.tga` or `Textures\Arrow3.tga` the same way these were. If you want the green/red progress coloring to read cleanly, ask for the art in mostly white/light gray rather than richly colored — that's exactly what `Arrow3.tga` is.
 
 ## Map Marker Style
 
@@ -113,15 +115,15 @@ How close two saved nodes need to be before they're treated as "the same node" -
 
 If you were seeing "this node is already recorded" with no marker anywhere nearby, lowering this should fix it - then run Cleanup Duplicates (or `/xxr cleanup`) to reapply the new distance to nodes you've already saved.
 
-## TomTom Hand-off (optional)
+## TomTom Hand-off (optional, off by default)
 
-If [TomTom](https://www.curseforge.com/wow/addons/tomtom) is installed, its crazy arrow automatically follows your route, stop by stop, staying in sync as you advance through it - no popup, no copy/paste, nothing to click.
+**Off by default.** Turn it on in Settings -> Integrations, or with `/xxr tomtom`. If [TomTom](https://www.curseforge.com/wow/addons/tomtom) is installed and this is switched on, its crazy arrow automatically follows your route, stop by stop, staying in sync as you advance through it - no popup, no copy/paste, nothing to click.
 
 This works a specific way worth understanding: TomTom's crazy arrow is built around a single active target, not an internal list it steps through on its own (confirmed by reading TomTom's own source - its `SetCrazyArrow` function just replaces one active waypoint, it doesn't manage a queue). So rather than dumping the whole route into TomTom at once and hoping it sorts out the order, this addon keeps re-pointing TomTom's one active waypoint at whatever stop it currently considers "next" - updating it every time the route advances, the same moment its own compass does. The result looks and feels like TomTom is following your whole route, because it's being actively kept in sync with it the entire time.
 
-This calls TomTom's real API (`AddWaypoint`/`RemoveWaypoint`) - a function it exposes specifically for other addons to use, the same category of thing as this addon calling HereBeDragons' API elsewhere. No code of TomTom's is used or bundled, just normal addon interoperability. It's still one-way: this addon only ever pushes to TomTom, it never reads anything back from it or reacts to its own state. If TomTom isn't installed, nothing happens - no error, no popup, just a quiet no-op.
+This calls TomTom's real API (`AddWaypoint`/`RemoveWaypoint`) - a function it exposes specifically for other addons to use, the same category of thing as this addon calling HereBeDragons' API elsewhere. No code of TomTom's is used or bundled, just normal addon interoperability. It's still one-way: this addon only ever pushes to TomTom, it never reads anything back from it or reacts to its own state. If TomTom isn't installed, turning this on does nothing - no error, no popup, just a quiet no-op.
 
-Stopping the route clears the waypoint TomTom was given.
+Turning it off (or stopping the route) clears the waypoint TomTom was given.
 
 ## Chat Commands
 
@@ -142,7 +144,7 @@ Use `/xxr` or `/xalmoras` in chat followed by an option:
 *   `/xxr glow`: Toggles the colored glow behind markers.
 *   `/xxr proximity <20-500>`: Sets the distance (yards) at which markers hide when close - always on, this just sets the distance.
 *   `/xxr dupdistance <5-50>`: Sets how close two nodes must be to count as the same one.
-*   `/xxr arrowstyle <name>`: Sets the compass arrow style (`custom1`, `custom2`, `custom3`, `blizzard`).
+*   `/xxr arrowstyle <name>`: Sets the compass arrow style (`custom3`, `custom4`, `blizzard`).
 *   `/xxr arrowprogress`: Toggles green/red arrow coloring based on whether you're closing in on the target.
 *   `/xxr button`: Shows or hides the floating helper button.
 *   `/xxr button reset`: Resets the helper button to its default position.
