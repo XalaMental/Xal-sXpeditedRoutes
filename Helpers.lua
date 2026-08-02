@@ -190,8 +190,8 @@ end
 -- IDs the table doesn't recognize - this way the common case (a known ID) never
 -- touches string matching at all.
 local KNOWN_GATHER_SPELLS = {
-    [32606] = "mine", [2575] = "mine",
-    [2366] = "herb",
+    [32606] = "mine", [2575] = "mine", [471013] = "mine", -- 471013 confirmed live: Midnight mining. 372610 was tested and ruled out - it's mount-related, not a gather spell
+    [2366] = "herb", [471009] = "herb", -- 471009 confirmed live: Midnight's herbalism gather spell, a new ID not present in older expansions
 }
 
 -- Spell ID is the only thing checked here - deliberately not falling back to
