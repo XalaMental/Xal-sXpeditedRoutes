@@ -61,7 +61,7 @@ local NON_MAP_KEYS = {
     showPins = true, compassPosition = true, autoAdvanceDistance = true,
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
-    showRouteTrail = true, arrowProgressColor = true, pinAlpha = true,
+    arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true,
 }
 
