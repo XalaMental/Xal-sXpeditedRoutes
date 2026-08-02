@@ -1,6 +1,5 @@
 -- Engine.lua
 -- Xal's Xpedited Routes
--- Originally based on "WhereIGathered" by fytta. Used and extended with credit to the original author.
 local addonName, addonTable = ...
 local Engine = addonTable.Engine
 local Helpers = addonTable.Helpers
@@ -91,7 +90,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 XalsXRDB.duplicateDistanceYards = 15
             end
             if XalsXRDB.compassArrowStyle == nil then
-                XalsXRDB.compassArrowStyle = "custom3"
+                XalsXRDB.compassArrowStyle = "custom4"
+            end
+            if XalsXRDB.arrowScale == nil then
+                XalsXRDB.arrowScale = 1
+            end
+            if XalsXRDB.tomtomSyncEnabled == nil then
+                XalsXRDB.tomtomSyncEnabled = false
             end
             
             -- Per-character preferences (route filters etc. - these can differ per alt,
