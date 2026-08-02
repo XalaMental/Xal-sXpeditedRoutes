@@ -21,7 +21,6 @@ No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is
 *   **Route Optimization:** Builds an initial path with a greedy nearest-neighbor approach, then improves it with a 2-opt pass that un-crosses and shortens the route further, using real distances in yards when HereBeDragons is installed (an approximation otherwise).
 *   **HUD Compass:** A floating, dynamic arrow that rotates based on the direction your character is facing and shows the exact distance to the next node.
 *   **Simple Map Markers:** A hollow X (default) or hollow star, green for Herbalism and red for Mining, with a small dot marking your active route target. Fully hides itself once you're close to a node, since the real node model in the world is what matters at that range.
-*   **Route Trail Line:** While a route is active, a solid chained path is drawn on the minimap from you through your current target and on through the entire remaining route.
 *   **In-Game Settings Panel:** No need to memorize chat commands — split into three sections (General, Map Markers, Database) instead of one long page.
 *   **Floating Helper Button:** A small draggable button (like a minimap button) that generates or stops a route for your current zone in a single click — no chat commands required.
 *   **Independent Mine/Herb Route Control on the Floater:** A dual-gathering character gets two buttons — click either to route just that type, click both to merge into one combined route. Recording new gathers happens unconditionally regardless of these buttons.
@@ -53,8 +52,8 @@ A small draggable control, on by default, that puts route control one click away
 
 Each button is drawn using whatever **Map Marker Style** you've selected in Settings — same shape, same green/red color logic — just larger, so the floater always visually matches your map pins instead of being a generic shape of its own.
 
-*   **Click a button:** Starts (or updates) a route including that node type — the HUD compass appears, the minimap trail line is drawn through the whole route, and if TomTom is installed, its `/way` list pops up automatically. If both Mine and Herb are on, it's one combined route through everything this character can gather. If only one is on, the route is restricted to just that type.
-*   **Click an already-on button again:** Removes that type from the route. If that was the only type included, the route stops entirely (compass and trail disappear).
+*   **Click a button:** Starts (or updates) a route including that node type — the HUD compass appears, and if TomTom is installed, its crazy arrow follows along automatically. If both Mine and Herb are on, it's one combined route through everything this character can gather. If only one is on, the route is restricted to just that type.
+*   **Click an already-on button again:** Removes that type from the route. If that was the only type included, the route stops entirely (compass disappears).
 *   Whichever type(s) are currently included in the active route get a small dot marked at their center, matching how the map highlights your active target. A small number under each button shows how many of that node type are saved in your current zone.
 
 The whole thing can be dragged from anywhere on it (buttons included) — position is saved. Show/hide the button itself from the Settings panel or with `/xxr button`. Reset its position with `/xxr button reset` or the Settings panel.
@@ -101,14 +100,6 @@ Distance is measured as on-screen pixel distance on the minimap (marker position
 Default hide distance is 200 yards (adjustable 20-500) in Settings -> Map Markers, or with `/xxr proximity <20-500>`.
 
 This only applies to the minimap, not the world map - the zone you're viewing on the world map isn't necessarily the one you're standing in, so "distance to player" wouldn't mean anything there.
-
-## Route Trail Line
-
-While a route is active, a solid chained path is drawn on the minimap: you -> current target -> next stop -> the stop after that, through the **entire remaining route**. It's built out of small rotated rectangle textures, the same technique used to draw the shape-based marker styles, just in screen space so it can connect a chain of points instead of drawing one shape.
-
-Always on - no setting to turn it off.
-
-This only applies to the minimap, same as the proximity hide above - the world map isn't necessarily the zone you're standing in.
 
 ## Markers/Routes Automatically Match Your Professions
 
@@ -181,7 +172,7 @@ The addon is structured following the best WoW development practices, split into
 *   `Beacon.lua`: Creation, animations, and behavior of the HUD compass.
 *   `MarkerRenderer.lua`: Shared marker-shape drawing, used by both the map pins and the floating helper button.
 *   `QuickButton.lua`: Floating draggable button for one-click route/unroute control.
-*   `Markers.lua`: Pin pooling/placement on the minimap and world map via the optional `HereBeDragons-Pins-2.0` library, plus the proximity-hide and route trail line.
+*   `Markers.lua`: Pin pooling/placement on the minimap and world map via the optional `HereBeDragons-Pins-2.0` library, plus the proximity-hide.
 *   `TomTomBridge.lua`: Keeps TomTom's crazy arrow synced to the current route stop via its API when TomTom is detected.
 *   `SettingsPanel.lua`: In-game Settings panel.
 *   `ChatCommands.lua`: Processing of console commands.
