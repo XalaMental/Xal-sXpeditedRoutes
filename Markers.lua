@@ -10,13 +10,6 @@
 -- not our marker. Always on, distance is the only adjustable part. World map
 -- pins don't get this - the map you're viewing isn't necessarily the zone you're
 -- standing in, so "distance to player" isn't meaningful there.
---
--- When a route is active, a solid trail line is also drawn on the minimap from
--- the player (always dead-center on a standard minimap) through the current
--- target and on through the rest of the route, chained stop to stop. It's built
--- the same way MarkerRenderer draws shape outlines (small rotated rectangle
--- textures), just in absolute screen space instead of pin-local space, since the
--- endpoints are on different frames.
 local addonName, addonTable = ...
 local Markers = addonTable.Markers
 local Engine = addonTable.Engine
@@ -30,14 +23,6 @@ local worldmapPinPool = {}
 local DEFAULT_PIN_SIZE = 14 -- base size in pixels for a normal (non-target) marker
 local PROXIMITY_CHECK_INTERVAL = 0.3
 local proximityTimer = 0
-local TRAIL_UPDATE_INTERVAL = 0.1 -- faster than the proximity check, so the line tracks movement smoothly
-local trailTimer = 0
-local TRAIL_COLOR = { 1, 0.82, 0.1 } -- gold, just for the trail line itself
-
-local trailFrame = nil
-local trailSegments = {}
-local MAX_TRAIL_SEGMENTS = 400
-local TRAIL_THICKNESS = 3
 
 -- Re-exported for backward compatibility with code (SettingsPanel.lua) that reads these
 -- off Markers; MarkerRenderer.lua is the source of truth.
@@ -95,99 +80,6 @@ local function ReleaseAllPins()
     for _, pin in ipairs(worldmapPinPool) do
         pin.inUse = false
         pin:Hide()
-    end
-end
-
-local function EnsureTrailParts()
-    if trailFrame then return end
-    trailFrame = CreateFrame("Frame", nil, Minimap)
-    trailFrame:SetAllPoints(Minimap)
-    for i = 1, MAX_TRAIL_SEGMENTS do
-        local tex = trailFrame:CreateTexture(nil, "ARTWORK")
-        tex:Hide()
-        trailSegments[i] = tex
-    end
-end
-
-local function HideTrail()
-    for _, tex in ipairs(trailSegments) do tex:Hide() end
-end
-
--- Positions+rotates a texture to form a line between two ABSOLUTE screen points
--- (as returned by frame:GetCenter()), anchored off UIParent's own bottom-left
--- corner - the same coordinate space GetCenter() itself returns values in.
-local function PlaceScreenSegment(tex, x1, y1, x2, y2, thickness, color, alpha)
-    local dx, dy = x2 - x1, y2 - y1
-    local length = math.sqrt(dx * dx + dy * dy)
-    if length < 0.5 then
-        tex:Hide()
-        return
-    end
-    local angle = math.atan2(dy, dx)
-    tex:ClearAllPoints()
-    tex:SetSize(length, thickness)
-    tex:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (x1 + x2) / 2, (y1 + y2) / 2)
-    tex:SetRotation(angle)
-    tex:SetColorTexture(color[1], color[2], color[3], alpha)
-    tex:Show()
-end
-
--- Draws (or hides) the trail line: player -> current target -> next stop -> next
--- stop, chained through the ENTIRE remaining route in order. No artificial stop
--- limit - if the route has 30 stops left, all 30 get connected. Solid line only.
--- MAX_TRAIL_SEGMENTS is the only real ceiling, and it's set generously high for
--- exactly this reason.
-local function UpdateTrail()
-    EnsureTrailParts()
-
-    if not PathPlanner:InProgress() then
-        HideTrail()
-        return
-    end
-
-    local mx, my = Minimap:GetCenter()
-    if not mx then
-        HideTrail()
-        return
-    end
-
-    -- Look up each upcoming stop's pin by its route position (tagged in UpdatePins)
-    local pinByIndex = {}
-    for _, pin in ipairs(minimapPinPool) do
-        if pin.inUse and pin.routeIndex then
-            pinByIndex[pin.routeIndex] = pin
-        end
-    end
-
-    local points = { { mx, my } }
-    local route = PathPlanner.currentPath
-    for i = PathPlanner.stopCursor, #route do
-        local pin = pinByIndex[i]
-        if pin and pin:IsShown() then
-            local px, py = pin:GetCenter()
-            if px then
-                table.insert(points, { px, py })
-            end
-        end
-    end
-
-    if #points < 2 then
-        HideTrail()
-        return
-    end
-
-    local segIndex = 0
-    for h = 1, #points - 1 do
-        segIndex = segIndex + 1
-        if segIndex <= MAX_TRAIL_SEGMENTS then
-            local x1, y1 = points[h][1], points[h][2]
-            local x2, y2 = points[h + 1][1], points[h + 1][2]
-            PlaceScreenSegment(trailSegments[segIndex], x1, y1, x2, y2, TRAIL_THICKNESS, TRAIL_COLOR, 0.7)
-        end
-    end
-
-    for i = segIndex + 1, MAX_TRAIL_SEGMENTS do
-        trailSegments[i]:Hide()
     end
 end
 
@@ -255,12 +147,6 @@ function Markers:Init()
     local ticker = CreateFrame("Frame")
     ticker:SetScript("OnUpdate", function(_, elapsed)
         ProximityTick(elapsed)
-
-        trailTimer = trailTimer + elapsed
-        if trailTimer >= TRAIL_UPDATE_INTERVAL then
-            trailTimer = 0
-            UpdateTrail()
-        end
     end)
 
     self:UpdatePins()
@@ -293,17 +179,6 @@ function Markers:UpdatePins()
     -- Check if there's an active route and get the current node
     local targetNode = PathPlanner:CurrentStop()
     
-    -- Build a coordinate -> route-position lookup for the active route (if any),
-    -- so each pin can be tagged with where it falls in the route - the trail line
-    -- uses this to chain segments through the upcoming stops in order.
-    local routeIndexByCoord = nil
-    if PathPlanner:InProgress() and PathPlanner.pathMapID == playerMapID then
-        routeIndexByCoord = {}
-        for i, rNode in ipairs(PathPlanner.currentPath) do
-            routeIndexByCoord[rNode.x .. "," .. rNode.y] = i
-        end
-    end
-    
     -- Load pins on the minimap (only for the player's current map)
     if playerMapID and XalsXRDB[playerMapID] then
         for _, node in ipairs(XalsXRDB[playerMapID]) do
@@ -313,7 +188,6 @@ function Markers:UpdatePins()
                 local isTarget = (targetNode and targetNode.x == node.x and targetNode.y == node.y)
                 local sameNodeAsBefore = (mPin.nodeX == node.x and mPin.nodeY == node.y)
                 mPin.nodeX, mPin.nodeY, mPin.nodeType, mPin.isRouteTarget = node.x, node.y, node.type, isTarget
-                mPin.routeIndex = routeIndexByCoord and routeIndexByCoord[node.x .. "," .. node.y] or nil
                 if not sameNodeAsBefore then
                     -- This pin now represents a different node than last time (or is
                     -- brand new) - let the next proximity tick judge it fresh.
