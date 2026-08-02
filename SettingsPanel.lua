@@ -15,7 +15,7 @@ local Markers = addonTable.Markers
 local Beacon = addonTable.Beacon
 local QuickButton = addonTable.QuickButton
 
-local rootPanel, markersPanel, dataPanel
+local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel
 local statsText = nil
 local pinStyleButtons = {}
 
@@ -29,7 +29,7 @@ local function GetStatsString()
                 and mapID ~= "helperButtonPosition" and mapID ~= "showGlow"
                 and mapID ~= "proximityDistanceYards"
                 and mapID ~= "arrowProgressColor" and mapID ~= "pinAlpha"
-                and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and type(nodes) == "table" then
+                and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -55,7 +55,7 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "helperButtonPosition" and key ~= "showGlow"
                 and key ~= "proximityDistanceYards"
                 and key ~= "arrowProgressColor" and key ~= "pinAlpha"
-                and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" then
+                and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" and key ~= "arrowScale" and key ~= "tomtomSyncEnabled" then
                 XalsXRDB[key] = nil
             end
         end
@@ -146,7 +146,7 @@ local function BuildRootPanel()
 
     local credit = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     credit:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -10)
-    credit:SetText("Originally based on WhereIGathered by fytta. See the sub-sections in the list on the left for Map Markers and Database.")
+    credit:SetText("See the sub-sections in the list on the left for Map Markers and Database.")
     credit:SetWidth(500)
     credit:SetJustifyH("LEFT")
 
@@ -194,7 +194,34 @@ local function BuildRootPanel()
     sliderHelp:SetJustifyH("LEFT")
     sliderHelp:SetText("How close you need to be to a node before the compass automatically advances to the next one.")
 
-    local arrowHeader = CreateHeader(rootPanel, sliderHelp, "Beacon Arrow", -18)
+    rootPanel:SetScript("OnShow", function()
+        helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
+        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
+        slider:SetValue(dist)
+        _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
+    end)
+
+    return rootPanel
+end
+
+--------------------------------------------------------------------------------
+-- Waypoint panel: arrow style, progress coloring, uniform scale
+--------------------------------------------------------------------------------
+local function BuildWaypointPanel()
+    waypointPanel = CreateFrame("Frame")
+    waypointPanel.name = "Waypoint"
+
+    local title = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("Waypoint")
+
+    local intro = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    intro:SetWidth(460)
+    intro:SetJustifyH("LEFT")
+    intro:SetText("The floating directional arrow that points at your next node.")
+
+    local arrowHeader = CreateHeader(waypointPanel, intro, "Arrow Style", -18)
 
     local arrowStyleButtons = {}
     local arrowBtnWidth = 170
@@ -203,7 +230,7 @@ local function BuildRootPanel()
     for i, key in ipairs(Beacon.ARROW_STYLES) do
         local col = (i - 1) % arrowCols
         local row = math.floor((i - 1) / arrowCols)
-        local btn = CreateButton(rootPanel, arrowHeader,
+        local btn = CreateButton(waypointPanel, arrowHeader,
             col * (arrowBtnWidth + 8), -10 - row * (arrowBtnHeight + 6),
             Beacon.ARROW_STYLE_LABELS[key], arrowBtnWidth, function()
                 XalsXRDB.compassArrowStyle = key
@@ -216,33 +243,61 @@ local function BuildRootPanel()
     end
     local arrowRows = math.ceil(#Beacon.ARROW_STYLES / arrowCols)
 
-    local progressColorCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
+    local progressColorCheck = CreateFrame("CheckButton", nil, waypointPanel, "UICheckButtonTemplate")
     progressColorCheck:SetPoint("TOPLEFT", arrowHeader, "BOTTOMLEFT", 2, -10 - arrowRows * (arrowBtnHeight + 6) - 6)
     progressColorCheck.Text:SetText("Color the arrow green when closing in, red when moving away")
     progressColorCheck:SetScript("OnClick", function(self)
         XalsXRDB.arrowProgressColor = self:GetChecked() and true or false
     end)
-    rootPanel.progressColorCheck = progressColorCheck
+    waypointPanel.progressColorCheck = progressColorCheck
 
-    local progressColorHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    local progressColorHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     progressColorHelp:SetPoint("TOPLEFT", progressColorCheck, "BOTTOMLEFT", -2, -4)
     progressColorHelp:SetWidth(420)
     progressColorHelp:SetJustifyH("LEFT")
     progressColorHelp:SetText("Works best with plain/light-colored arrow art - tinting already-colorful art can look muddy.")
 
-    rootPanel:SetScript("OnShow", function()
-        helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
-        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
-        slider:SetValue(dist)
-        _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
-        local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom1"
+    local scaleHeader = CreateHeader(waypointPanel, progressColorHelp, "Scale", -22)
+
+    -- Uniform scale only - no separate width/height. Non-uniform scaling would
+    -- distort the art (stretched, not just resized) and adds a real class of
+    -- bugs (aspect ratio drift, inconsistent hitboxes) for very little benefit
+    -- over just picking a bigger or smaller arrow overall.
+    local scaleSlider = CreateFrame("Slider", "XalsXRArrowScaleSlider", waypointPanel, "OptionsSliderTemplate")
+    scaleSlider:SetPoint("TOPLEFT", scaleHeader, "BOTTOMLEFT", 6, -20)
+    scaleSlider:SetWidth(220)
+    scaleSlider:SetMinMaxValues(50, 150)
+    scaleSlider:SetValueStep(5)
+    scaleSlider:SetObeyStepOnDrag(true)
+    _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
+    _G[scaleSlider:GetName() .. "High"]:SetText("150%")
+    _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale")
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 5 + 0.5) * 5
+        XalsXRDB.arrowScale = value / 100
+        _G[self:GetName() .. "Text"]:SetText("Arrow scale: " .. value .. "%")
+        Beacon:ApplyArrowStyle()
+    end)
+    waypointPanel.scaleSlider = scaleSlider
+
+    local scaleHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    scaleHelp:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", -6, -8)
+    scaleHelp:SetWidth(360)
+    scaleHelp:SetJustifyH("LEFT")
+    scaleHelp:SetText("Resizes the arrow uniformly - same shape, just bigger or smaller.")
+
+    waypointPanel:SetScript("OnShow", function()
+        local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
         for styleKey, styleBtn in pairs(arrowStyleButtons) do
             styleBtn:SetSelected(styleKey == currentArrowStyle)
         end
         progressColorCheck:SetChecked(not (XalsXRDB and XalsXRDB.arrowProgressColor == false))
+        local scalePct = math.floor(((XalsXRDB and XalsXRDB.arrowScale) or 1) * 100 + 0.5)
+        scaleSlider:SetValue(scalePct)
+        _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale: " .. scalePct .. "%")
     end)
 
-    return rootPanel
+    return waypointPanel
 end
 
 --------------------------------------------------------------------------------
@@ -461,11 +516,57 @@ local function BuildDataPanel()
     return dataPanel
 end
 
+--------------------------------------------------------------------------------
+-- Integrations panel: any optional third-party addon this one can hand off to.
+-- Home for TomTom now; anywhere future optional addon interop settings belong.
+--------------------------------------------------------------------------------
+local function BuildIntegrationsPanel()
+    integrationsPanel = CreateFrame("Frame")
+    integrationsPanel.name = "Integrations"
+
+    local title = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("Integrations")
+
+    local intro = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    intro:SetWidth(460)
+    intro:SetJustifyH("LEFT")
+    intro:SetText("Optional hand-offs to other addons, if you have them installed. Nothing here is required for this addon's own features to work.")
+
+    local tomtomHeader = CreateHeader(integrationsPanel, intro, "TomTom", -22)
+
+    local tomtomCheck = CreateFrame("CheckButton", nil, integrationsPanel, "UICheckButtonTemplate")
+    tomtomCheck:SetPoint("TOPLEFT", tomtomHeader, "BOTTOMLEFT", 2, -6)
+    tomtomCheck.Text:SetText("Sync TomTom's crazy arrow to your current route stop")
+    tomtomCheck:SetScript("OnClick", function(self)
+        XalsXRDB.tomtomSyncEnabled = self:GetChecked() and true or false
+        if not XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.ClearWaypoints then
+            addonTable.TomTomBridge:ClearWaypoints()
+        end
+    end)
+    integrationsPanel.tomtomCheck = tomtomCheck
+
+    local tomtomHelp = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    tomtomHelp:SetPoint("TOPLEFT", tomtomCheck, "BOTTOMLEFT", -2, -4)
+    tomtomHelp:SetWidth(420)
+    tomtomHelp:SetJustifyH("LEFT")
+    tomtomHelp:SetText("Off by default. Does nothing if TomTom isn't installed. When on, keeps TomTom's own arrow pointed at whatever stop this addon's route currently considers next.")
+
+    integrationsPanel:SetScript("OnShow", function()
+        tomtomCheck:SetChecked(XalsXRDB and XalsXRDB.tomtomSyncEnabled == true)
+    end)
+
+    return integrationsPanel
+end
+
 function SettingsPanel:Init()
     if rootPanel then return end
     BuildRootPanel()
+    BuildWaypointPanel()
     BuildMarkersPanel()
     BuildDataPanel()
+    BuildIntegrationsPanel()
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         -- Modern Settings API (retail 10.0+), with real sub-sections in the category tree
@@ -475,16 +576,22 @@ function SettingsPanel:Init()
         SettingsPanel.category = rootCategory
 
         if Settings.RegisterCanvasLayoutSubcategory then
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, waypointPanel, waypointPanel.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, markersPanel, markersPanel.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataPanel, dataPanel.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsPanel, integrationsPanel.name)
         end
     elseif InterfaceOptions_AddCategory then
         -- Legacy fallback for older clients: nest sub-panels under the root by name
         InterfaceOptions_AddCategory(rootPanel)
+        waypointPanel.parent = rootPanel.name
+        InterfaceOptions_AddCategory(waypointPanel)
         markersPanel.parent = rootPanel.name
         InterfaceOptions_AddCategory(markersPanel)
         dataPanel.parent = rootPanel.name
         InterfaceOptions_AddCategory(dataPanel)
+        integrationsPanel.parent = rootPanel.name
+        InterfaceOptions_AddCategory(integrationsPanel)
     end
 end
 
