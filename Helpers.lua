@@ -82,10 +82,29 @@ function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
     -- being the "legacy" API, this is the one confirmed to work reliably without
     -- the Professions window ever having been opened - it reads from the
     -- character's core profession slots directly, not the trade-skill/recipe UI's
-    -- own lazily-loaded cache. This is what most addons that need profession info
-    -- at login actually rely on for that reason.
+    -- own lazily-loaded cache. Verified directly: C_TradeSkillUI's modern
+    -- equivalent, when called cold (Professions window never opened), returns
+    -- its entire static reference list of every profession skill line in the
+    -- game's history with every skillLevel reported as 0 - completely unusable
+    -- for this purpose until that window has been opened. This is what most
+    -- addons that need profession info at login actually rely on for that reason.
     if _G.GetProfessions and _G.GetProfessionInfo then
         local prof1, prof2 = GetProfessions()
+
+        -- Neither profession slot has ANY data at all - this is much more
+        -- likely a timing gap (profession data genuinely not populated yet on
+        -- a truly fresh login) than a character with zero professions. Verified
+        -- directly: this does happen on cold login even though the same check
+        -- works correctly moments later after a /reload, meaning the earlier
+        -- assumption that GetProfessions() always has real data immediately was
+        -- wrong for this specific case. Don't cache anything here - leave it
+        -- uncached so the backstop re-check timers (see Engine.lua) get another
+        -- shot at it once the data's actually loaded, instead of permanently
+        -- locking in a false "no professions" result for the whole session.
+        if not prof1 and not prof2 then
+            return true
+        end
+
         -- Checked explicitly rather than via ipairs({prof1, prof2}) - ipairs stops
         -- at the first nil it sees, so if prof1 is nil and prof2 holds a real
         -- profession (entirely possible depending on which slot a profession
@@ -100,8 +119,10 @@ function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
                 end
             end
         end
-        -- GetProfessions() always returns real data immediately (nil slots for
-        -- professions you don't have, not "not loaded yet") - so a full scan with
+        -- At least one real profession slot WAS found above (we already ruled
+        -- out "both empty" earlier), so a scan that found no match here is a
+        -- confirmed, trustworthy "no" - this character has real profession
+        -- data and it genuinely doesn't include this one.
         -- no match is a confirmed, trustworthy "no", not an inconclusive result.
         confirmedProfessionCache[parentSkillLineID] = false
         return false
