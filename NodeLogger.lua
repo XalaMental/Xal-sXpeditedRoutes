@@ -62,7 +62,7 @@ local NON_MAP_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, compassArrowStyle = true,
+    duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
 }
 
 function NodeLogger.RemoveDuplicates()
