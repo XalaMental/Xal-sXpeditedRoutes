@@ -58,6 +58,15 @@ function Helpers.IsProfessionDetectionConfirmed()
         and confirmedProfessionCache[Helpers.HERBALISM_SKILL_LINE] ~= nil
 end
 
+-- Wipes the cached answers so the next check re-reads real profession data
+-- instead of trusting an old cached result. Needed because a confirmed answer
+-- isn't permanent - a player can learn (or drop) a profession mid-session,
+-- which a one-time login-only cache can't account for.
+function Helpers.ClearProfessionCache()
+    confirmedProfessionCache[Helpers.MINING_SKILL_LINE] = nil
+    confirmedProfessionCache[Helpers.HERBALISM_SKILL_LINE] = nil
+end
+
 local function NameMatches(name, matchNames)
     if not name or not matchNames then return false end
     local lowerName = name:lower()
