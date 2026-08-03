@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120100, 120007
 ## Title: Xal's Xpedited Routes
 ## Notes: Records gathering positions and displays them on the map and minimap, with an optimal-route compass - combining node-tracking and route optimization into one tool.
 ## Author: XalaMental
