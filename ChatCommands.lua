@@ -8,6 +8,27 @@ local QuickButton = addonTable.QuickButton
 local Beacon = addonTable.Beacon
 local TomTomBridge = addonTable.TomTomBridge
 
+-- Keybind support (see Bindings.xml). These have to be plain globals, not
+-- addonTable-scoped or local - Bindings.xml calls them by exact global name,
+-- and WoW's Key Bindings UI reads the BINDING_HEADER_*/BINDING_NAME_* globals
+-- to build the labels shown in that menu.
+BINDING_HEADER_XALSXPEDITEDROUTES = "Xal's Xpedited Routes"
+BINDING_NAME_XALSXR_ROUTE_START = "Start/Update Route"
+BINDING_NAME_XALSXR_ROUTE_STOP = "Stop Route"
+BINDING_NAME_XALSXR_ROUTE_SKIP = "Skip Current Node"
+
+function XalsXR_KeybindStartRoute()
+    PathPlanner:PlotCourse()
+end
+
+function XalsXR_KeybindStopRoute()
+    PathPlanner:CancelPath()
+end
+
+function XalsXR_KeybindSkipNode()
+    PathPlanner:SkipPin()
+end
+
 SLASH_XALMORASXR1 = "/xxr"
 SLASH_XALMORASXR2 = "/xalmoras"
 
