@@ -128,6 +128,119 @@ local function CreateButton(parentPanel, anchorTo, xOffset, yOffset, label, widt
     return btn
 end
 
+-- A button that lets the player set a keybind without leaving this panel,
+-- using the exact same SetBinding()/SaveBindings() API Blizzard's own Key
+-- Bindings UI uses - so whatever gets set here shows up there too, and vice
+-- versa, since both are just reading/writing the same underlying data.
+local IGNORED_KEYS = {
+    LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
+    UNKNOWN = true,
+}
+local function CreateKeybindButton(parentPanel, anchorTo, xOffset, yOffset, label, bindingName)
+    local row = CreateFrame("Frame", nil, parentPanel)
+    row:SetSize(420, 24)
+    row:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", xOffset, yOffset)
+
+    local labelText = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    labelText:SetPoint("LEFT", row, "LEFT", 0, 0)
+    labelText:SetWidth(230)
+    labelText:SetJustifyH("LEFT")
+    labelText:SetText(label)
+
+    local btn = CreateFrame("Button", nil, row, "BackdropTemplate")
+    btn:SetSize(160, 22)
+    btn:SetPoint("LEFT", labelText, "RIGHT", 10, 0)
+    btn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    btn:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
+    btn:SetBackdropBorderColor(0.72, 0.55, 0.14, 1)
+
+    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    btnText:SetPoint("CENTER")
+    btnText:SetWidth(150)
+    btnText:SetWordWrap(false)
+    btnText:SetTextColor(0.95, 0.82, 0.4)
+    btn.text = btnText
+
+    local function UpdateDisplay()
+        if btn.listening then
+            btnText:SetText("Press a key... (Esc clears)")
+            return
+        end
+        local key1 = GetBindingKey(bindingName)
+        btnText:SetText(key1 or "Not Bound")
+    end
+    btn.UpdateDisplay = UpdateDisplay
+
+    local function StopListening()
+        btn.listening = false
+        btn:EnableKeyboard(false)
+        btn:SetBackdropBorderColor(0.72, 0.55, 0.14, 1)
+        UpdateDisplay()
+    end
+
+    btn:SetScript("OnKeyDown", function(self, key)
+        if IGNORED_KEYS[key] then return end
+        self:SetPropagateKeyboardInput(false)
+
+        if key == "ESCAPE" then
+            local existingKey = GetBindingKey(bindingName)
+            if existingKey then
+                SetBinding(existingKey)
+                SaveBindings(GetCurrentBindingSet())
+            end
+            StopListening()
+            return
+        end
+
+        local combo = key
+        if IsShiftKeyDown() then combo = "SHIFT-" .. combo end
+        if IsControlKeyDown() then combo = "CTRL-" .. combo end
+        if IsAltKeyDown() then combo = "ALT-" .. combo end
+
+        SetBinding(combo, bindingName)
+        SaveBindings(GetCurrentBindingSet())
+        StopListening()
+    end)
+
+    btn:SetScript("OnClick", function(self)
+        if self.listening then
+            StopListening()
+            return
+        end
+        self.listening = true
+        self:EnableKeyboard(true)
+        self:SetPropagateKeyboardInput(false)
+        self:SetBackdropBorderColor(1, 0.85, 0.2, 1)
+        UpdateDisplay()
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        if not self.listening then
+            self:SetBackdropColor(0.18, 0.18, 0.14, 0.95)
+        end
+    end)
+    btn:SetScript("OnLeave", function(self)
+        if not self.listening then
+            self:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
+        end
+    end)
+
+    btn:SetScript("OnHide", function(self)
+        if self.listening then
+            StopListening()
+        end
+    end)
+
+    UpdateDisplay()
+    row.btn = btn
+    row.UpdateDisplay = UpdateDisplay
+    return row
+end
+
 --------------------------------------------------------------------------------
 -- General (root) panel: visibility toggles, helper button, auto-advance distance
 --------------------------------------------------------------------------------
@@ -194,11 +307,26 @@ local function BuildRootPanel()
     sliderHelp:SetJustifyH("LEFT")
     sliderHelp:SetText("How close you need to be to a node before the compass automatically advances to the next one.")
 
+    local keybindHeader = CreateHeader(rootPanel, sliderHelp, "Keybinds", -22)
+
+    local keybindStartRow = CreateKeybindButton(rootPanel, keybindHeader, 2, -10, "Start/Update Route", "XALSXR_ROUTE_START")
+    local keybindStopRow = CreateKeybindButton(rootPanel, keybindStartRow, 0, -6, "Stop Route", "XALSXR_ROUTE_STOP")
+    local keybindSkipRow = CreateKeybindButton(rootPanel, keybindStopRow, 0, -6, "Skip Current Node", "XALSXR_ROUTE_SKIP")
+
+    local keybindHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    keybindHelp:SetPoint("TOPLEFT", keybindSkipRow, "BOTTOMLEFT", 0, -8)
+    keybindHelp:SetWidth(420)
+    keybindHelp:SetJustifyH("LEFT")
+    keybindHelp:SetText("Click a button, then press the key you want. Not bound to anything by default. These stay in sync with Options -> Key Bindings if you'd rather set them there instead.")
+
     local RefreshRootPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
         local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
+        keybindStartRow.UpdateDisplay()
+        keybindStopRow.UpdateDisplay()
+        keybindSkipRow.UpdateDisplay()
     end
     rootPanel:SetScript("OnShow", RefreshRootPanel)
     rootPanel.Refresh = RefreshRootPanel
