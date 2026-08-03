@@ -13,10 +13,16 @@ eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("ZONE_CHANGED")
 eventFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
--- These fire once the client actually has profession/skill data loaded - which
--- doesn't always happen immediately at login. Re-checking on these lets any
--- earlier "assume known" guess (see Helpers.HasGatheringProfession) correct itself
--- automatically once real data is available, with no action needed from the player.
+-- TRADE_SKILL_LIST_UPDATE/PLAYER_LOGIN fire once the client actually has
+-- profession/skill data loaded - which doesn't always happen immediately at
+-- login. Re-checking on these lets any earlier "assume known" guess (see
+-- Helpers.HasGatheringProfession) correct itself automatically once real data
+-- is available, with no action needed from the player.
+--
+-- SKILL_LINES_CHANGED does that too, but ALSO fires for a genuine mid-session
+-- change - learning a brand new profession, or replacing one at a trainer -
+-- which is why it's never unregistered the way the other two are (see
+-- HandleSkillLinesChanged below).
 eventFrame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
@@ -31,11 +37,12 @@ local function RefreshProfessionDependentUI()
 end
 
 -- Runs a check, and once both professions have a CONFIRMED answer (see
--- Helpers.IsProfessionDetectionConfirmed), stops doing any further work - no more
--- point re-checking something that's already known for certain and can't change
--- mid-session. Unregisters the two "maybe the data's ready now" events too, so
--- they stop even reaching this function; the login-window rechecks below just
--- become instant no-ops via the confirmed check up front.
+-- Helpers.IsProfessionDetectionConfirmed), stops doing any further work for
+-- THIS specific pass - no point re-checking something already known for
+-- certain in this moment. TRADE_SKILL_LIST_UPDATE gets unregistered once
+-- confirmed, since that one's really just a "trade window data loaded" signal
+-- with nothing further to tell us. SKILL_LINES_CHANGED deliberately stays
+-- registered forever - see HandleSkillLinesChanged below for why.
 local function ProfessionCheckTick()
     if Helpers.IsProfessionDetectionConfirmed() then return end
 
@@ -43,8 +50,21 @@ local function ProfessionCheckTick()
 
     if Helpers.IsProfessionDetectionConfirmed() then
         eventFrame:UnregisterEvent("TRADE_SKILL_LIST_UPDATE")
-        eventFrame:UnregisterEvent("SKILL_LINES_CHANGED")
     end
+end
+
+-- SKILL_LINES_CHANGED fires both for the login "data isn't ready yet" case AND
+-- for a genuine mid-session change (learning a brand new profession, or
+-- replacing one at a trainer) - those look identical from this event alone.
+-- If detection was already confirmed, the only reason this could be firing
+-- again is a real change, so the stale cached answer has to be thrown out
+-- first, or the next check would just trust the old (now wrong) result and
+-- do nothing.
+local function HandleSkillLinesChanged()
+    if Helpers.IsProfessionDetectionConfirmed() then
+        Helpers.ClearProfessionCache()
+    end
+    ProfessionCheckTick()
 end
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
@@ -118,6 +138,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             Engine.HBDPins = LibStub("HereBeDragons-Pins-2.0", true)
             
             print("|cff00ccffXal's XR|r loaded successfully.")
+            print("|cff888888Xal's XR:|r Route keybinds available in Settings -> General (not set by default).")
             if not (Engine.HBD and Engine.HBDPins) then
                 print("|cffff9900Xal's XR:|r Optional library 'HereBeDragons' not found - map/minimap pins are disabled and cross-zone distances are approximate until it's installed. Recording, routing, and the compass still work normally.")
             end
@@ -160,7 +181,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if addonTable.QuickButton.Refresh then
             addonTable.QuickButton:Refresh()
         end
-    elseif event == "TRADE_SKILL_LIST_UPDATE" or event == "SKILL_LINES_CHANGED" or event == "PLAYER_LOGIN" then
+    elseif event == "SKILL_LINES_CHANGED" then
+        HandleSkillLinesChanged()
+    elseif event == "TRADE_SKILL_LIST_UPDATE" or event == "PLAYER_LOGIN" then
         ProfessionCheckTick()
     end
 end)
