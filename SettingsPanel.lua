@@ -194,12 +194,14 @@ local function BuildRootPanel()
     sliderHelp:SetJustifyH("LEFT")
     sliderHelp:SetText("How close you need to be to a node before the compass automatically advances to the next one.")
 
-    rootPanel:SetScript("OnShow", function()
+    local RefreshRootPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
         local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
-    end)
+    end
+    rootPanel:SetScript("OnShow", RefreshRootPanel)
+    rootPanel.Refresh = RefreshRootPanel
 
     return rootPanel
 end
@@ -286,7 +288,7 @@ local function BuildWaypointPanel()
     scaleHelp:SetJustifyH("LEFT")
     scaleHelp:SetText("Resizes the arrow uniformly - same shape, just bigger or smaller.")
 
-    waypointPanel:SetScript("OnShow", function()
+    local RefreshWaypointPanel = function()
         local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
         for styleKey, styleBtn in pairs(arrowStyleButtons) do
             styleBtn:SetSelected(styleKey == currentArrowStyle)
@@ -295,7 +297,9 @@ local function BuildWaypointPanel()
         local scalePct = math.floor(((XalsXRDB and XalsXRDB.arrowScale) or 1) * 100 + 0.5)
         scaleSlider:SetValue(scalePct)
         _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale: " .. scalePct .. "%")
-    end)
+    end
+    waypointPanel:SetScript("OnShow", RefreshWaypointPanel)
+    waypointPanel.Refresh = RefreshWaypointPanel
 
     return waypointPanel
 end
@@ -424,7 +428,7 @@ local function BuildMarkersPanel()
     end)
     markersPanel.proximitySlider = proximitySlider
 
-    markersPanel:SetScript("OnShow", function()
+    local RefreshMarkersPanel = function()
         local currentStyle = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
         for styleKey, styleBtn in pairs(pinStyleButtons) do
             styleBtn:SetSelected(styleKey == currentStyle)
@@ -439,7 +443,9 @@ local function BuildMarkersPanel()
         local dist = (XalsXRDB and XalsXRDB.proximityDistanceYards) or 200
         proximitySlider:SetValue(dist)
         _G[proximitySlider:GetName() .. "Text"]:SetText("Hide distance: " .. dist .. " yd")
-    end)
+    end
+    markersPanel:SetScript("OnShow", RefreshMarkersPanel)
+    markersPanel.Refresh = RefreshMarkersPanel
 
     return markersPanel
 end
@@ -506,12 +512,14 @@ local function BuildDataPanel()
     resetAllBtn:SetBackdropBorderColor(0.75, 0.2, 0.2, 1)
     resetAllBtn.text:SetTextColor(1, 0.55, 0.5)
 
-    dataPanel:SetScript("OnShow", function()
+    local RefreshDataPanel = function()
         RefreshStats()
         local dupYards = (XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15
         dupSlider:SetValue(dupYards)
         _G[dupSlider:GetName() .. "Text"]:SetText("Duplicate detection distance: " .. dupYards .. " yd")
-    end)
+    end
+    dataPanel:SetScript("OnShow", RefreshDataPanel)
+    dataPanel.Refresh = RefreshDataPanel
 
     return dataPanel
 end
@@ -553,9 +561,11 @@ local function BuildIntegrationsPanel()
     tomtomHelp:SetJustifyH("LEFT")
     tomtomHelp:SetText("Off by default. Does nothing if TomTom isn't installed. When on, keeps TomTom's own arrow pointed at whatever stop this addon's route currently considers next.")
 
-    integrationsPanel:SetScript("OnShow", function()
+    local RefreshIntegrationsPanel = function()
         tomtomCheck:SetChecked(XalsXRDB and XalsXRDB.tomtomSyncEnabled == true)
-    end)
+    end
+    integrationsPanel:SetScript("OnShow", RefreshIntegrationsPanel)
+    integrationsPanel.Refresh = RefreshIntegrationsPanel
 
     return integrationsPanel
 end
@@ -593,6 +603,30 @@ function SettingsPanel:Init()
         integrationsPanel.parent = rootPanel.name
         InterfaceOptions_AddCategory(integrationsPanel)
     end
+
+    -- Backstop: OnShow does not reliably fire for these panels when switching
+    -- between sub-categories inside the modern Settings window (confirmed live -
+    -- every slider on every sub-page was showing its bare label with no current
+    -- value, every time, with no errors - meaning OnShow just wasn't running,
+    -- not that anything inside it was wrong). Polling actual frame visibility
+    -- directly sidesteps that entirely, since it doesn't depend on any
+    -- particular script event firing at all.
+    local panels = { rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel }
+    local wasVisible = {}
+    local pollTimer = 0
+    local poller = CreateFrame("Frame")
+    poller:SetScript("OnUpdate", function(self, elapsed)
+        pollTimer = pollTimer + elapsed
+        if pollTimer < 0.1 then return end
+        pollTimer = 0
+        for _, panel in ipairs(panels) do
+            local isVisible = panel:IsVisible()
+            if isVisible and not wasVisible[panel] and panel.Refresh then
+                panel.Refresh()
+            end
+            wasVisible[panel] = isVisible
+        end
+    end)
 end
 
 function SettingsPanel:Open()
