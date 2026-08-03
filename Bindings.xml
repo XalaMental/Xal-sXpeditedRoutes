@@ -1,0 +1,11 @@
+<Bindings>
+    <Binding name="XALSXR_ROUTE_START" header="XALSXPEDITEDROUTES">
+        XalsXR_KeybindStartRoute()
+    </Binding>
+    <Binding name="XALSXR_ROUTE_STOP">
+        XalsXR_KeybindStopRoute()
+    </Binding>
+    <Binding name="XALSXR_ROUTE_SKIP">
+        XalsXR_KeybindSkipNode()
+    </Binding>
+</Bindings>
