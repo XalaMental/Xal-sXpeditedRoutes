@@ -40,7 +40,7 @@ It's split into five sections (shown as sub-items under Xal's Xpedited Routes in
 *   **Database** — stats, duplicate detection distance, cleanup/reset
 *   **Integrations** — optional hand-offs to other addons (currently just TomTom); home for any future ones too
 
-Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` still work from chat if you'd rather not use the floater.
+Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` still work from chat if you'd rather not use the floater. All three can also be bound to a real key: **Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes**. Unbound by default.
 
 ## Floating Helper Button
 
