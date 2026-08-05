@@ -118,7 +118,10 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.tomtomSyncEnabled == nil then
                 XalsXRDB.tomtomSyncEnabled = false
             end
-            
+            if XalsXRDB.freshnessMinutes == nil then
+                XalsXRDB.freshnessMinutes = Helpers.DEFAULT_FRESHNESS_MINUTES
+            end
+
             -- Per-character preferences (route filters etc. - these can differ per alt,
             -- e.g. a character with only Mining wants Herbalism nodes skipped)
             XalsXRCharDB = XalsXRCharDB or {}
@@ -138,7 +141,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             Engine.HBDPins = LibStub("HereBeDragons-Pins-2.0", true)
             
             print("|cff00ccffXal's XR|r loaded successfully.")
-            print("|cff888888Xal's XR:|r Route keybinds available in Settings -> General (not set by default).")
+            print("|cff888888Xal's XR:|r Route keybinds available in Options -> Key Bindings (not set by default).")
             if not (Engine.HBD and Engine.HBDPins) then
                 print("|cffff9900Xal's XR:|r Optional library 'HereBeDragons' not found - map/minimap pins are disabled and cross-zone distances are approximate until it's installed. Recording, routing, and the compass still work normally.")
             end

@@ -184,6 +184,25 @@ function Helpers.GetDuplicateYards()
     return (XalsXRDB and XalsXRDB.duplicateDistanceYards) or Helpers.DEFAULT_DUPLICATE_YARDS
 end
 
+-- WoW doesn't expose real node respawn timers to addons, so this is a blunt
+-- heuristic: a node gathered very recently almost certainly hasn't respawned
+-- yet, so it's not worth routing to. 0 disables the check entirely.
+Helpers.DEFAULT_FRESHNESS_MINUTES = 10
+
+function Helpers.GetFreshnessMinutes()
+    return (XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES
+end
+
+-- True if `node` was gathered recently enough that it probably hasn't
+-- respawned. Nodes saved before this feature existed (or never gathered a
+-- second time) have no lastGathered value at all - treated as NOT recent,
+-- since there's no evidence either way and excluding them by default would
+-- silently drop nodes nobody actually just picked.
+function Helpers.IsNodeRecentlyGathered(node, freshnessMinutes)
+    if not node.lastGathered or freshnessMinutes <= 0 then return false end
+    return (time() - node.lastGathered) < (freshnessMinutes * 60)
+end
+
 function Helpers.NodeDistanceYards(Core, mapID, x1, y1, x2, y2)
     if Core.HBD then
         local dist = Core.HBD:GetZoneDistance(mapID, x1, y1, x2, y2)
