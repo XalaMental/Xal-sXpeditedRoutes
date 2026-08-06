@@ -187,7 +187,8 @@ end
 -- WoW doesn't expose real node respawn timers to addons, so this is a blunt
 -- heuristic: a node gathered very recently almost certainly hasn't respawned
 -- yet, so it's not worth routing to. 0 disables the check entirely.
-Helpers.DEFAULT_FRESHNESS_MINUTES = 10
+-- Ships OFF by default (Xperimental / opt-in) - players enable it via /xxr freshness.
+Helpers.DEFAULT_FRESHNESS_MINUTES = 0
 
 function Helpers.GetFreshnessMinutes()
     return (XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES
