@@ -16,11 +16,15 @@ local function SaveNode(uiMapID, x, y, gatherType)
     local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, x, y, duplicateYards)
 
     if existingIndex then
+        -- Same spot gathered again - that's useful signal (it respawned and
+        -- got picked), so refresh its freshness timestamp instead of just
+        -- discarding the information.
+        zoneNodes[existingIndex].lastGathered = time()
         print("|cffff9900Xal's XR:|r This node is already recorded.")
         return
     end
 
-    table.insert(zoneNodes, { x = x, y = y, type = gatherType })
+    table.insert(zoneNodes, { x = x, y = y, type = gatherType, lastGathered = time() })
     print("|cff00ff00Xal's XR:|r " .. (gatherType == "mine" and "Vein" or "Herb") .. " saved to your database.")
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
@@ -63,6 +67,7 @@ local NON_MAP_KEYS = {
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
+    freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
 }
 
 function NodeLogger.RemoveDuplicates()
