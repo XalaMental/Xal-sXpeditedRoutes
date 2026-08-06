@@ -13,3 +13,4 @@ addonTable.SettingsPanel = {}
 addonTable.QuickButton = {}
 addonTable.MarkerRenderer = {}
 addonTable.TomTomBridge = {}
+addonTable.RunTracker = {}
