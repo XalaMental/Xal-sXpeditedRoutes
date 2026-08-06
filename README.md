@@ -18,6 +18,7 @@ No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is
 *   **Local Database:** Data is stored in your personal `SavedVariables`, ensuring that your gathering database remains private and persistent.
 *   **False Nodes Filtering:** Automatically excludes corpse-based herbalism (such as those in Midnight) to avoid registering invalid coordinates.
 *   **Duplicate Cleanup:** Built-in algorithm to automatically detect and remove duplicate or extremely close node records.
+*   **Node Freshness:** Skips nodes gathered too recently when building a route, since they probably haven't respawned yet.
 *   **Route Optimization:** Builds an initial path with a greedy nearest-neighbor approach, then improves it with a 2-opt pass that un-crosses and shortens the route further, using real distances in yards when HereBeDragons is installed (an approximation otherwise).
 *   **HUD Compass:** A floating, dynamic arrow that rotates based on the direction your character is facing and shows the exact distance to the next node.
 *   **Simple Map Markers:** A hollow X (default) or hollow star, green for Herbalism and red for Mining, with a small dot marking your active route target. Fully hides itself once you're close to a node, since the real node model in the world is what matters at that range.
@@ -37,10 +38,10 @@ It's split into five sections (shown as sub-items under Xal's Xpedited Routes in
 *   **General** — show/hide the floating helper button (+ reset its position), auto-advance distance
 *   **Waypoint** — compass arrow style, arrow scale, progress coloring
 *   **Map Markers** — marker style, size, opacity, glow, proximity hide distance
-*   **Database** — stats, duplicate detection distance, cleanup/reset
+*   **Database** — stats, duplicate detection distance, node freshness, cleanup/reset
 *   **Integrations** — optional hand-offs to other addons (currently just TomTom); home for any future ones too
 
-Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` still work from chat if you'd rather not use the floater. All three can also be bound to a real key — click the keybind buttons in Settings -> General, or set them the usual way at Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes (both stay in sync, since they're the same underlying binding). Unbound by default.
+Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` work from chat if you'd rather not use the floater. All three can also be bound to a real key at Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes. Unbound by default.
 
 ## Floating Helper Button
 
@@ -114,6 +115,10 @@ This checks your character's actual known professions using WoW's profession-det
 How close two saved nodes need to be before they're treated as "the same node" - used when recording a new gather and running Cleanup Duplicates. Distances are computed in actual yards via HereBeDragons when it's installed, rather than a raw fraction of the zone's coordinate space, which is why it could otherwise feel inconsistent - 1% of a zone's own coordinate space is a very different real distance in a small zone than a huge one. Default is 15 yards, adjustable 5-50 in Settings -> Database, or with `/xxr dupdistance <5-50>`.
 
 If you were seeing "this node is already recorded" with no marker anywhere nearby, lowering this should fix it - then run Cleanup Duplicates (or `/xxr cleanup`) to reapply the new distance to nodes you've already saved.
+
+## Node Freshness
+
+WoW doesn't tell addons when a node has actually respawned, so this is a simple heuristic: any node gathered more recently than this many minutes is skipped when building a route, since it probably hasn't grown/re-spawned back yet. Whenever you gather at an already-recorded spot, that node's "last gathered" time is refreshed too, so this keeps working correctly as nodes get picked over and over across sessions. Default is 10 minutes, adjustable 0-60 in Settings -> Database, or with `/xxr freshness <0-60>` - 0 turns it off and routes to every saved node regardless of when it was last picked. If filtering would leave nothing to route to, it's ignored for that route rather than leaving you with nothing.
 
 ## TomTom Hand-off (optional, off by default)
 
