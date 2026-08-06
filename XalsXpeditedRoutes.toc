@@ -26,3 +26,4 @@ Markers.lua
 TomTomBridge.lua
 SettingsPanel.lua
 ChatCommands.lua
+Bindings.xml
