@@ -28,4 +28,3 @@ TomTomBridge.lua
 SettingsPanel.lua
 RunTracker.lua
 ChatCommands.lua
-Bindings.xml
