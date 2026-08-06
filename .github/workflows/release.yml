@@ -22,3 +22,13 @@ jobs:
           fetch-depth: 0 # needed so the packager can generate a changelog from commit history
 
       - uses: BigWigsMods/packager@v2
+
+      # Announce the release in Discord: posts the latest CHANGELOG.md entry to a
+      # webhook (clean, player-facing - no filenames). No-ops safely if the
+      # DISCORD_WEBHOOK_URL secret isn't set, so it never breaks a release.
+      - name: Announce on Discord
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/discord_changelog.py
