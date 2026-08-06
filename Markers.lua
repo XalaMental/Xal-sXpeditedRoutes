@@ -111,7 +111,7 @@ local function ProximityTick(elapsed)
     local minimapRadius = Minimap:GetWidth() / 2
     if not minimapRadius or minimapRadius <= 0 then return end
 
-    local viewRadiusYards = C_Minimap.GetViewRadius and C_Minimap.GetViewRadius()
+    local viewRadiusYards = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius()
     local thresholdPixels
     if viewRadiusYards and viewRadiusYards > 0 then
         local thresholdYards = (XalsXRDB and XalsXRDB.proximityDistanceYards) or DEFAULT_PROXIMITY_DISTANCE_YARDS
