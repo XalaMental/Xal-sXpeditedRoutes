@@ -5,3 +5,9 @@ package-as: XalsXpeditedRoutes
 ignore:
   - .github
   - .gitignore
+
+# Use our hand-maintained, styled changelog as the release changelog on
+# CurseForge instead of the packager's auto-generated commit list.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
