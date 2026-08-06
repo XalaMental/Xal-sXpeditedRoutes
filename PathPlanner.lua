@@ -165,13 +165,28 @@ function PathPlanner:PlotCourse(typeFilter)
     for _, node in ipairs(XalsXRDB[mapID]) do
         local excluded = (node.type == "mine" and excludeMining) or (node.type == "herb" and excludeHerbs)
         if not excluded then
-            table.insert(stops, { x = node.x, y = node.y, type = node.type })
+            table.insert(stops, { x = node.x, y = node.y, type = node.type, lastGathered = node.lastGathered })
         end
     end
 
     if #stops == 0 then
         print("|cff00ccffXal's XR:|r No nodes left to route to in this zone after applying your route filters.")
         return
+    end
+
+    -- Skip nodes gathered too recently to have plausibly respawned yet (see
+    -- Helpers.IsNodeRecentlyGathered). Same safety-net shape as the profession
+    -- filter above: if that would leave nothing to route to, fall back to
+    -- routing everything rather than returning an empty route.
+    local freshnessMinutes = Helpers.GetFreshnessMinutes()
+    local freshStops = {}
+    for _, stop in ipairs(stops) do
+        if not Helpers.IsNodeRecentlyGathered(stop, freshnessMinutes) then
+            table.insert(freshStops, stop)
+        end
+    end
+    if #freshStops > 0 then
+        stops = freshStops
     end
 
     local route = BuildGreedyOrder(mapID, startX, startY, stops)
