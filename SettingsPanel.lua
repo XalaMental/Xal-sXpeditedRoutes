@@ -14,6 +14,7 @@ local NodeLogger = addonTable.NodeLogger
 local Markers = addonTable.Markers
 local Beacon = addonTable.Beacon
 local QuickButton = addonTable.QuickButton
+local Helpers = addonTable.Helpers
 
 local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel
 local statsText = nil
@@ -29,7 +30,7 @@ local function GetStatsString()
                 and mapID ~= "helperButtonPosition" and mapID ~= "showGlow"
                 and mapID ~= "proximityDistanceYards"
                 and mapID ~= "arrowProgressColor" and mapID ~= "pinAlpha"
-                and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and type(nodes) == "table" then
+                and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and mapID ~= "freshnessMinutes" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -55,7 +56,7 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "helperButtonPosition" and key ~= "showGlow"
                 and key ~= "proximityDistanceYards"
                 and key ~= "arrowProgressColor" and key ~= "pinAlpha"
-                and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" and key ~= "arrowScale" and key ~= "tomtomSyncEnabled" then
+                and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" and key ~= "arrowScale" and key ~= "tomtomSyncEnabled" and key ~= "freshnessMinutes" then
                 XalsXRDB[key] = nil
             end
         end
@@ -128,119 +129,6 @@ local function CreateButton(parentPanel, anchorTo, xOffset, yOffset, label, widt
     return btn
 end
 
--- A button that lets the player set a keybind without leaving this panel,
--- using the exact same SetBinding()/SaveBindings() API Blizzard's own Key
--- Bindings UI uses - so whatever gets set here shows up there too, and vice
--- versa, since both are just reading/writing the same underlying data.
-local IGNORED_KEYS = {
-    LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
-    UNKNOWN = true,
-}
-local function CreateKeybindButton(parentPanel, anchorTo, xOffset, yOffset, label, bindingName)
-    local row = CreateFrame("Frame", nil, parentPanel)
-    row:SetSize(420, 24)
-    row:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", xOffset, yOffset)
-
-    local labelText = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    labelText:SetPoint("LEFT", row, "LEFT", 0, 0)
-    labelText:SetWidth(230)
-    labelText:SetJustifyH("LEFT")
-    labelText:SetText(label)
-
-    local btn = CreateFrame("Button", nil, row, "BackdropTemplate")
-    btn:SetSize(160, 22)
-    btn:SetPoint("LEFT", labelText, "RIGHT", 10, 0)
-    btn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
-    btn:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
-    btn:SetBackdropBorderColor(0.72, 0.55, 0.14, 1)
-
-    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    btnText:SetPoint("CENTER")
-    btnText:SetWidth(150)
-    btnText:SetWordWrap(false)
-    btnText:SetTextColor(0.95, 0.82, 0.4)
-    btn.text = btnText
-
-    local function UpdateDisplay()
-        if btn.listening then
-            btnText:SetText("Press a key... (Esc clears)")
-            return
-        end
-        local key1 = GetBindingKey(bindingName)
-        btnText:SetText(key1 or "Not Bound")
-    end
-    btn.UpdateDisplay = UpdateDisplay
-
-    local function StopListening()
-        btn.listening = false
-        btn:EnableKeyboard(false)
-        btn:SetBackdropBorderColor(0.72, 0.55, 0.14, 1)
-        UpdateDisplay()
-    end
-
-    btn:SetScript("OnKeyDown", function(self, key)
-        if IGNORED_KEYS[key] then return end
-        self:SetPropagateKeyboardInput(false)
-
-        if key == "ESCAPE" then
-            local existingKey = GetBindingKey(bindingName)
-            if existingKey then
-                SetBinding(existingKey)
-                SaveBindings(GetCurrentBindingSet())
-            end
-            StopListening()
-            return
-        end
-
-        local combo = key
-        if IsShiftKeyDown() then combo = "SHIFT-" .. combo end
-        if IsControlKeyDown() then combo = "CTRL-" .. combo end
-        if IsAltKeyDown() then combo = "ALT-" .. combo end
-
-        SetBinding(combo, bindingName)
-        SaveBindings(GetCurrentBindingSet())
-        StopListening()
-    end)
-
-    btn:SetScript("OnClick", function(self)
-        if self.listening then
-            StopListening()
-            return
-        end
-        self.listening = true
-        self:EnableKeyboard(true)
-        self:SetPropagateKeyboardInput(false)
-        self:SetBackdropBorderColor(1, 0.85, 0.2, 1)
-        UpdateDisplay()
-    end)
-
-    btn:SetScript("OnEnter", function(self)
-        if not self.listening then
-            self:SetBackdropColor(0.18, 0.18, 0.14, 0.95)
-        end
-    end)
-    btn:SetScript("OnLeave", function(self)
-        if not self.listening then
-            self:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
-        end
-    end)
-
-    btn:SetScript("OnHide", function(self)
-        if self.listening then
-            StopListening()
-        end
-    end)
-
-    UpdateDisplay()
-    row.btn = btn
-    row.UpdateDisplay = UpdateDisplay
-    return row
-end
-
 --------------------------------------------------------------------------------
 -- General (root) panel: visibility toggles, helper button, auto-advance distance
 --------------------------------------------------------------------------------
@@ -309,24 +197,37 @@ local function BuildRootPanel()
 
     local keybindHeader = CreateHeader(rootPanel, sliderHelp, "Keybinds", -22)
 
-    local keybindStartRow = CreateKeybindButton(rootPanel, keybindHeader, 2, -10, "Start/Update Route", "XALSXR_ROUTE_START")
-    local keybindStopRow = CreateKeybindButton(rootPanel, keybindStartRow, 0, -6, "Stop Route", "XALSXR_ROUTE_STOP")
-    local keybindSkipRow = CreateKeybindButton(rootPanel, keybindStopRow, 0, -6, "Skip Current Node", "XALSXR_ROUTE_SKIP")
-
     local keybindHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    keybindHelp:SetPoint("TOPLEFT", keybindSkipRow, "BOTTOMLEFT", 0, -8)
+    keybindHelp:SetPoint("TOPLEFT", keybindHeader, "BOTTOMLEFT", 2, -10)
     keybindHelp:SetWidth(420)
     keybindHelp:SetJustifyH("LEFT")
-    keybindHelp:SetText("Click a button, then press the key you want. Not bound to anything by default. These stay in sync with Options -> Key Bindings if you'd rather set them there instead.")
+    keybindHelp:SetText("Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
+
+    local haulHeader = CreateHeader(rootPanel, keybindHelp, "Gathering Haul", -22)
+
+    local haulCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
+    haulCheck:SetPoint("TOPLEFT", haulHeader, "BOTTOMLEFT", 2, -8)
+    haulCheck.Text:SetText("Show the live haul window while a route is active")
+    haulCheck:SetScript("OnClick", function(self)
+        XalsXRDB.showHaulSummary = self:GetChecked() and true or false
+        if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
+            addonTable.RunTracker:OnSettingChanged()
+        end
+    end)
+    rootPanel.haulCheck = haulCheck
+
+    local haulHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    haulHelp:SetPoint("TOPLEFT", haulCheck, "BOTTOMLEFT", -2, -4)
+    haulHelp:SetWidth(420)
+    haulHelp:SetJustifyH("LEFT")
+    haulHelp:SetText("A small movable window that tallies what you gather during a route. It stays open after the route ends so you can read it - close it with its X button. Summon it anytime with /xxr haul.")
 
     local RefreshRootPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
+        haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
-        keybindStartRow.UpdateDisplay()
-        keybindStopRow.UpdateDisplay()
-        keybindSkipRow.UpdateDisplay()
     end
     rootPanel:SetScript("OnShow", RefreshRootPanel)
     rootPanel.Refresh = RefreshRootPanel
@@ -615,7 +516,29 @@ local function BuildDataPanel()
     dupHelp:SetJustifyH("LEFT")
     dupHelp:SetText("How close two saved nodes need to be to count as the same one. If \"already recorded\" fires with no marker nearby, try lowering this.")
 
-    local cleanupBtn = CreateButton(dataPanel, dupHelp, 0, -12, "Cleanup Duplicates", 170, function()
+    local freshnessSlider = CreateFrame("Slider", "XalsXRFreshnessSlider", dataPanel, "OptionsSliderTemplate")
+    freshnessSlider:SetPoint("TOPLEFT", dupHelp, "BOTTOMLEFT", 6, -20)
+    freshnessSlider:SetWidth(220)
+    freshnessSlider:SetMinMaxValues(0, 60)
+    freshnessSlider:SetValueStep(5)
+    freshnessSlider:SetObeyStepOnDrag(true)
+    _G[freshnessSlider:GetName() .. "Low"]:SetText("Off")
+    _G[freshnessSlider:GetName() .. "High"]:SetText("60 min")
+    _G[freshnessSlider:GetName() .. "Text"]:SetText("Node freshness")
+    freshnessSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 5 + 0.5) * 5
+        XalsXRDB.freshnessMinutes = value
+        _G[self:GetName() .. "Text"]:SetText(value == 0 and "Node freshness: Off" or ("Node freshness: " .. value .. " min"))
+    end)
+    dataPanel.freshnessSlider = freshnessSlider
+
+    local freshnessHelp = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    freshnessHelp:SetPoint("TOPLEFT", freshnessSlider, "BOTTOMLEFT", -6, -8)
+    freshnessHelp:SetWidth(400)
+    freshnessHelp:SetJustifyH("LEFT")
+    freshnessHelp:SetText("Skips nodes you gathered more recently than this when building a route, since they probably haven't respawned yet. Off routes to every saved node regardless of when it was last picked.")
+
+    local cleanupBtn = CreateButton(dataPanel, freshnessHelp, 0, -12, "Cleanup Duplicates", 170, function()
         local removed = NodeLogger.RemoveDuplicates()
         print("|cff00ccffXal's XR:|r Cleanup complete. Removed |cffff9900" .. removed .. "|r duplicates.")
         Markers:UpdatePins()
@@ -645,6 +568,9 @@ local function BuildDataPanel()
         local dupYards = (XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15
         dupSlider:SetValue(dupYards)
         _G[dupSlider:GetName() .. "Text"]:SetText("Duplicate detection distance: " .. dupYards .. " yd")
+        local freshnessMinutes = (XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES
+        freshnessSlider:SetValue(freshnessMinutes)
+        _G[freshnessSlider:GetName() .. "Text"]:SetText(freshnessMinutes == 0 and "Node freshness: Off" or ("Node freshness: " .. freshnessMinutes .. " min"))
     end
     dataPanel:SetScript("OnShow", RefreshDataPanel)
     dataPanel.Refresh = RefreshDataPanel
