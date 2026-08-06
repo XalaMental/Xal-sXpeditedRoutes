@@ -1,0 +1,34 @@
+# MoP Classic build. The WoW client auto-loads this _Mists.toc on the Mists of
+# Pandaria Classic flavor and the base XalsXpeditedRoutes.toc on retail - same
+# folder, one shared Lua codebase.
+# MoP Classic interface, current as of patch 5.5.0.x (verified 2026-08-05 via
+# warcraft.wiki.gg). If a future patch flags "out of date" again, get the live
+# number in-game with: /dump select(4, GetBuildInfo())
+## Interface: 50504
+## Title: Xal's Xpedited Routes
+## Notes: Records gathering positions and displays them on the map and minimap, with an optimal-route compass - combining node-tracking and route optimization into one tool.
+## Author: XalaMental
+## X-Credits: Concept inspired by node-recording addons GatherMate2/Gatherer and route-optimization addon Routes.
+## X-License: MIT (code) - see LICENSE.md for full terms, including the custom-art exception
+## X-Curse-Project-ID: 1632781
+## SavedVariables: XalsXRDB
+## SavedVariablesPerCharacter: XalsXRCharDB
+## IconTexture: Interface\AddOns\XalsXpeditedRoutes\Textures\AddonIcon
+## OptionalDeps: HereBeDragons
+
+
+libs\LibStub\LibStub.lua
+libs\CallbackHandler\CallbackHandler-1.0.lua
+
+Bootstrap.lua
+Helpers.lua
+Engine.lua
+NodeLogger.lua
+PathPlanner.lua
+Beacon.lua
+MarkerRenderer.lua
+QuickButton.lua
+Markers.lua
+TomTomBridge.lua
+SettingsPanel.lua
+ChatCommands.lua
