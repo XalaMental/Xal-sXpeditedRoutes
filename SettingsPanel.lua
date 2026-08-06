@@ -203,6 +203,25 @@ local function BuildRootPanel()
     keybindHelp:SetJustifyH("LEFT")
     keybindHelp:SetText("Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
 
+    local haulHeader = CreateHeader(rootPanel, keybindHelp, "Gathering Haul", -22)
+
+    local haulCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
+    haulCheck:SetPoint("TOPLEFT", haulHeader, "BOTTOMLEFT", 2, -8)
+    haulCheck.Text:SetText("Show the live haul window while a route is active")
+    haulCheck:SetScript("OnClick", function(self)
+        XalsXRDB.showHaulSummary = self:GetChecked() and true or false
+        if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
+            addonTable.RunTracker:OnSettingChanged()
+        end
+    end)
+    rootPanel.haulCheck = haulCheck
+
+    local haulHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    haulHelp:SetPoint("TOPLEFT", haulCheck, "BOTTOMLEFT", -2, -4)
+    haulHelp:SetWidth(420)
+    haulHelp:SetJustifyH("LEFT")
+    haulHelp:SetText("A small movable window that tallies what you gather during a route. It stays open after the route ends so you can read it - close it with its X button. Summon it anytime with /xxr haul.")
+
     local RefreshRootPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
         haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
