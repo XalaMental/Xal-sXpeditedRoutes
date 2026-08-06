@@ -9,6 +9,7 @@ local Beacon = addonTable.Beacon
 local TomTomBridge = addonTable.TomTomBridge
 local Helpers = addonTable.Helpers
 local RunTracker = addonTable.RunTracker
+local Helpers = addonTable.Helpers
 
 -- Keybind support (see Bindings.xml). These have to be plain globals, not
 -- addonTable-scoped or local - Bindings.xml calls them by exact global name,
@@ -41,6 +42,7 @@ local EXCLUDED_KEYS = {
     arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
+    freshnessMinutes = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
@@ -150,6 +152,16 @@ SlashCmdList["XALMORASXR"] = function(msg)
             print("|cff00ccffXal's XR:|r Current node freshness: |cff00ff00" .. (current == 0 and "Off" or (current .. " min")) .. "|r")
             print("|cff888888/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
         end
+    elseif command == "freshness" then
+        local n = tonumber(subcommand)
+        if n and n >= 0 and n <= 60 then
+            XalsXRDB.freshnessMinutes = n
+            print("|cff00ccffXal's XR:|r Node freshness set to |cff00ff00" .. (n == 0 and "Off" or (n .. " min")) .. "|r.")
+        else
+            local current = XalsXRDB.freshnessMinutes or Helpers.DEFAULT_FRESHNESS_MINUTES
+            print("|cff00ccffXal's XR:|r Current node freshness: |cff00ff00" .. (current == 0 and "Off" or (current .. " min")) .. "|r")
+            print("|cff888888/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
+        end
     elseif command == "pinalpha" then
         local n = tonumber(subcommand)
         if n and n >= 30 and n <= 100 then
@@ -241,6 +253,7 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
+        print("  |cff00ff00/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
         print("  |cff00ff00/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
         print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom3, custom4, blizzard).")
         print("  |cff00ff00/xxr arrowscale <50-150>|r - Sets the arrow's size as a percentage.")

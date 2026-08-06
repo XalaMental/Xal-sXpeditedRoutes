@@ -67,7 +67,7 @@ local NON_MAP_KEYS = {
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
-    freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
+    freshnessMinutes = true,
 }
 
 function NodeLogger.RemoveDuplicates()
