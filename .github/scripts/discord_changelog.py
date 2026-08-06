@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import urllib.request
+import urllib.error
 
 # ------------------------------------------------------------------ config ----
 ADDON_NAME = "Xal's Xpedited Routes"
@@ -23,7 +24,7 @@ ADDON_EMOJI = "🗺️"
 CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/xals-xpedited-routes"  # ← VERIFY this slug
 EMBED_COLOR = 0x1D9E75  # teal-green accent bar on the embed
 CHANGELOG_PATH = "CHANGELOG.md"
-SKIP_CATEGORIES = ("under the hood",)  # categories left OUT of the public post
+SKIP_CATEGORIES = ()  # nothing dropped - the post shows every category / every file
 
 
 def latest_section(text):
@@ -65,10 +66,10 @@ def build_description(body, date):
             continue
         if skipping:
             continue
+        if line.strip() in ("", "---"):
+            continue
         if line.strip().startswith(("-", "*")):
             lines.append(clean_bullet(line))
-        elif line.strip() in ("", "---"):
-            continue
         else:
             lines.append(line)
     return "\n".join(lines).strip()
@@ -90,16 +91,13 @@ def main():
 
     heading, body = section
     parsed_version, date = parse_heading(heading)
-    # Prefer the actual git tag (e.g. V1.1.1) for the title; fall back to the
-    # version parsed from the changelog heading.
-    version = os.environ.get("RELEASE_TAG") or parsed_version
 
     description = build_description(body, date)
 
     payload = {
         "content": CURSEFORGE_URL,  # bare URL -> Discord renders the CurseForge card
         "embeds": [{
-            "title": f"{ADDON_EMOJI} {ADDON_NAME} — {version}",
+            "title": f"{ADDON_EMOJI} {ADDON_NAME} — {parsed_version}",
             "url": CURSEFORGE_URL,
             "description": description[:4000],
             "color": EMBED_COLOR,
@@ -108,10 +106,24 @@ def main():
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        webhook, data=data, headers={"Content-Type": "application/json"}
+        webhook, data=data,
+        headers={
+            "Content-Type": "application/json",
+            # Discord rejects webhook posts sent with urllib's default agent
+            # (HTTP 403), so send an explicit User-Agent.
+            "User-Agent": "XalsXpeditedRoutes-Release/1.0",
+        },
     )
-    with urllib.request.urlopen(req) as resp:
-        print(f"Posted release announcement to Discord (HTTP {resp.status}).")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            print(f"Posted release announcement to Discord (HTTP {resp.status}).")
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", "ignore")
+        print(f"Discord post FAILED: HTTP {err.code} - {detail}")
+        return 1
+    except urllib.error.URLError as err:
+        print(f"Discord post FAILED: {err.reason}")
+        return 1
     return 0
 
 
