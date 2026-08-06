@@ -184,6 +184,25 @@ function Helpers.GetDuplicateYards()
     return (XalsXRDB and XalsXRDB.duplicateDistanceYards) or Helpers.DEFAULT_DUPLICATE_YARDS
 end
 
+-- WoW doesn't expose real node respawn timers to addons, so this is a blunt
+-- heuristic: a node gathered very recently almost certainly hasn't respawned
+-- yet, so it's not worth routing to. 0 disables the check entirely.
+Helpers.DEFAULT_FRESHNESS_MINUTES = 10
+
+function Helpers.GetFreshnessMinutes()
+    return (XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES
+end
+
+-- True if `node` was gathered recently enough that it probably hasn't
+-- respawned. Nodes saved before this feature existed (or never gathered a
+-- second time) have no lastGathered value at all - treated as NOT recent,
+-- since there's no evidence either way and excluding them by default would
+-- silently drop nodes nobody actually just picked.
+function Helpers.IsNodeRecentlyGathered(node, freshnessMinutes)
+    if not node.lastGathered or freshnessMinutes <= 0 then return false end
+    return (time() - node.lastGathered) < (freshnessMinutes * 60)
+end
+
 function Helpers.NodeDistanceYards(Core, mapID, x1, y1, x2, y2)
     if Core.HBD then
         local dist = Core.HBD:GetZoneDistance(mapID, x1, y1, x2, y2)
@@ -198,9 +217,41 @@ end
 -- known fixed spell IDs, with a name-substring scan as a secondary pass only for
 -- IDs the table doesn't recognize - this way the common case (a known ID) never
 -- touches string matching at all.
+-- Retail collapsed each gathering profession into a single cast spell, so only a
+-- couple of IDs are ever seen there. Classic clients (Era/Cata/MoP) instead fire
+-- a RANK-SPECIFIC spell ID on UNIT_SPELLCAST_SUCCEEDED - an Apprentice miner and a
+-- Zen Master miner cast different IDs - so every rank has to be listed or higher-
+-- rank gatherers on Classic record nothing. IDs are globally unique and the old
+-- rank IDs are never actually cast on retail, so one combined table safely serves
+-- every flavor at once; the MoP ladder below also fully covers Cata and Era.
+--
+-- VERIFY BEFORE RELEASE: the Classic rank IDs are transcribed from the historical
+-- rank ladder and still need confirming against Wowhead's MoP Classic build, since
+-- these realms can't be quick-tested. Wrong/missing IDs = silently unrecorded nodes.
 local KNOWN_GATHER_SPELLS = {
-    [32606] = "mine", [2575] = "mine", [471013] = "mine", -- 471013 confirmed live: Midnight mining. 372610 was tested and ruled out - it's mount-related, not a gather spell
-    [2366] = "herb", [471009] = "herb", -- 471009 confirmed live: Midnight's herbalism gather spell, a new ID not present in older expansions
+    -- Retail (confirmed live)
+    [32606] = "mine", [471013] = "mine", -- 471013: Midnight mining. 372610 ruled out (mount-related)
+    [471009] = "herb", -- 471009: Midnight herbalism gather spell
+
+    -- Classic mining rank ladder: Apprentice -> Zen Master
+    [2575] = "mine",  -- Apprentice
+    [2576] = "mine",  -- Journeyman
+    [3564] = "mine",  -- Expert
+    [10248] = "mine", -- Artisan
+    [29354] = "mine", -- Master (TBC)
+    [50310] = "mine", -- Grand Master (WotLK)
+    [88075] = "mine", -- Illustrious (Cata)
+    [102161] = "mine", -- Zen Master (MoP)
+
+    -- Classic herbalism rank ladder: Apprentice -> Zen Master
+    [2366] = "herb",  -- Apprentice
+    [2368] = "herb",  -- Journeyman
+    [3570] = "herb",  -- Expert
+    [11993] = "herb", -- Artisan
+    [28695] = "herb", -- Master (TBC)
+    [50300] = "herb", -- Grand Master (WotLK)
+    [74519] = "herb", -- Illustrious (Cata)
+    [110413] = "herb", -- Zen Master (MoP)
 }
 
 -- Spell ID is the only thing checked here - deliberately not falling back to
