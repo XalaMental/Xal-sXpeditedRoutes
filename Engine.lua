@@ -148,7 +148,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             
             print("|cff00ccffXal's XR|r loaded successfully.")
             print("|cff888888Xal's XR:|r Route keybinds available in Options -> Key Bindings (not set by default).")
-            print("|cff888888Xal's XR:|r Route keybinds available in Options -> Key Bindings (not set by default).")
             if not (Engine.HBD and Engine.HBDPins) then
                 print("|cffff9900Xal's XR:|r Optional library 'HereBeDragons' not found - map/minimap pins are disabled and cross-zone distances are approximate until it's installed. Recording, routing, and the compass still work normally.")
             end
