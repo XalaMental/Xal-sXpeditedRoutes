@@ -14,3 +14,4 @@ addonTable.QuickButton = {}
 addonTable.MarkerRenderer = {}
 addonTable.TomTomBridge = {}
 addonTable.RunTracker = {}
+addonTable.DungeonNav = {}
