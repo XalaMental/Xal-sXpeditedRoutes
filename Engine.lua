@@ -115,6 +115,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.arrowScale == nil then
                 XalsXRDB.arrowScale = 1
             end
+            if XalsXRDB.arrowTextScale == nil then
+                XalsXRDB.arrowTextScale = 1
+            end
             if XalsXRDB.tomtomSyncEnabled == nil then
                 XalsXRDB.tomtomSyncEnabled = false
             end
@@ -126,6 +129,24 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
             if XalsXRDB.haulFramePosition == nil then
                 XalsXRDB.haulFramePosition = { point = "CENTER", x = 0, y = 60 }
+            end
+            if XalsXRDB.haulShowIcons == nil then
+                XalsXRDB.haulShowIcons = true
+            end
+            if XalsXRDB.haulFontScale == nil then
+                XalsXRDB.haulFontScale = 1
+            end
+            if XalsXRDB.haulGatherTimer == nil then
+                XalsXRDB.haulGatherTimer = false
+            end
+            if XalsXRDB.haulRouteTimer == nil then
+                XalsXRDB.haulRouteTimer = false
+            end
+            if XalsXRDB.dungeonButtonEnabled == nil then
+                XalsXRDB.dungeonButtonEnabled = false
+            end
+            if XalsXRDB.dungeonButtonSide == nil then
+                XalsXRDB.dungeonButtonSide = "right"
             end
 
             -- Per-character preferences (route filters etc. - these can differ per alt,
