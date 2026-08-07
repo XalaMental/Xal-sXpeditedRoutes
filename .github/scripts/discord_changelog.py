@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Posts the latest CHANGELOG.md entry to a Discord webhook as one clean release
-announcement per update. Run by the release workflow on a tag push.
+Posts the latest CHANGELOG.md entry to a Discord webhook as one clean, PLAIN-TEXT
+release announcement - no embed box. Discord then renders the markdown headings
+big and auto-builds the CurseForge link card from the bare URL at the bottom
+(exactly the look of a hand-written release post).
 
-It posts a PLAYER-FACING version: it strips the per-file "**Filename** -" prefixes
-and drops the "Under the hood" section, so the announcement reads like a normal
-patch note even though the source changelog is organized per file for commits.
+Since CHANGELOG.md is already written player-facing (clean bullets, no filenames),
+this mostly reformats the top release section: the "## Release X - date" heading
+becomes a big title + Released line, "### Section" headers become Discord headings,
+and the CurseForge URL is appended so Discord makes the card.
 
-Needs only the Python standard library. Reads the webhook URL from the
-DISCORD_WEBHOOK_URL environment variable (a GitHub secret). If that isn't set,
-it prints a note and exits cleanly - so it never fails a release.
+Standard library only. Reads the webhook URL from DISCORD_WEBHOOK_URL (a GitHub
+secret); if it's unset, prints a note and exits cleanly so a release never fails.
 """
 import json
 import os
@@ -18,13 +20,11 @@ import sys
 import urllib.request
 import urllib.error
 
-# ------------------------------------------------------------------ config ----
 ADDON_NAME = "Xal's Xpedited Routes"
 ADDON_EMOJI = "🗺️"
-CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/xals-xpedited-routes"  # ← VERIFY this slug
-EMBED_COLOR = 0x1D9E75  # teal-green accent bar on the embed
+CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/xals-xpedited-routes"
 CHANGELOG_PATH = "CHANGELOG.md"
-SKIP_CATEGORIES = ()  # nothing dropped - the post shows every category / every file
+MAX_CONTENT = 2000  # Discord's hard limit for a message's content field
 
 
 def latest_section(text):
@@ -37,42 +37,32 @@ def latest_section(text):
 
 
 def parse_heading(heading):
-    """'1.1.1 - August 6, 2026' -> ('1.1.1', 'August 6, 2026')."""
+    """'1.3.0 - August 6, 2026' -> ('1.3.0', 'August 6, 2026')."""
     m = re.match(r"\s*([^\s-]+)\s*-\s*(.+)", heading)
     if m:
         return m.group(1).strip(), m.group(2).strip()
     return heading, None
 
 
-def clean_bullet(line):
-    """'- **RunTracker.lua** - Added the haul tracker' -> '- Added the haul tracker'."""
-    m = re.match(r"^(\s*[-*]\s+)\*\*[^*]+\*\*\s*-\s*(.*)$", line)
-    return (m.group(1) + m.group(2)) if m else line
-
-
-def build_description(body, date):
-    lines = []
+def build_content(version, date, body):
+    """Plain-text Discord message: big title, Released line, section headings,
+    bullets, then the download URL (bare, so Discord unfurls the CurseForge card)."""
+    out = [f"# {ADDON_EMOJI} {ADDON_NAME} — {version}"]
     if date:
-        lines.append(f"**Released:** {date}")
-    skipping = False
+        out.append(f"**Released:** {date}")
     for raw in body.splitlines():
         line = raw.rstrip()
-        if line.startswith("### "):
-            cat = line[4:].strip()
-            skipping = any(s in cat.lower() for s in SKIP_CATEGORIES)
-            if not skipping:
-                lines.append("")
-                lines.append(f"**{cat}**")
-            continue
-        if skipping:
-            continue
-        if line.strip() in ("", "---"):
-            continue
-        if line.strip().startswith(("-", "*")):
-            lines.append(clean_bullet(line))
+        if line.strip() == "---":
+            continue  # drop the divider under the version heading
+        m = re.match(r"^#{2,3}\s+(.*)$", line)  # "### Section" / "## Section"
+        if m:
+            out.append("")
+            out.append(f"## {m.group(1).strip()}")
         else:
-            lines.append(line)
-    return "\n".join(lines).strip()
+            out.append(line)
+    text = "\n".join(out)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()  # collapse runs of blank lines
+    return f"{text}\n\nDownload: {CURSEFORGE_URL}"
 
 
 def main():
@@ -90,27 +80,18 @@ def main():
         return 0
 
     heading, body = section
-    parsed_version, date = parse_heading(heading)
+    version, date = parse_heading(heading)
+    content = build_content(version, date, body)
+    if len(content) > MAX_CONTENT:
+        content = content[:MAX_CONTENT - 20].rstrip() + "\n…"
 
-    description = build_description(body, date)
-
-    payload = {
-        "content": CURSEFORGE_URL,  # bare URL -> Discord renders the CurseForge card
-        "embeds": [{
-            "title": f"{ADDON_EMOJI} {ADDON_NAME} — {parsed_version}",
-            "url": CURSEFORGE_URL,
-            "description": description[:4000],
-            "color": EMBED_COLOR,
-        }],
-    }
-
+    payload = {"content": content, "allowed_mentions": {"parse": []}}
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         webhook, data=data,
         headers={
             "Content-Type": "application/json",
-            # Discord rejects webhook posts sent with urllib's default agent
-            # (HTTP 403), so send an explicit User-Agent.
+            # Discord 403s urllib's default agent, so send an explicit User-Agent.
             "User-Agent": "XalsXpeditedRoutes-Release/1.0",
         },
     )
