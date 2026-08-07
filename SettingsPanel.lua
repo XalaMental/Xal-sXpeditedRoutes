@@ -16,7 +16,7 @@ local Beacon = addonTable.Beacon
 local QuickButton = addonTable.QuickButton
 local Helpers = addonTable.Helpers
 
-local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel
+local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel, gatherPanel
 local statsText = nil
 local pinStyleButtons = {}
 
@@ -203,11 +203,11 @@ local function BuildRootPanel()
     keybindHelp:SetJustifyH("LEFT")
     keybindHelp:SetText("Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
 
-    local haulHeader = CreateHeader(rootPanel, keybindHelp, "Gathering Haul", -22)
+    local haulHeader = CreateHeader(rootPanel, keybindHelp, "Gather Tally", -22)
 
     local haulCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
     haulCheck:SetPoint("TOPLEFT", haulHeader, "BOTTOMLEFT", 2, -8)
-    haulCheck.Text:SetText("Show the live haul window while a route is active")
+    haulCheck.Text:SetText("Show the live Gather Tally window during a route")
     haulCheck:SetScript("OnClick", function(self)
         XalsXRDB.showHaulSummary = self:GetChecked() and true or false
         if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
@@ -220,7 +220,7 @@ local function BuildRootPanel()
     haulHelp:SetPoint("TOPLEFT", haulCheck, "BOTTOMLEFT", -2, -4)
     haulHelp:SetWidth(420)
     haulHelp:SetJustifyH("LEFT")
-    haulHelp:SetText("A small movable window that tallies what you gather during a route. It stays open after the route ends so you can read it - close it with its X button. Summon it anytime with /xxr haul.")
+    haulHelp:SetText("A small movable window that tallies what you gather. It stays open after a route ends so you can read it - close it with its X. Open it anytime with the Gather button or /xxr haul. More options under the Gather Tally section.")
 
     local RefreshRootPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
@@ -317,6 +317,29 @@ local function BuildWaypointPanel()
     scaleHelp:SetJustifyH("LEFT")
     scaleHelp:SetText("Resizes the arrow uniformly - same shape, just bigger or smaller.")
 
+    local textScaleSlider = CreateFrame("Slider", "XalsXRArrowTextScaleSlider", waypointPanel, "OptionsSliderTemplate")
+    textScaleSlider:SetPoint("TOPLEFT", scaleHelp, "BOTTOMLEFT", 6, -18)
+    textScaleSlider:SetWidth(220)
+    textScaleSlider:SetMinMaxValues(100, 250)
+    textScaleSlider:SetValueStep(10)
+    textScaleSlider:SetObeyStepOnDrag(true)
+    _G[textScaleSlider:GetName() .. "Low"]:SetText("100%")
+    _G[textScaleSlider:GetName() .. "High"]:SetText("250%")
+    _G[textScaleSlider:GetName() .. "Text"]:SetText("Text size")
+    textScaleSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 10 + 0.5) * 10
+        XalsXRDB.arrowTextScale = value / 100
+        _G[self:GetName() .. "Text"]:SetText("Text size: " .. value .. "%")
+        Beacon:ApplyTextScale()
+    end)
+    waypointPanel.textScaleSlider = textScaleSlider
+
+    local textScaleHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    textScaleHelp:SetPoint("TOPLEFT", textScaleSlider, "BOTTOMLEFT", -6, -8)
+    textScaleHelp:SetWidth(360)
+    textScaleHelp:SetJustifyH("LEFT")
+    textScaleHelp:SetText("Enlarges the distance and node-name text under the arrow - handy if the default is hard to read.")
+
     local RefreshWaypointPanel = function()
         local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
         for styleKey, styleBtn in pairs(arrowStyleButtons) do
@@ -326,6 +349,9 @@ local function BuildWaypointPanel()
         local scalePct = math.floor(((XalsXRDB and XalsXRDB.arrowScale) or 1) * 100 + 0.5)
         scaleSlider:SetValue(scalePct)
         _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale: " .. scalePct .. "%")
+        local textScalePct = math.floor(((XalsXRDB and XalsXRDB.arrowTextScale) or 1) * 100 + 0.5)
+        textScaleSlider:SetValue(textScalePct)
+        _G[textScaleSlider:GetName() .. "Text"]:SetText("Text size: " .. textScalePct .. "%")
     end
     waypointPanel:SetScript("OnShow", RefreshWaypointPanel)
     waypointPanel.Refresh = RefreshWaypointPanel
@@ -624,11 +650,131 @@ local function BuildIntegrationsPanel()
     return integrationsPanel
 end
 
+--------------------------------------------------------------------------------
+-- Gather Tally panel: icons on/off (text mode), text size, and the two timers.
+--------------------------------------------------------------------------------
+local function BuildGatherTallyPanel()
+    gatherPanel = CreateFrame("Frame")
+    gatherPanel.name = "Gather Tally"
+
+    local title = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("Gather Tally")
+
+    local intro = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    intro:SetWidth(460)
+    intro:SetJustifyH("LEFT")
+    intro:SetText("The live window that tallies what you gather. Open it with the Gather button on the floating helper, or /xxr haul.")
+
+    local displayHeader = CreateHeader(gatherPanel, intro, "Display", -18)
+
+    local iconsCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
+    iconsCheck:SetPoint("TOPLEFT", displayHeader, "BOTTOMLEFT", 2, -8)
+    iconsCheck.Text:SetText("Show item icons (off = clean text-only list)")
+    iconsCheck:SetScript("OnClick", function(self)
+        XalsXRDB.haulShowIcons = self:GetChecked() and true or false
+        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+    end)
+    gatherPanel.iconsCheck = iconsCheck
+
+    local sizeSlider = CreateFrame("Slider", "XalsXRHaulFontSlider", gatherPanel, "OptionsSliderTemplate")
+    sizeSlider:SetPoint("TOPLEFT", iconsCheck, "BOTTOMLEFT", 6, -24)
+    sizeSlider:SetWidth(220)
+    sizeSlider:SetMinMaxValues(100, 200)
+    sizeSlider:SetValueStep(10)
+    sizeSlider:SetObeyStepOnDrag(true)
+    _G[sizeSlider:GetName() .. "Low"]:SetText("100%")
+    _G[sizeSlider:GetName() .. "High"]:SetText("200%")
+    _G[sizeSlider:GetName() .. "Text"]:SetText("Text size")
+    sizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 10 + 0.5) * 10
+        XalsXRDB.haulFontScale = value / 100
+        _G[self:GetName() .. "Text"]:SetText("Text size: " .. value .. "%")
+        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+    end)
+    gatherPanel.sizeSlider = sizeSlider
+
+    local sizeHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    sizeHelp:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", -6, -8)
+    sizeHelp:SetWidth(400)
+    sizeHelp:SetJustifyH("LEFT")
+    sizeHelp:SetText("Scales the text in the tally list up or down.")
+
+    local timerHeader = CreateHeader(gatherPanel, sizeHelp, "Timers", -18)
+
+    local gatherTimerCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
+    gatherTimerCheck:SetPoint("TOPLEFT", timerHeader, "BOTTOMLEFT", 2, -8)
+    gatherTimerCheck.Text:SetText("Gather timer - time your Gather-button sessions")
+    gatherTimerCheck:SetScript("OnClick", function(self)
+        XalsXRDB.haulGatherTimer = self:GetChecked() and true or false
+        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+    end)
+    gatherPanel.gatherTimerCheck = gatherTimerCheck
+
+    local routeTimerCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
+    routeTimerCheck:SetPoint("TOPLEFT", gatherTimerCheck, "BOTTOMLEFT", 0, -6)
+    routeTimerCheck.Text:SetText("Route timer - time how long a route has run")
+    routeTimerCheck:SetScript("OnClick", function(self)
+        XalsXRDB.haulRouteTimer = self:GetChecked() and true or false
+        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+    end)
+    gatherPanel.routeTimerCheck = routeTimerCheck
+
+    local timerHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    timerHelp:SetPoint("TOPLEFT", routeTimerCheck, "BOTTOMLEFT", -2, -4)
+    timerHelp:SetWidth(420)
+    timerHelp:SetJustifyH("LEFT")
+    timerHelp:SetText("Both off by default. When on, the tally shows elapsed time - the gather timer for sessions you open with the Gather button, the route timer while you're running a route.")
+
+    local dungeonHeader = CreateHeader(gatherPanel, timerHelp, "Dungeon Nav (Xperimental)", -18)
+
+    local dungeonEnableCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
+    dungeonEnableCheck:SetPoint("TOPLEFT", dungeonHeader, "BOTTOMLEFT", 2, -8)
+    dungeonEnableCheck.Text:SetText("Show a dungeon-waypoint button on the helper (retail only)")
+    dungeonEnableCheck:SetScript("OnClick", function(self)
+        XalsXRDB.dungeonButtonEnabled = self:GetChecked() and true or false
+        if QuickButton and QuickButton.Refresh then QuickButton:Refresh() end
+    end)
+    gatherPanel.dungeonEnableCheck = dungeonEnableCheck
+
+    local dungeonSideCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
+    dungeonSideCheck:SetPoint("TOPLEFT", dungeonEnableCheck, "BOTTOMLEFT", 0, -6)
+    dungeonSideCheck.Text:SetText("Put it on the left of the Gather button (default: right)")
+    dungeonSideCheck:SetScript("OnClick", function(self)
+        XalsXRDB.dungeonButtonSide = self:GetChecked() and "left" or "right"
+        if QuickButton and QuickButton.Refresh then QuickButton:Refresh() end
+    end)
+    gatherPanel.dungeonSideCheck = dungeonSideCheck
+
+    local dungeonHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    dungeonHelp:SetPoint("TOPLEFT", dungeonSideCheck, "BOTTOMLEFT", -2, -4)
+    dungeonHelp:SetWidth(420)
+    dungeonHelp:SetJustifyH("LEFT")
+    dungeonHelp:SetText("Adds a small map icon next to the Gather button. Click it to pick a Season 2 dungeon and drop a waypoint at its entrance. Also available as /xxr dungeon.")
+
+    local RefreshGatherPanel = function()
+        iconsCheck:SetChecked(not (XalsXRDB and XalsXRDB.haulShowIcons == false))
+        local pct = math.floor(((XalsXRDB and XalsXRDB.haulFontScale) or 1) * 100 + 0.5)
+        sizeSlider:SetValue(pct)
+        _G[sizeSlider:GetName() .. "Text"]:SetText("Text size: " .. pct .. "%")
+        gatherTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulGatherTimer == true)
+        routeTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulRouteTimer == true)
+        dungeonEnableCheck:SetChecked(XalsXRDB and XalsXRDB.dungeonButtonEnabled == true)
+        dungeonSideCheck:SetChecked(XalsXRDB and XalsXRDB.dungeonButtonSide == "left")
+    end
+    gatherPanel:SetScript("OnShow", RefreshGatherPanel)
+    gatherPanel.Refresh = RefreshGatherPanel
+
+    return gatherPanel
+end
+
 function SettingsPanel:Init()
     if rootPanel then return end
     BuildRootPanel()
     BuildWaypointPanel()
     BuildMarkersPanel()
+    BuildGatherTallyPanel()
     BuildDataPanel()
     BuildIntegrationsPanel()
 
@@ -642,6 +788,7 @@ function SettingsPanel:Init()
         if Settings.RegisterCanvasLayoutSubcategory then
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, waypointPanel, waypointPanel.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, markersPanel, markersPanel.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, gatherPanel, gatherPanel.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataPanel, dataPanel.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsPanel, integrationsPanel.name)
         end
@@ -652,6 +799,8 @@ function SettingsPanel:Init()
         InterfaceOptions_AddCategory(waypointPanel)
         markersPanel.parent = rootPanel.name
         InterfaceOptions_AddCategory(markersPanel)
+        gatherPanel.parent = rootPanel.name
+        InterfaceOptions_AddCategory(gatherPanel)
         dataPanel.parent = rootPanel.name
         InterfaceOptions_AddCategory(dataPanel)
         integrationsPanel.parent = rootPanel.name
@@ -665,7 +814,7 @@ function SettingsPanel:Init()
     -- not that anything inside it was wrong). Polling actual frame visibility
     -- directly sidesteps that entirely, since it doesn't depend on any
     -- particular script event firing at all.
-    local panels = { rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel }
+    local panels = { rootPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }
     local wasVisible = {}
     local pollTimer = 0
     local poller = CreateFrame("Frame")
