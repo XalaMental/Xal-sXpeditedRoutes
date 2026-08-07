@@ -130,11 +130,15 @@ function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, is
     end
 
     if isTarget then
-        local dotSize = math.max(3, size * 0.22)
+        -- The active/target marker gets a bright YELLOW filled center so the
+        -- "this one" node pops against every other red/green marker. Map pins
+        -- and the floating Gather button both render through here, so the fill
+        -- shows up in both places from this single spot.
+        local dotSize = math.max(4, size * 0.34)
         pin.dotTex:ClearAllPoints()
         pin.dotTex:SetSize(dotSize, dotSize)
         pin.dotTex:SetPoint("CENTER", pin, "CENTER", 0, 0)
-        pin.dotTex:SetColorTexture(1, 1, 1, 1 * alphaMult)
+        pin.dotTex:SetColorTexture(1, 0.82, 0.0, 1 * alphaMult)
         pin.dotTex:Show()
     end
 end
