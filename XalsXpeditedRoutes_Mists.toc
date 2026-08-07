@@ -31,4 +31,6 @@ QuickButton.lua
 Markers.lua
 TomTomBridge.lua
 SettingsPanel.lua
+RunTracker.lua
+DungeonNav.lua
 ChatCommands.lua
