@@ -9,6 +9,7 @@ local Beacon = addonTable.Beacon
 local TomTomBridge = addonTable.TomTomBridge
 local Helpers = addonTable.Helpers
 local RunTracker = addonTable.RunTracker
+local DungeonNav = addonTable.DungeonNav
 
 -- Keybind support (see Bindings.xml). These have to be plain globals, not
 -- addonTable-scoped or local - Bindings.xml calls them by exact global name,
@@ -41,6 +42,8 @@ local EXCLUDED_KEYS = {
     arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
+    haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
+    arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
@@ -224,6 +227,10 @@ SlashCmdList["XALMORASXR"] = function(msg)
         elseif RunTracker and RunTracker.ShowHaulCommand then
             RunTracker:ShowHaulCommand()
         end
+    elseif command == "dungeon" then
+        if DungeonNav and DungeonNav.Command then
+            DungeonNav:Command(table.concat(parts, " ", 2))
+        end
     elseif command == "help" then
         print("|cff00ccffXal's Xpedited Routes - Chat commands:|r")
         print("  |cff00ff00/xxr|r - Shows or hides the gathering icons on the maps.")
@@ -248,8 +255,9 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr arrowprogress|r - Toggles green/red arrow coloring based on whether you're closing in.")
         print("  |cff00ff00/xxr button|r - Shows or hides the floating helper button.")
         print("  |cff00ff00/xxr button reset|r - Resets the helper button to its default position.")
-        print("  |cff00ff00/xxr haul|r - Opens the gathering haul window for the current or last route.")
-        print("  |cff00ff00/xxr haul on|r / |cff00ff00off|r - Toggles the live haul window (also in Options).")
+        print("  |cff00ff00/xxr haul|r - Opens the Gather Tally window (also on the Gather button).")
+        print("  |cff00ff00/xxr haul on|r / |cff00ff00off|r - Toggles the live Gather Tally during routes (also in Options).")
+        print("  |cff00ff00/xxr dungeon|r - |cff888888(Xperimental)|r Waypoints to a Season 2 dungeon entrance. Type it for the list.")
         print("  |cff00ff00/xxr options|r - Opens the settings panel.")
         print("|cff888888(You can also type /xalmoras instead of /xxr. If TomTom is installed, generating a route automatically pops up a copy-paste /way list for it - no separate command needed.)|r")
     else
