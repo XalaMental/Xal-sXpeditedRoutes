@@ -47,6 +47,19 @@ function Beacon:ApplyArrowStyle()
     self:Retarget()
 end
 
+local BASE_DISTANCE_FONT = 15
+local BASE_NODE_FONT = 11
+-- Scales the waypoint's distance + node-name text, driven by the "Waypoint text
+-- size" slider so it can be enlarged for readability. Safe before Init (no-op).
+function Beacon:ApplyTextScale()
+    if not textDistance or not textNode then return end
+    local scale = (XalsXRDB and XalsXRDB.arrowTextScale) or 1
+    local fName = textDistance:GetFont()
+    textDistance:SetFont(fName, BASE_DISTANCE_FONT * scale, "OUTLINE")
+    local nName = textNode:GetFont()
+    textNode:SetFont(nName, BASE_NODE_FONT * scale, "OUTLINE")
+end
+
 function Beacon:Init()
     if frame then return end
     
@@ -119,6 +132,8 @@ function Beacon:Init()
     textNode:SetFont(fontNameN, 11, "OUTLINE")
     textNode:SetPoint("TOP", frame, "TOP", 0, 14)
     textNode:SetTextColor(0, 0.8, 1, 1) -- Bright blue
+
+    Beacon:ApplyTextScale()
     
     frame:Hide()
     
