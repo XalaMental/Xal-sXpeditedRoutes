@@ -1,21 +1,19 @@
 # Xal's Xpedited Routes - Changelog
 
-## Release 1.2.0 - August 6, 2026
+## Release 1.3.0 - August 11, 2026
 
 ---
 
+A big polish-and-features pass - a Gather Tally you can open on demand and customize, a brighter active node, larger readable text, and an early dungeon-waypoint button for Season 2.
+
 ### 🆕 New
-- **RunTracker.lua** - Added the Gathering Haul tracker: a live, movable window that tallies everything you gather during a route and stays open at the end so you can read or record your haul. Summon it anytime with /xxr haul.
-- **SettingsPanel.lua** - Added an Options toggle for the live haul window.
+- **Gather button** on the floating helper - opens the new **Gather Tally** window and starts tracking your haul, even when you're not on a route.
+- **Gather Tally options** - switch to a clean text-only list (hide the item icons) and scale the text size, under Options -> Gather Tally.
+- **Two optional timers** - a gather-session timer and a route timer, both off by default, so you can see how long you've been at it.
+- **Brighter active node** - the node you're headed to now has a bright yellow center, on both the map markers and the floating button, so it's easy to spot.
+- **Bigger waypoint text** - a new text-size slider for the arrow's distance and node name, for easier reading.
+- **Clearer counts** - a drop shadow on the node counts under the floating buttons so they pop against the world.
+- **Classic support** - the Gather Tally now works on MoP Classic and Classic Era too, not just retail.
 
 ### 🧪 Xperimental
-- **Node Freshness is now opt-in** *(off by default)* - The /xxr freshness <0-60> option (skips nodes you gathered too recently to have respawned yet) is now off unless you turn it on, while I re-tune it. Flip it on with /xxr freshness and let me know how it works for you.
-
-### ⚙️ Under the hood
-- **Bootstrap.lua** - Registered the new haul-tracker module.
-- **Engine.lua** - Loads the haul tracker and its saved settings at startup.
-- **PathPlanner.lua** - Opens the haul window when a route starts and finalizes it when the route ends.
-- **NodeLogger.lua** - Keeps the haul settings out of the node-cleanup sweep.
-- **ChatCommands.lua** - Added /xxr haul and /xxr freshness, and cleaned up duplicated command handling.
-- **XalsXpeditedRoutes.toc** - Removed the redundant Bindings.xml listing that caused login Lua warnings.
-- **discord_changelog.py** - Each release now auto-announces to the Discord server.
+- **Dungeon Nav (early WIP)** - a new dungeon-waypoint button (turn it on under Options -> Gather Tally, and put it on either side of the Gather button) opens a list of all eight Season 2 Mythic+ dungeons and drops a waypoint at any entrance - every coordinate verified. Also works as `/xxr dungeon`, and `/xxr dungeon set <name>` pins one exactly. Portal routing is still to come - feedback welcome.
