@@ -31,6 +31,8 @@ RunTracker.tally = {}
 RunTracker.startTime = 0
 RunTracker.runDuration = nil -- set when a run ends, so the window can show the final time
 RunTracker.lootWindowUntil = 0
+RunTracker.sessionKind = nil -- "route" (started by PathPlanner) or "manual" (Gather button)
+RunTracker.lastKind = nil    -- remembers the kind after a session ends, for the final timer
 
 local frame -- the haul window, built lazily the first time it's shown
 
@@ -142,8 +144,14 @@ end
 -- where no run is currently active - resets the tally. A re-plot mid-run keeps
 -- everything gathered so far.
 function RunTracker:StartRun()
-    if self.active then return end
+    if self.active then
+        -- A manual (Gather-button) session may already be tallying; let the route
+        -- take it over so route timing applies, but keep everything gathered so far.
+        if self.sessionKind == "manual" then self.sessionKind = "route" end
+        return
+    end
     self.active = true
+    self.sessionKind = "route"
     self.tally = {}
     self.startTime = time()
     self.runDuration = nil
@@ -153,13 +161,31 @@ function RunTracker:StartRun()
     end
 end
 
+-- Started by the floating Gather button: begins tallying (and timing) outside of
+-- a route. If something's already tracking, just surface the window instead.
+function RunTracker:StartManualSession()
+    if self.active then
+        self:ShowWindow()
+        return
+    end
+    self.active = true
+    self.sessionKind = "manual"
+    self.tally = {}
+    self.startTime = time()
+    self.runDuration = nil
+    self.lootWindowUntil = 0
+    self:ShowWindow()
+end
+
 function RunTracker:EndRun()
     if not self.active then return end
     self.active = false
     self.runDuration = time() - self.startTime
+    self.lastKind = self.sessionKind
+    self.sessionKind = nil
     -- Deliberately do NOT hide the window - leave it up so the player can read or
     -- copy the totals, and close it themselves. Just refresh it to its final
-    -- "Route complete" state if it happens to be open.
+    -- state if it happens to be open.
     if frame and frame:IsShown() then
         self:Render()
     end
@@ -217,7 +243,7 @@ local function BuildFrame()
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
     title:SetTextColor(0, 0.8, 1) -- the addon's blue
-    title:SetText("Gathering Haul")
+    title:SetText("Gather Tally")
     frame.title = title
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -227,7 +253,23 @@ local function BuildFrame()
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
-    close:SetScript("OnClick", function() frame:Hide() end)
+    close:SetScript("OnClick", function()
+        -- Closing a manual (Gather-button) session ends it - stops tallying/timing.
+        -- A route session just hides; PathPlanner is what ends that one.
+        if RunTracker.sessionKind == "manual" then RunTracker:EndRun() end
+        frame:Hide()
+    end)
+
+    -- Ticks the live timer while a session is active and the window is open.
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        self._timerTick = (self._timerTick or 0) + elapsed
+        if self._timerTick >= 0.5 then
+            self._timerTick = 0
+            if RunTracker.active and self:IsShown() then
+                RunTracker:Render()
+            end
+        end
+    end)
 
     frame.rows = {}
     return frame
@@ -271,10 +313,35 @@ local function AcquireRow(index)
     return row
 end
 
--- Repaints the window from the current tally. Called live on each gather, and
--- once more when the run ends (to flip the header to "Route complete").
+local BASE_ROW_FONT = 12
+-- Applies the current icon/font-size options to a pooled row before it's filled.
+-- Font size is set absolutely (BASE * scale) so repeated renders never compound.
+local function StyleRow(row, showIcons, fontScale, rowH)
+    row:SetHeight(rowH)
+    local size = BASE_ROW_FONT * fontScale
+    local nFont, _, nFlags = row.name:GetFont()
+    row.name:SetFont(nFont, size, nFlags)
+    local cFont, _, cFlags = row.count:GetFont()
+    row.count:SetFont(cFont, size, cFlags)
+    row.name:ClearAllPoints()
+    if showIcons then
+        row.icon:Show()
+        row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+    else
+        row.icon:Hide()
+        row.name:SetPoint("LEFT", row, "LEFT", 0, 0)
+    end
+    row.name:SetPoint("RIGHT", row.count, "LEFT", -6, 0)
+end
+
+-- Repaints the window from the current tally. Called live on each gather, on a
+-- half-second tick while active (so the timer moves), and once when a run ends.
 function RunTracker:Render()
     if not frame then return end
+
+    local showIcons = not (XalsXRDB and XalsXRDB.haulShowIcons == false)
+    local fontScale = (XalsXRDB and XalsXRDB.haulFontScale) or 1
+    local rowH = math.floor(ROW_HEIGHT * fontScale + 0.5)
 
     local list = {}
     local totalItems = 0
@@ -291,8 +358,9 @@ function RunTracker:Render()
     for i = 1, shown do
         local entry = list[i]
         local row = AcquireRow(i)
+        StyleRow(row, showIcons, fontScale, rowH)
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + (i - 1) * ROW_HEIGHT))
+        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + (i - 1) * rowH))
         row.icon:SetTexture(entry.icon or 134400) -- 134400 = generic "question mark" fallback icon
         row.name:SetText(entry.link or "?")
         row.count:SetText("x" .. entry.count)
@@ -304,9 +372,10 @@ function RunTracker:Render()
     if #list > MAX_ROWS then
         usedRows = shown + 1
         local row = AcquireRow(usedRows)
+        StyleRow(row, showIcons, fontScale, rowH)
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + shown * ROW_HEIGHT))
-        row.icon:SetTexture(nil)
+        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + shown * rowH))
+        row.icon:Hide()
         row.name:SetText("|cff888888+" .. (#list - MAX_ROWS) .. " more types|r")
         row.count:SetText("")
         row.link = nil
@@ -320,9 +389,10 @@ function RunTracker:Render()
     -- Empty state so a freshly-opened window (or a run with nothing yet) isn't blank.
     if #list == 0 then
         local row = AcquireRow(1)
+        StyleRow(row, showIcons, fontScale, rowH)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -HEADER_HEIGHT)
-        row.icon:SetTexture(nil)
+        row.icon:Hide()
         row.name:SetText("|cff888888Nothing gathered yet...|r")
         row.count:SetText("")
         row.link = nil
@@ -330,12 +400,29 @@ function RunTracker:Render()
         usedRows = 1
     end
 
+    -- Timer line: shown only when the matching toggle is on for this session kind.
+    -- Gather Timer covers manual (Gather-button) sessions; Route Timer covers routes.
+    -- Both default off, so by default the subtitle is just the item count.
+    local kind = (self.active and self.sessionKind) or self.lastKind
+    local showTimer = (kind == "route" and XalsXRDB and XalsXRDB.haulRouteTimer)
+        or (kind == "manual" and XalsXRDB and XalsXRDB.haulGatherTimer)
     local duration = self.active and (time() - self.startTime) or (self.runDuration or 0)
-    local verb = self.active and "In progress" or "Route complete"
-    frame.subtitle:SetText(string.format("%s  -  %s  -  %d item%s",
-        verb, FormatDuration(duration), totalItems, totalItems == 1 and "" or "s"))
 
-    frame:SetHeight(HEADER_HEIGHT + usedRows * ROW_HEIGHT + FOOTER_PAD)
+    local verb
+    if self.active then
+        verb = "Gathering"
+    elseif kind == "manual" then
+        verb = "Session ended"
+    else
+        verb = "Route complete"
+    end
+
+    local parts = { verb }
+    if showTimer then parts[#parts + 1] = FormatDuration(duration) end
+    parts[#parts + 1] = string.format("%d item%s", totalItems, totalItems == 1 and "" or "s")
+    frame.subtitle:SetText(table.concat(parts, "  -  "))
+
+    frame:SetHeight(HEADER_HEIGHT + usedRows * rowH + FOOTER_PAD)
 end
 
 function RunTracker:ShowWindow()
@@ -360,7 +447,7 @@ function RunTracker:ShowHaulCommand()
     if self.active or next(self.tally) ~= nil then
         self:ShowWindow()
     else
-        print("|cff00ccffXal's XR:|r No gathering haul yet - start a route and gather something.")
+        print("|cff00ccffXal's XR:|r Nothing tracked yet - hit the Gather button or start a route.")
     end
 end
 
