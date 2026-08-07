@@ -68,6 +68,8 @@ local NON_MAP_KEYS = {
     arrowProgressColor = true, pinAlpha = true,
     duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
+    haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
+    arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
 }
 
 function NodeLogger.RemoveDuplicates()
