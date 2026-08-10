@@ -6,7 +6,7 @@ big and auto-builds the CurseForge link card from the bare URL at the bottom
 (exactly the look of a hand-written release post).
 
 Since CHANGELOG.md is already written player-facing (clean bullets, no filenames),
-this mostly reformats the top release section: the "## Release X - date" heading
+this mostly reformats the top release section: the "## X.Y.Z - date" heading
 becomes a big title + Released line, "### Section" headers become Discord headings,
 and the CurseForge URL is appended so Discord makes the card.
 
@@ -28,8 +28,10 @@ MAX_CONTENT = 2000  # Discord's hard limit for a message's content field
 
 
 def latest_section(text):
-    """Return (heading, body) for the top-most '## Release ...' block, or None."""
-    parts = re.split(r"(?m)^##\s+Release\b", text)
+    """Return (heading, body) for the top-most '## X.Y.Z - date' block, or None.
+    CHANGELOG.md only ever holds the current release, so the first '## ' heading
+    IS the latest one - no need to match a literal word before the version."""
+    parts = re.split(r"(?m)^##\s+", text)
     if len(parts) < 2:
         return None
     heading, _, body = parts[1].partition("\n")
@@ -76,7 +78,7 @@ def main():
 
     section = latest_section(text)
     if not section:
-        print("No '## Release' section found in CHANGELOG.md - skipping.")
+        print("No '## X.Y.Z' version heading found in CHANGELOG.md - skipping.")
         return 0
 
     heading, body = section
