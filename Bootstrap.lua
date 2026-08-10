@@ -3,6 +3,7 @@
 local addonName, addonTable = ...
 
 -- Main namespace definition
+addonTable.BrandStyle = {}
 addonTable.Engine = {}
 addonTable.Helpers = {}
 addonTable.NodeLogger = {}
@@ -15,3 +16,5 @@ addonTable.MarkerRenderer = {}
 addonTable.TomTomBridge = {}
 addonTable.RunTracker = {}
 addonTable.DungeonNav = {}
+addonTable.WhatsNew = {}
+addonTable.MinimapButton = {}
