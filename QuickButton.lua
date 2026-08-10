@@ -22,6 +22,7 @@ local QuickButton = addonTable.QuickButton
 local PathPlanner = addonTable.PathPlanner
 local Helpers = addonTable.Helpers
 local MarkerRenderer = addonTable.MarkerRenderer
+local Brand = addonTable.BrandStyle
 
 local container = nil -- outer draggable frame
 local slotMine, slotHerb = nil, nil -- slotMine doubles as the only button when just one profession (or none) is known
@@ -45,10 +46,13 @@ end
 local SLOT_SIZE = 40 -- clickable hit area
 local BUTTON_PIN_SIZE = 30 -- drawn shape size (bigger than the default 14px map pin)
 local SLOT_GAP = 4
-local GATHER_BTN_HEIGHT = 18 -- the "Gather" button under the profession slot(s)
-local GATHER_BTN_WIDTH = 52
-local COUNT_LABEL_SPACE = 14 -- room reserved for the bottom slot's count label
-local DUNGEON_BTN_SIZE = 22 -- the Xperimental dungeon-waypoint icon beside Gather
+local GATHER_BTN_HEIGHT = 24 -- the "Gather" button under the profession slot(s) - bumped from 18 for breathing room around the label
+-- Matches slotsWidth (SLOT_SIZE*2 + SLOT_GAP) in UpdateLayout so the button
+-- spans the full width under both side-by-side profession slots instead of
+-- looking like a narrow stem under a wider top. Confirmed 2026-08-09.
+local GATHER_BTN_WIDTH = SLOT_SIZE * 2 + SLOT_GAP
+local COUNT_LABEL_SPACE = 20 -- room reserved for the bottom slot's count label - bumped from 14 to fit the larger 16pt count font
+local DUNGEON_BTN_SIZE = 64 -- bumped from 22 to match the profession X icons, and moved to sit below Gather instead of beside it
 local DISABLED_COLOR = { 0.4, 0.4, 0.4 }
 local refreshInterval = 0.5
 local refreshTimer = 0
@@ -105,12 +109,31 @@ local function CreateSlot(parent)
     slot:SetSize(SLOT_SIZE, SLOT_SIZE)
     MarkerRenderer.EnsureParts(slot)
 
+    -- TEST ONLY, 2026-08-09: visual test of the new rune-X icon on the
+    -- floating helper button, isolated from MarkerRenderer entirely so
+    -- actual map/minimap markers are untouched. Two complete baked icon
+    -- variants (idle = transparent interior, active = interior pre-filled
+    -- solid yellow) instead of layering a separate tintable mask - simpler,
+    -- and avoids any layering/z-order fragility. ConfigureSlot just swaps
+    -- which one SetTexture points at.
+    local runeXTest = slot:CreateTexture(nil, "ARTWORK")
+    runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Test")
+    runeXTest:SetSize(64, 64) -- bumped way up from BUTTON_PIN_SIZE (30) for visibility testing
+    runeXTest:SetPoint("CENTER", slot, "CENTER", 0, 0)
+    slot.runeXTest = runeXTest
+
     local countText = slot:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     countText:SetPoint("TOP", slot, "BOTTOM", 0, -2)
     countText:SetTextColor(1, 1, 1, 1)
+    -- Bumped up from GameFontNormalSmall's default (~10pt) - the node count
+    -- was hard to read against busy terrain at the old size.
+    do
+        local font, _, flags = countText:GetFont()
+        countText:SetFont(font, 16, flags)
+    end
     -- Drop shadow so the count reads clearly over any world/terrain behind it.
     countText:SetShadowColor(0, 0, 0, 1)
-    countText:SetShadowOffset(1, -1)
+    countText:SetShadowOffset(1.5, -1.5)
     slot.countText = countText
 
     slot:SetScript("OnEnter", function(self)
@@ -158,15 +181,45 @@ end
 local function ConfigureSlot(slot, nodeType)
     slot.nodeType = nodeType
 
+    -- TEST ONLY, 2026-08-09: while testing the new rune-X icon, skip the
+    -- normal MarkerRenderer draw for this slot entirely and just show the
+    -- static test texture instead. Glow color now follows the slot's actual
+    -- node type - Mining red or Herbalism green, same colors used everywhere
+    -- else in the addon - instead of being hardcoded to Mining.
+    if slot.runeXTest then
+        for _, tex in ipairs(slot.segTex or {}) do tex:Hide() end
+        if slot.dotTex then slot.dotTex:Hide() end
+        if slot.glowTex then
+            local glowColor = (nodeType == "herb") and MarkerRenderer.HERB_COLOR or MarkerRenderer.MINE_COLOR
+            slot.glowTex:ClearAllPoints()
+            slot.glowTex:SetSize(64 * 1.6, 64 * 1.6)
+            slot.glowTex:SetPoint("CENTER", slot.runeXTest, "CENTER", 0, 0)
+            slot.glowTex:SetVertexColor(glowColor[1], glowColor[2], glowColor[3], 0.8)
+            slot.glowTex:Show()
+        end
+        -- Active-state test: swap to the pre-baked yellow-interior icon when
+        -- this profession's route is the one currently running, back to the
+        -- transparent-interior icon otherwise. Reuses IsTypeOn() - the same
+        -- check the old MarkerRenderer isTarget flag used - rather than
+        -- inventing new logic.
+        if nodeType and IsTypeOn(nodeType) then
+            slot.runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Active_Test")
+        else
+            slot.runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Test")
+        end
+        slot.runeXTest:Show()
+    end
+
     if nodeType then
-        MarkerRenderer.SetAppearance(slot, nodeType, IsTypeOn(nodeType), BUTTON_PIN_SIZE)
         slot.countText:SetText(tostring(GetZoneNodeCount(nodeType)))
         slot.countText:Show()
     else
         -- No professions known: a plain grey hexagon placeholder regardless of the
         -- chosen map style, since there's no "mine"/"herb" icon that would apply.
-        local thickness = math.max(1.5, BUTTON_PIN_SIZE / 7)
-        MarkerRenderer.Draw(slot, "hollowx", DISABLED_COLOR, BUTTON_PIN_SIZE, thickness)
+        if not slot.runeXTest then
+            local thickness = math.max(1.5, BUTTON_PIN_SIZE / 7)
+            MarkerRenderer.Draw(slot, "hollowx", DISABLED_COLOR, BUTTON_PIN_SIZE, thickness)
+        end
         slot.countText:Hide()
     end
 end
@@ -231,8 +284,12 @@ local function CreateDungeonButton(parent)
     btn:SetSize(DUNGEON_BTN_SIZE, DUNGEON_BTN_SIZE)
     local tex = btn:CreateTexture(nil, "ARTWORK")
     tex:SetAllPoints()
-    tex:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
-    tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    -- TEST ONLY, 2026-08-09: trying the new custom rune-framed dungeon-
+    -- entrance icon in place of the stock Blizzard map icon. No TexCoord
+    -- crop here (unlike the old icon) since this one already has its own
+    -- full border baked in - the 0.07-0.93 crop was only there to trim
+    -- Blizzard's generic icon bevel.
+    tex:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\DungeonNavIcon_Test")
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
     hl:SetColorTexture(1, 1, 1, 0.25)
@@ -259,25 +316,32 @@ end
 -- The "Gather" button under the profession slots: opens the Gather Tally window
 -- and starts a manual tracking session (tallies loot even outside a route).
 local function CreateGatherButton(parent)
-    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    btn:SetSize(GATHER_BTN_WIDTH, GATHER_BTN_HEIGHT)
-    btn:SetText("Gather")
-    btn:SetNormalFontObject("GameFontNormalSmall")
-    btn:SetHighlightFontObject("GameFontHighlightSmall")
-    btn:RegisterForClicks("LeftButtonUp")
-    btn:SetScript("OnClick", function()
+    local btn = Brand.MakeButton(parent, "Gather", GATHER_BTN_WIDTH, GATHER_BTN_HEIGHT, function()
         if addonTable.RunTracker and addonTable.RunTracker.StartManualSession then
             addonTable.RunTracker:StartManualSession()
         end
     end)
+    -- Bump the label size to fill the now-wider button proportionally,
+    -- instead of small text floating in a lot of empty space.
+    do
+        local font, size, flags = btn.label:GetFont()
+        btn.label:SetFont(font, size + 2, flags)
+    end
+    -- Brand.MakeButton already wires OnEnter/OnLeave for its own hover
+    -- brighten effect; re-set here to ALSO keep that effect AND add the
+    -- tooltip, rather than replacing it outright.
     btn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.18, 0.18, 0.18, 0.75)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("|cff00ccffXal's Xpedited Routes|r")
         GameTooltip:AddLine("|cff00ff00Click|r: Open the Gather Tally and start tracking your haul.")
         GameTooltip:AddLine("|cff888888Drag|r: Move this")
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    btn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+        GameTooltip:Hide()
+    end)
     btn:RegisterForDrag("LeftButton")
     btn:SetScript("OnDragStart", OnDragStartShared)
     btn:SetScript("OnDragStop", OnDragStopShared)
@@ -299,27 +363,35 @@ local function UpdateLayout()
         hasMining, hasHerb = true, true
     end
 
-    local slotsHeight
-    if hasMining and hasHerb then
-        slotsHeight = SLOT_SIZE * 2 + SLOT_GAP
-        slotMine:ClearAllPoints()
-        slotMine:SetPoint("TOP", container, "TOP", 0, 0)
-        slotHerb:ClearAllPoints()
-        slotHerb:SetPoint("TOP", container, "TOP", 0, -(SLOT_SIZE + SLOT_GAP))
+    -- Mining and Herbalism each have a PERMANENT position - Mining always
+    -- left, Herbalism always right of the Gather button's own horizontal
+    -- center (x=0, since Gather is anchored TOP,0 below) - regardless of
+    -- which professions this character actually has. Deliberately NOT
+    -- conditional on "both known" anymore: a single-profession character
+    -- still gets that profession's fixed slot, just with the other one
+    -- hidden, so the layout never shifts around based on what's learned.
+    -- Confirmed 2026-08-09 - "don't care if it's a little off center...
+    -- have it be a permanent position" so professions being added/detected
+    -- later can't cause a misalignment.
+    local slotsWidth = SLOT_SIZE * 2 + SLOT_GAP
+    local slotsHeight = SLOT_SIZE
+    local halfOffset = SLOT_SIZE / 2 + SLOT_GAP / 2
+
+    slotMine:ClearAllPoints()
+    slotMine:SetPoint("TOP", container, "TOP", -halfOffset, 0)
+    if hasMining then
         ConfigureSlot(slotMine, "mine")
+        slotMine:Show()
+    else
+        slotMine:Hide()
+    end
+
+    slotHerb:ClearAllPoints()
+    slotHerb:SetPoint("TOP", container, "TOP", halfOffset, 0)
+    if hasHerb then
         ConfigureSlot(slotHerb, "herb")
         slotHerb:Show()
-    elseif hasMining or hasHerb then
-        slotsHeight = SLOT_SIZE
-        slotMine:ClearAllPoints()
-        slotMine:SetPoint("TOP", container, "TOP", 0, 0)
-        ConfigureSlot(slotMine, hasMining and "mine" or "herb")
-        slotHerb:Hide()
     else
-        slotsHeight = SLOT_SIZE
-        slotMine:ClearAllPoints()
-        slotMine:SetPoint("TOP", container, "TOP", 0, 0)
-        ConfigureSlot(slotMine, nil)
         slotHerb:Hide()
     end
 
@@ -328,21 +400,27 @@ local function UpdateLayout()
     if gatherBtn then
         gatherBtn:ClearAllPoints()
         gatherBtn:SetPoint("TOP", container, "TOP", 0, -(slotsHeight + COUNT_LABEL_SPACE + SLOT_GAP))
-        container:SetSize(SLOT_SIZE, slotsHeight + COUNT_LABEL_SPACE + SLOT_GAP + GATHER_BTN_HEIGHT)
-    else
-        container:SetSize(SLOT_SIZE, slotsHeight)
     end
 
-    -- Xperimental dungeon button hangs off the side of the Gather button (the side
-    -- is player-selectable so it never crowds a UI), only when enabled and on retail.
+    -- TEST, 2026-08-09: moved from beside the Gather button to centered
+    -- underneath it, on the same vertical axis as everything else - beside
+    -- it (even with the player-selectable side) reintroduced the exact
+    -- left/right asymmetry the profession-slot layout was just fixed to
+    -- avoid. Also bumped up to match the profession X icons' size (64px),
+    -- up from the old 22px stock-icon size.
+    local dungeonBtnVisible = dungeonBtn and gatherBtn and DungeonNavAvailable()
+        and XalsXRDB and XalsXRDB.dungeonButtonEnabled
+
+    local containerHeight = slotsHeight + COUNT_LABEL_SPACE + SLOT_GAP + (gatherBtn and GATHER_BTN_HEIGHT or 0)
+    if dungeonBtnVisible then
+        containerHeight = containerHeight + SLOT_GAP + DUNGEON_BTN_SIZE
+    end
+    container:SetSize(slotsWidth, containerHeight)
+
     if dungeonBtn then
-        if gatherBtn and DungeonNavAvailable() and XalsXRDB and XalsXRDB.dungeonButtonEnabled then
+        if dungeonBtnVisible then
             dungeonBtn:ClearAllPoints()
-            if ((XalsXRDB and XalsXRDB.dungeonButtonSide) or "right") == "left" then
-                dungeonBtn:SetPoint("RIGHT", gatherBtn, "LEFT", -4, 0)
-            else
-                dungeonBtn:SetPoint("LEFT", gatherBtn, "RIGHT", 4, 0)
-            end
+            dungeonBtn:SetPoint("TOP", gatherBtn, "BOTTOM", 0, -SLOT_GAP)
             dungeonBtn:Show()
         else
             dungeonBtn:Hide()
@@ -376,6 +454,8 @@ function QuickButton:Init()
     slotHerb = CreateSlot(container)
     gatherBtn = CreateGatherButton(container)
     dungeonBtn = CreateDungeonButton(container)
+
+    container:SetScale((XalsXRDB and XalsXRDB.helperButtonScale) or 1)
 
     UpdateLayout()
 
@@ -413,6 +493,14 @@ end
 
 function QuickButton:Refresh()
     UpdateLayout()
+end
+
+-- Called by the Floating Button settings panel's scale slider (and its
+-- Defaults reset) - live-applies without needing a reload.
+function QuickButton:ApplyScale()
+    if container then
+        container:SetScale((XalsXRDB and XalsXRDB.helperButtonScale) or 1)
+    end
 end
 
 function QuickButton:ResetPosition()
