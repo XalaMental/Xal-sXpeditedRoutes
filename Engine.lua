@@ -145,9 +145,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.dungeonButtonEnabled == nil then
                 XalsXRDB.dungeonButtonEnabled = false
             end
-            if XalsXRDB.dungeonButtonSide == nil then
-                XalsXRDB.dungeonButtonSide = "right"
-            end
 
             -- Per-character preferences (route filters etc. - these can differ per alt,
             -- e.g. a character with only Mining wants Herbalism nodes skipped)
@@ -181,7 +178,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if addonTable.SettingsPanel.Init then addonTable.SettingsPanel:Init() end
             if addonTable.QuickButton.Init then addonTable.QuickButton:Init() end
             if addonTable.RunTracker.Init then addonTable.RunTracker:Init() end
-            
+            if addonTable.MinimapButton and addonTable.MinimapButton.Register then addonTable.MinimapButton:Register() end
+            if addonTable.WhatsNew and addonTable.WhatsNew.CheckAndShow then addonTable.WhatsNew:CheckAndShow() end
+
             -- Nudge the client to populate profession data early rather than waiting
             -- for the player to open their Professions panel organically - the read
             -- itself can trigger population as a side effect. Discard the result;
