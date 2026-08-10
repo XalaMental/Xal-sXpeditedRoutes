@@ -1,19 +1,21 @@
 # Xal's Xpedited Routes - Changelog
 
-## Release 1.3.0 - August 11, 2026
+## 1.3.1 - August 9, 2026
 
 ---
 
-A big polish-and-features pass - a Gather Tally you can open on demand and customize, a brighter active node, larger readable text, and an early dungeon-waypoint button for Season 2.
+A big style-and-polish pass - a refreshed look across every settings panel, a redesigned floating helper button, new custom icons, and a new standalone Options window.
 
 ### 🆕 New
-- **Gather button** on the floating helper - opens the new **Gather Tally** window and starts tracking your haul, even when you're not on a route.
-- **Gather Tally options** - switch to a clean text-only list (hide the item icons) and scale the text size, under Options -> Gather Tally.
-- **Two optional timers** - a gather-session timer and a route timer, both off by default, so you can see how long you've been at it.
-- **Brighter active node** - the node you're headed to now has a bright yellow center, on both the map markers and the floating button, so it's easy to spot.
-- **Bigger waypoint text** - a new text-size slider for the arrow's distance and node name, for easier reading.
-- **Clearer counts** - a drop shadow on the node counts under the floating buttons so they pop against the world.
-- **Classic support** - the Gather Tally now works on MoP Classic and Classic Era too, not just retail.
+- **Standalone Options window** - its own tabs (General, Floating Button, Waypoint, Map Markers, Gather Tally, Database, Integrations), now the main way to reach settings. Open with `/xxr options` or the minimap button.
+- **Floating Button settings page** - show/hide, a resize slider, Reset Button Position, and a Defaults button.
+- **What's New popup** - after an update, shows once to walk you through what changed.
+- **Redesigned floating helper button** - Mining and Herbalism each get their own icon, permanently positioned left/right, with a colored glow (red/green) so you can tell them apart at a glance. Fills bright yellow while that profession's route is running.
+- **New minimap icon** and **new dungeon-nav icon**, both custom-designed instead of generic defaults.
 
-### 🧪 Xperimental
-- **Dungeon Nav (early WIP)** - a new dungeon-waypoint button (turn it on under Options -> Gather Tally, and put it on either side of the Gather button) opens a list of all eight Season 2 Mythic+ dungeons and drops a waypoint at any entrance - every coordinate verified. Also works as `/xxr dungeon`, and `/xxr dungeon set <name>` pins one exactly. Portal routing is still to come - feedback welcome.
+### ⚙️ Under the hood
+- Bigger, more legible text and consistent spacing across every settings panel.
+- Every button now shares one consistent style.
+- Gather button widened to sit flush under both profession icons.
+- Removed a leftover setting that stopped doing anything once the dungeon button was repositioned.
+- Refreshed look for the Gather Tally window; fixed its close button overlapping the border.
