@@ -5,6 +5,8 @@ package-as: XalsXpeditedRoutes
 ignore:
   - .github
   - .gitignore
+  - images
+  - ArtSource
 
 # Use our hand-maintained, styled changelog as the release changelog on
 # CurseForge instead of the packager's auto-generated commit list.
