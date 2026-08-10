@@ -18,6 +18,7 @@
 local addonName, addonTable = ...
 local RunTracker = addonTable.RunTracker
 local Helpers = addonTable.Helpers
+local Brand = addonTable.BrandStyle
 
 -- Seconds after a successful gather during which incoming loot is counted toward
 -- the haul. Generous enough to cover auto-loot lag and multi-item nodes, short
@@ -209,16 +210,10 @@ local function BuildFrame()
     frame:SetFrameStrata("HIGH")
     frame:SetClampedToScreen(true)
 
-    if frame.SetBackdrop then
-        frame:SetBackdrop({
-            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 16,
-            insets = { left = 4, right = 4, top = 4, bottom = 4 },
-        })
-        frame:SetBackdropColor(0, 0, 0, 0.92)
-        frame:SetBackdropBorderColor(0.25, 0.55, 0.75, 1)
-    end
+    -- Brand background + border (anchor-based, so the border stays correct
+    -- as this window grows/shrinks with the row count).
+    Brand.ApplyBackground(frame)
+    Brand.DrawBorder(frame)
 
     -- Draggable, with the position remembered between runs (same approach as the
     -- helper button).
@@ -240,19 +235,19 @@ local function BuildFrame()
     frame:ClearAllPoints()
     frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
-    title:SetTextColor(0, 0.8, 1) -- the addon's blue
-    title:SetText("Gather Tally")
+    local title = Brand.Title(frame, "Gather Tally", 15, "TOPLEFT", frame, "TOPLEFT", Brand.SAFE_MARGIN, -Brand.SAFE_MARGIN)
+    title:SetJustifyH("LEFT")
     frame.title = title
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    subtitle:SetTextColor(0.7, 0.7, 0.7)
+    subtitle:SetTextColor(Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
     frame.subtitle = subtitle
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+    -- -8, not -2: keeps the button clear of the border (drawn 6px in, 2px
+    -- thick) instead of overlapping its corner.
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
     close:SetScript("OnClick", function()
         -- Closing a manual (Gather-button) session ends it - stops tallying/timing.
         -- A route session just hides; PathPlanner is what ends that one.
