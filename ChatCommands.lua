@@ -44,6 +44,7 @@ local EXCLUDED_KEYS = {
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
+    minimap = true, helperButtonScale = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
@@ -214,8 +215,10 @@ SlashCmdList["XALMORASXR"] = function(msg)
             end
         end
     elseif command == "options" or command == "config" or command == "settings" then
-        if SettingsPanel and SettingsPanel.Open then
-            SettingsPanel:Open()
+        -- Standalone window is the PRIMARY way in now; the native Esc -> Options
+        -- entry (SettingsPanel:Open) still exists as a secondary path.
+        if SettingsPanel and SettingsPanel.ToggleStandalone then
+            SettingsPanel:ToggleStandalone()
         end
     elseif command == "haul" then
         if subcommand == "off" then
