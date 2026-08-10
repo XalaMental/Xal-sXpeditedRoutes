@@ -4,7 +4,7 @@
 ## Notes: Records gathering positions and displays them on the map and minimap, with an optimal-route compass - combining node-tracking and route optimization into one tool.
 ## Author: XalaMental
 ## X-Credits: Concept inspired by node-recording addons GatherMate2/Gatherer and route-optimization addon Routes.
-## X-License: MIT (code) - see LICENSE.md for full terms, including the custom-art exception
+## X-License: All Rights Reserved - see LICENSE.md for full terms
 ## X-Curse-Project-ID: 1632781
 ## SavedVariables: XalsXRDB
 ## SavedVariablesPerCharacter: XalsXRCharDB
@@ -14,8 +14,12 @@
 
 libs\LibStub\LibStub.lua
 libs\CallbackHandler\CallbackHandler-1.0.lua
+libs\LibDataBroker\LibDataBroker-1.1.lua
+libs\LibDBIcon\LibDBIcon-1.0.lua
 
 Bootstrap.lua
+BrandStyle.lua
+WhatsNew.lua
 Helpers.lua
 Engine.lua
 NodeLogger.lua
@@ -28,4 +32,5 @@ TomTomBridge.lua
 SettingsPanel.lua
 RunTracker.lua
 DungeonNav.lua
+MinimapButton.lua
 ChatCommands.lua
