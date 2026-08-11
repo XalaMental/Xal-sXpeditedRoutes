@@ -70,7 +70,8 @@ local NON_MAP_KEYS = {
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
-    minimap = true, helperButtonScale = true,
+    minimap = true, helperButtonScale = true, groupingDistanceYards = true, showTrailLine = true,
+    boundaryNodes = true,
 }
 
 function NodeLogger.RemoveDuplicates()
