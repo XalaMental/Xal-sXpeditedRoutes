@@ -8,6 +8,7 @@ PathPlanner.currentPath = nil
 PathPlanner.stopCursor = nil
 PathPlanner.pathMapID = nil
 PathPlanner.pathTypeFilter = nil -- "mine", "herb", or nil for an unfiltered/mixed route
+PathPlanner.paused = false -- true while outside the route's zone (see CheckZone)
 
 -- Route construction: a greedy nearest-first build, then a 2-opt local-search
 -- pass that tries to shorten the result further. Greedy-nearest alone can lock
@@ -26,6 +27,55 @@ local function DistanceBetween(mapID, ax, ay, bx, by)
     end
     local dx, dy = bx - ax, by - ay
     return math.sqrt(dx * dx + dy * dy) * Helpers.FALLBACK_YARDS_PER_UNIT
+end
+
+-- Sanity cap on the RAW normalized map-coordinate distance between two
+-- nodes, checked BEFORE trusting HereBeDragons' yard-converted distance.
+-- HBD's per-zone calibration is missing or off for some zones - if it ever
+-- misreports two nodes that are actually far apart as "within grouping
+-- radius," clustering would silently merge a real, distant node into
+-- another cluster so it's never separately routed to again (confirmed live
+-- 2026-08-10: a route claimed a 4-node stop 2000+ yards away with nothing
+-- actually there). Two nodes more than 15% of the map's width/height apart
+-- being genuinely within a couple hundred real yards of each other would
+-- require an implausibly huge zone, so this cap can only ever make grouping
+-- LESS aggressive than intended (nodes that should group don't, in an
+-- oversized zone) - never merge nodes that shouldn't be (nodes vanish).
+local MAX_CLUSTER_COORD_DELTA = 0.15
+
+-- Groups nearby nodes into clusters before the route is built, so a dense
+-- patch of nodes becomes ONE stop on the route instead of a separate stop
+-- for each individual node. Anchor-based (not chained): a node only joins a
+-- cluster if it's within `radius` of that cluster's ORIGINAL node, never a
+-- later member. Chaining (A links to B, B links to C) would let a cluster
+-- stretch across a large area if nodes happen to line up like a trail -
+-- anchoring keeps every cluster visually tight, matching what the player
+-- would actually see together on screen. The tradeoff: two clusters that
+-- are close to each other but whose anchors are just outside `radius` stay
+-- separate - an acceptable, predictable edge case.
+local function BuildClusters(mapID, stops, radius)
+    local clusters = {}
+    for _, stop in ipairs(stops) do
+        local joined = nil
+        for _, cluster in ipairs(clusters) do
+            local coordDeltaX, coordDeltaY = cluster.anchor.x - stop.x, cluster.anchor.y - stop.y
+            local coordDelta = math.sqrt(coordDeltaX * coordDeltaX + coordDeltaY * coordDeltaY)
+            if coordDelta <= MAX_CLUSTER_COORD_DELTA
+                and DistanceBetween(mapID, cluster.anchor.x, cluster.anchor.y, stop.x, stop.y) <= radius then
+                joined = cluster
+                break
+            end
+        end
+        if joined then
+            table.insert(joined.members, stop)
+            if stop.type ~= joined.type then
+                joined.type = "mixed"
+            end
+        else
+            table.insert(clusters, { anchor = stop, x = stop.x, y = stop.y, type = stop.type, members = { stop } })
+        end
+    end
+    return clusters
 end
 
 -- Builds an initial ordering by always stepping to whichever remaining stop is
@@ -161,10 +211,24 @@ function PathPlanner:PlotCourse(typeFilter)
         return
     end
 
+    -- Nodes previously flagged by CheckZone as requiring you to leave this
+    -- zone to reach (a real boundary node, or just a bad/unreachable
+    -- coordinate - either way, permanently excluded from routing).
+    local boundaryList = XalsXRDB.boundaryNodes and XalsXRDB.boundaryNodes[mapID]
+    local function IsBoundaryNode(node)
+        if not boundaryList then return false end
+        for _, bad in ipairs(boundaryList) do
+            if bad.x == node.x and bad.y == node.y then
+                return true
+            end
+        end
+        return false
+    end
+
     local stops = {}
     for _, node in ipairs(XalsXRDB[mapID]) do
         local excluded = (node.type == "mine" and excludeMining) or (node.type == "herb" and excludeHerbs)
-        if not excluded then
+        if not excluded and not IsBoundaryNode(node) then
             table.insert(stops, { x = node.x, y = node.y, type = node.type, lastGathered = node.lastGathered })
         end
     end
@@ -189,7 +253,10 @@ function PathPlanner:PlotCourse(typeFilter)
         stops = freshStops
     end
 
-    local route = BuildGreedyOrder(mapID, startX, startY, stops)
+    local groupingRadius = (XalsXRDB and XalsXRDB.groupingDistanceYards) or 240
+    local clusters = BuildClusters(mapID, stops, groupingRadius)
+
+    local route = BuildGreedyOrder(mapID, startX, startY, clusters)
     route = ImproveWithTwoOpt(mapID, startX, startY, route)
 
     self.currentPath = route
@@ -204,7 +271,7 @@ function PathPlanner:PlotCourse(typeFilter)
     end
 
     local typeLabel = (typeFilter == "mine" and "Mining ") or (typeFilter == "herb" and "Herbalism ") or ""
-    print("|cff00ccffXal's XR:|r " .. typeLabel .. "gathering route generated with |cff00ff00" .. #route .. "|r nodes.")
+    print("|cff00ccffXal's XR:|r " .. typeLabel .. "gathering route generated with |cff00ff00" .. #route .. "|r stops (|cff00ff00" .. #stops .. "|r nodes).")
 
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
@@ -260,6 +327,7 @@ function PathPlanner:CancelPath()
     self.stopCursor = nil
     self.pathMapID = nil
     self.pathTypeFilter = nil
+    self.paused = false
     
     if addonTable.Beacon.Hide then
         addonTable.Beacon:Hide()
@@ -277,13 +345,66 @@ function PathPlanner:CancelPath()
     end
 end
 
-function PathPlanner:HandleZoneChange()
-    -- If we changed zones, cancel the route to avoid pointing at incorrect coordinates
-    if self:InProgress() then
-        local currentMapID = C_Map.GetBestMapForUnit("player")
-        if currentMapID ~= self.pathMapID then
-            print("|cff00ccffXal's XR:|r Zone change detected. Route deactivated.")
-            self:CancelPath()
+-- Pauses/resumes the route depending on whether the player is currently in
+-- the zone it was plotted for - rather than cancelling outright, since
+-- briefly clipping a zone boundary (flying along a coastline, a dip near a
+-- capital city, etc. - none of which show up as a visible line anywhere in
+-- the game's own UI) shouldn't force a full replot. currentPath/stopCursor/
+-- pathMapID all stay intact while paused; the gathering haul tally (started
+-- by RunTracker) is untouched too, since the run hasn't actually ended.
+-- Called every tick from Beacon:RunUpdateLoop() AND from the zone-change
+-- event in Engine.lua - either one catches it, whichever fires first.
+function PathPlanner:CheckZone()
+    if not self:InProgress() and not self.paused then return end
+
+    local currentMapID = C_Map.GetBestMapForUnit("player")
+    if not currentMapID then return end
+
+    if currentMapID ~= self.pathMapID then
+        if not self.paused then
+            self.paused = true
+
+            -- The stop you were actually approaching when this triggered
+            -- requires physically crossing the zone boundary to reach - mark
+            -- every node in it as excluded so it's never offered as a route
+            -- stop again, then skip past it immediately instead of leaving
+            -- you stuck bouncing pause/resume against the same stop forever.
+            local target = self:CurrentStop()
+            if target and self.pathMapID then
+                XalsXRDB.boundaryNodes = XalsXRDB.boundaryNodes or {}
+                XalsXRDB.boundaryNodes[self.pathMapID] = XalsXRDB.boundaryNodes[self.pathMapID] or {}
+                local excluded = XalsXRDB.boundaryNodes[self.pathMapID]
+                local members = target.members or { target }
+                for _, member in ipairs(members) do
+                    table.insert(excluded, { x = member.x, y = member.y })
+                end
+                print("|cffff9900Xal's XR:|r That stop requires crossing the zone boundary to reach - excluding it from future routes and skipping it now.")
+            end
+
+            if RaidNotice_AddMessage and RaidWarningFrame and ChatTypeInfo then
+                RaidNotice_AddMessage(RaidWarningFrame, "Xal's XR: Route paused - outside route zone", ChatTypeInfo["RAID_WARNING"])
+            end
+            if addonTable.Beacon and addonTable.Beacon.Hide then
+                addonTable.Beacon:Hide()
+            end
+            self:SkipPin()
+        end
+    else
+        if self.paused then
+            self.paused = false
+            print("|cff00ff00Xal's XR:|r Back in the route's zone - resuming.")
+            if RaidNotice_AddMessage and RaidWarningFrame and ChatTypeInfo then
+                RaidNotice_AddMessage(RaidWarningFrame, "Xal's XR: Route resumed", ChatTypeInfo["RAID_WARNING"])
+            end
+            if addonTable.Beacon and addonTable.Beacon.Show then
+                addonTable.Beacon:Show()
+            end
         end
     end
+end
+
+-- Old name kept as an alias - Engine.lua's zone-change event dispatcher
+-- calls this directly.
+function PathPlanner:HandleZoneChange()
+    self:CheckZone()
 end
