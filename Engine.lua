@@ -80,7 +80,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 XalsXRDB.compassPosition = { point = "CENTER", x = 0, y = 180 }
             end
             if XalsXRDB.autoAdvanceDistance == nil then
-                XalsXRDB.autoAdvanceDistance = 30
+                XalsXRDB.autoAdvanceDistance = 20
             end
             if XalsXRDB.showHelperButton == nil then
                 XalsXRDB.showHelperButton = true
@@ -102,6 +102,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
             if XalsXRDB.proximityDistanceYards == nil then
                 XalsXRDB.proximityDistanceYards = 200
+            end
+            if XalsXRDB.groupingDistanceYards == nil then
+                XalsXRDB.groupingDistanceYards = 240
+            end
+            if XalsXRDB.showTrailLine == nil then
+                XalsXRDB.showTrailLine = true
             end
             if XalsXRDB.arrowProgressColor == nil then
                 XalsXRDB.arrowProgressColor = true
@@ -144,6 +150,21 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
             if XalsXRDB.dungeonButtonEnabled == nil then
                 XalsXRDB.dungeonButtonEnabled = false
+            end
+
+            -- ONE-TIME cleanup of orphaned keys from an abandoned earlier prototype
+            -- (never referenced anywhere in the current codebase - found sitting in
+            -- live SavedVariables 2026-08-10). Gated so this runs exactly once ever,
+            -- NOT on every login - a future feature is free to reuse any of these
+            -- exact key names (e.g. a real "route trail" feature) without this
+            -- silently wiping it back out again after the first pass.
+            if not XalsXRDB.clearedOrphanKeys2026 then
+                XalsXRDB.showRouteTrail = nil
+                XalsXRDB.routeTrailStyle = nil
+                XalsXRDB.proximityHexagonEnabled = nil
+                XalsXRDB.proximityHexagonDistance = nil
+                XalsXRDB.proximityFadeAlpha = nil
+                XalsXRDB.clearedOrphanKeys2026 = true
             end
 
             -- Per-character preferences (route filters etc. - these can differ per alt,
@@ -205,7 +226,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if addonTable.Markers.UpdatePins then
             addonTable.Markers:UpdatePins()
         end
-        if addonTable.PathPlanner.OnZoneChanged then
+        if addonTable.PathPlanner.HandleZoneChange then
             addonTable.PathPlanner:HandleZoneChange()
         end
         if addonTable.QuickButton.Refresh then
