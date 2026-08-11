@@ -137,6 +137,21 @@ local function ProximityTick(elapsed)
     end
 end
 
+-- Returns the minimap pin currently representing the active route's target
+-- node, if one exists and is actually visible right now (not hidden by
+-- proximity fade). Lets other modules (Beacon.lua's trail line) draw to the
+-- pin's REAL on-screen position instead of separately recalculating bearing/
+-- rotation/minimap-edge-clipping - HereBeDragons already solves all of that
+-- correctly for pin placement, so there's no reason to solve it twice.
+function Markers:GetTargetPin()
+    for _, pin in ipairs(minimapPinPool) do
+        if pin.inUse and pin.isRouteTarget and pin:IsShown() then
+            return pin
+        end
+    end
+    return nil
+end
+
 function Markers:Init()
     if WorldMapFrame then
         hooksecurefunc(WorldMapFrame, "OnMapChanged", function() self:UpdatePins() end)
@@ -201,7 +216,13 @@ function Markers:UpdatePins()
                 -- near/far state it already had instead of discarding it.
                 SetPinAppearance(mPin, node.type, isTarget, nil, mPin.isNear and 0 or nil)
                 
-                Engine.HBDPins:AddMinimapIconMap(addonName, mPin, playerMapID, node.x, node.y, true, false)
+                -- floatOnEdge = isTarget: the active route target clamps to the
+                -- minimap's edge when out of view range instead of disappearing,
+                -- so it (and the trail line pointing to it) stays visible at any
+                -- distance. Every other recorded node stays floatOnEdge=false -
+                -- otherwise every node in the zone would clutter the minimap edge,
+                -- not just the one you're actually routing to.
+                Engine.HBDPins:AddMinimapIconMap(addonName, mPin, playerMapID, node.x, node.y, true, isTarget)
             end
         end
     end
