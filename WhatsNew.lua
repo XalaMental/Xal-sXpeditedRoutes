@@ -27,16 +27,16 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
-    date = "August 9, 2026",
-    intro = "A style-and-polish pass - a refreshed look for the Gather Tally, a new standalone Options window, and this update-notes popup itself.",
+    date = "August 10, 2026",
+    intro = "Smarter routing: nearby nodes now group into one stop instead of a separate waypoint for each.",
     sections = {
         { heading = "New", items = {
-            "Standalone Options window - a movable window with its own tabs (General, Waypoint, Map Markers, Gather Tally, Database, Integrations), now the main way to reach settings. Open it with /xxr options.",
-            "What's New popup - after an update, this window pops up once to walk you through what changed - like the one you're reading now.",
+            "Node grouping - nearby nodes now group into a single route stop instead of a separate waypoint for each one, so routes flow through a dense patch instead of zig-zagging. On by default; adjustable in Options -> Map Markers.",
+            "Minimap trail line - a thin line on your minimap points straight from you to your next stop. On by default; toggle it in Options -> Waypoint.",
+            "Dual-profession routing, now explained - if you gather both Mining and Herbalism, lighting up both profession icons builds one combined route. This already worked, it just wasn't spelled out anywhere until now.",
         } },
         { heading = "Under the hood", items = {
-            "Refreshed look - the Gather Tally window and the Gather button now match the addon's shared visual style.",
-            "Fixed - the Gather Tally's close button was sitting slightly on top of the window's border; it's clear of it now.",
+            "The waypoint arrow and route-generated chat message both now show stop count separately from node count, so it's clear grouping combined nodes together rather than dropping any.",
         } },
     },
 }
