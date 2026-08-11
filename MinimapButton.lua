@@ -23,7 +23,7 @@ local MinimapButton = addonTable.MinimapButton
 -- folder alongside a newer .png (same base name) caused WoW to keep loading
 -- the OLD file, since an extensionless path left it ambiguous which one to
 -- resolve to. Confirmed 2026-08-09.
-local MINIMAP_ICON = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\ShieldIcon_Minimap_Test.png"
+local MINIMAP_ICON = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\BundleIcon_Minimap_v1.png"
 local MINIMAP_ICON_SIZE = 34
 
 function MinimapButton:Register()
