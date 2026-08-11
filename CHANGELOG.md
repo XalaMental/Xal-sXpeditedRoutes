@@ -4,7 +4,7 @@
 
 ---
 
-Smarter routing: nearby nodes now group into one stop instead of a separate waypoint for each, plus a couple of small fixes and clarifications.
+I realized the original routing system - point yourself at every single node, one after another - could get pretty overwhelming once you had a lot of nodes packed into one small area. So this update's focus is simplifying that: nearby nodes now group into a single stop instead of a separate detour for each one, so your route actually flows instead of zig-zagging. Along with that, I added a trail line on the minimap pointing straight to your next stop, and fixed a few routing bugs that turned up while testing all this.
 
 ### 🆕 New
 - **Node grouping** - nearby nodes now group into a single route stop instead of a separate waypoint for each one, so routes flow through a dense patch instead of zig-zagging node to node. On by default; adjustable in Options -> Map Markers if you want it tighter or looser.

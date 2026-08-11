@@ -28,7 +28,7 @@ local Brand = addonTable.BrandStyle
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
     date = "August 10, 2026",
-    intro = "Smarter routing: nearby nodes now group into one stop instead of a separate waypoint for each.",
+    intro = "I realized the original routing system - point yourself at every single node, one after another - could get pretty overwhelming once you had a lot of nodes packed into one small area. So this update's focus is simplifying that: nearby nodes now group into a single stop instead of a separate detour for each one.",
     sections = {
         { heading = "New", items = {
             "Node grouping - nearby nodes now group into a single route stop instead of a separate waypoint for each one, so routes flow through a dense patch instead of zig-zagging. On by default; adjustable in Options -> Map Markers.",
