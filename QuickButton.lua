@@ -148,6 +148,9 @@ local function CreateSlot(parent)
                 GameTooltip:AddLine("|cff00ff00Click|r: Add " .. label .. " to the route (starts one if none is active)")
             end
             GameTooltip:AddLine(label .. " nodes saved in this zone: |cffffffff" .. GetZoneNodeCount(self.nodeType) .. "|r")
+            if slotMine and slotHerb and slotMine:IsShown() and slotHerb:IsShown() then
+                GameTooltip:AddLine("|cff888888Tip: light up both icons for one combined route.|r")
+            end
         else
             GameTooltip:AddLine("No gathering professions known on this character.")
             GameTooltip:AddLine("|cff888888Learn Mining or Herbalism to use this.|r")
