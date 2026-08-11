@@ -35,7 +35,8 @@ local function GetStatsString()
                 and mapID ~= "showHaulSummary" and mapID ~= "haulFramePosition" and mapID ~= "haulShowIcons" and mapID ~= "haulFontScale"
                 and mapID ~= "haulGatherTimer" and mapID ~= "haulRouteTimer" and mapID ~= "arrowTextScale"
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
-                and mapID ~= "minimap" and mapID ~= "helperButtonScale" and type(nodes) == "table" then
+                and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
+                and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -65,7 +66,8 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "showHaulSummary" and key ~= "haulFramePosition" and key ~= "haulShowIcons" and key ~= "haulFontScale"
                 and key ~= "haulGatherTimer" and key ~= "haulRouteTimer" and key ~= "arrowTextScale"
                 and key ~= "dungeonCoords" and key ~= "dungeonButtonEnabled" and key ~= "dungeonButtonSide"
-                and key ~= "minimap" and key ~= "helperButtonScale" then
+                and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
+                and key ~= "showTrailLine" and key ~= "boundaryNodes" then
                 XalsXRDB[key] = nil
             end
         end
@@ -280,7 +282,7 @@ local function BuildRootPanel()
     local RefreshRootPanel = function()
         haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         minimapCheck:SetChecked(not (XalsXRDB and XalsXRDB.minimap and XalsXRDB.minimap.hide == true))
-        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
+        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 20
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
         BumpFont(_G[slider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
@@ -493,6 +495,17 @@ local function BuildWaypointPanel()
     textScaleHelp:SetJustifyH("LEFT")
     textScaleHelp:SetText("Enlarges the distance and node-name text under the arrow - handy if the default is hard to read.")
 
+    local trailLineCheck = CreateFrame("CheckButton", nil, waypointPanel, "UICheckButtonTemplate")
+    trailLineCheck:SetPoint("TOPLEFT", textScaleHelp, "BOTTOMLEFT", 2, -14)
+    trailLineCheck.Text:SetText("Show a trail line on the minimap to your next stop")
+    BumpFont(trailLineCheck.Text, PANEL_LABEL_FONT_SIZE)
+    trailLineCheck.Text:SetWordWrap(true)
+    trailLineCheck.Text:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
+    trailLineCheck:SetScript("OnClick", function(self)
+        XalsXRDB.showTrailLine = self:GetChecked() and true or false
+    end)
+    waypointPanel.trailLineCheck = trailLineCheck
+
     local RefreshWaypointPanel = function()
         local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
         for styleKey, styleBtn in pairs(arrowStyleButtons) do
@@ -507,6 +520,7 @@ local function BuildWaypointPanel()
         textScaleSlider:SetValue(textScalePct)
         _G[textScaleSlider:GetName() .. "Text"]:SetText("Text size: " .. textScalePct .. "%")
         BumpFont(_G[textScaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        trailLineCheck:SetChecked(not (XalsXRDB and XalsXRDB.showTrailLine == false))
     end
     waypointPanel:SetScript("OnShow", RefreshWaypointPanel)
     waypointPanel.Refresh = RefreshWaypointPanel
@@ -675,6 +689,38 @@ local function BuildMarkersPanel()
     end)
     markersPanel.proximitySlider = proximitySlider
 
+    -- Node grouping - nearby nodes become one route stop instead of a separate
+    -- stop for each one. On by default; only the distance is adjustable.
+    local groupingHeader = CreateHeader(markersPanel, proximitySlider, "Node Grouping Distance", -22)
+
+    local groupingHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    BumpFont(groupingHelp, PANEL_DESC_FONT_SIZE)
+    groupingHelp:SetPoint("TOPLEFT", groupingHeader, "BOTTOMLEFT", 0, -6)
+    groupingHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
+    groupingHelp:SetJustifyH("LEFT")
+    groupingHelp:SetText("Nearby nodes within this distance are treated as one stop on your route instead of a separate stop for each one, so routes flow instead of zig-zagging through a dense patch. Keep this a bit above your Hide Distance above.")
+    BumpFont(groupingHelp, PANEL_DESC_FONT_SIZE)
+
+    local groupingSlider = CreateFrame("Slider", "XalsXRGroupingSlider", markersPanel, "OptionsSliderTemplate")
+    groupingSlider:SetPoint("TOPLEFT", groupingHelp, "BOTTOMLEFT", 6, -30)
+    groupingSlider:SetWidth(220)
+    groupingSlider:SetMinMaxValues(50, 500)
+    groupingSlider:SetValueStep(10)
+    groupingSlider:SetObeyStepOnDrag(true)
+    _G[groupingSlider:GetName() .. "Low"]:SetText("50 yd")
+    BumpFont(_G[groupingSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
+    _G[groupingSlider:GetName() .. "High"]:SetText("500 yd")
+    BumpFont(_G[groupingSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
+    _G[groupingSlider:GetName() .. "Text"]:SetText("Grouping distance")
+    BumpFont(_G[groupingSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+    groupingSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / 10 + 0.5) * 10
+        XalsXRDB.groupingDistanceYards = value
+        _G[self:GetName() .. "Text"]:SetText("Grouping distance: " .. value .. " yd")
+        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+    end)
+    markersPanel.groupingSlider = groupingSlider
+
     local RefreshMarkersPanel = function()
         local currentStyle = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
         for styleKey, styleBtn in pairs(pinStyleButtons) do
@@ -693,6 +739,10 @@ local function BuildMarkersPanel()
         proximitySlider:SetValue(dist)
         _G[proximitySlider:GetName() .. "Text"]:SetText("Hide distance: " .. dist .. " yd")
         BumpFont(_G[proximitySlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        local groupDist = (XalsXRDB and XalsXRDB.groupingDistanceYards) or 240
+        groupingSlider:SetValue(groupDist)
+        _G[groupingSlider:GetName() .. "Text"]:SetText("Grouping distance: " .. groupDist .. " yd")
+        BumpFont(_G[groupingSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
     end
     markersPanel:SetScript("OnShow", RefreshMarkersPanel)
     markersPanel.Refresh = RefreshMarkersPanel
@@ -1046,9 +1096,10 @@ local function BuildStandaloneWindow()
     if standaloneFrame then return standaloneFrame end
     if not rootPanel then SettingsPanel:Init() end
 
-    -- Tall enough to fit the biggest existing panel (Gather Tally) without
+    -- Tall enough to fit the biggest existing panel (Map Markers, since the
+    -- 1.3.2 grouping-distance slider pushed it past Gather Tally) without
     -- needing scroll mechanics - deliberately generous rather than tight.
-    local FW, FH = 640, 700
+    local FW, FH = 640, 820
     local f = CreateFrame("Frame", "XalsXRStandaloneOptions", UIParent, "BackdropTemplate")
     tinsert(UISpecialFrames, "XalsXRStandaloneOptions") -- lets the Escape key close it, like any other UI panel
     f:SetSize(FW, FH)
