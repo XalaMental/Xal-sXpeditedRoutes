@@ -4,12 +4,15 @@ local Beacon = addonTable.Beacon
 local Engine = addonTable.Engine
 local PathPlanner = addonTable.PathPlanner
 local Helpers = addonTable.Helpers
+local Brand = addonTable.BrandStyle
 
 local frame = nil
 local arrow = nil
 local textDistance = nil
 local textNode = nil
+local trailLine = nil
 local updateInterval = 0.05 -- 20 FPS for smoothness
+local TRAIL_LINE_WIDTH = 2 -- thin but noticeable, matches Brand.LINE_THICKNESS elsewhere
 
 local PATH_CHECK_INTERVAL = 0.5 -- how often to judge "closer or farther", not every tick (avoids jitter)
 local PATH_DEADBAND_YARDS = 1.5 -- ignore tiny fluctuations smaller than this
@@ -134,9 +137,20 @@ function Beacon:Init()
     textNode:SetTextColor(0, 0.8, 1, 1) -- Bright blue
 
     Beacon:ApplyTextScale()
-    
+
     frame:Hide()
-    
+
+    -- Trail line: a thin bar stretched from the minimap's center to the
+    -- current target's pin, parented directly to Minimap (not `frame`) so it
+    -- keeps working regardless of whether the HUD arrow itself is shown -
+    -- it's a minimap decoration, not part of the floating arrow widget.
+    -- Plain white 1x1 texture tinted via SetVertexColor, the standard WoW UI
+    -- technique for a solid-color line - no custom art asset needed.
+    trailLine = Minimap:CreateTexture(nil, "ARTWORK")
+    trailLine:SetTexture("Interface\\Buttons\\WHITE8x8")
+    trailLine:SetVertexColor(1, 1, 1, 0.9)
+    trailLine:Hide()
+
     -- Update loop runs on its OWN frame, deliberately never hidden - if it lived
     -- on `frame` itself, WoW simply stops firing OnUpdate on a hidden frame,
     -- which would silently stop route progression (the auto-advance check)
@@ -175,17 +189,77 @@ function Beacon:Retarget()
         return
     end
     
-    local nodeLabel = (target.type == "mine" and "Mine" or "Herb")
+    local nodeLabel
+    if target.type == "mixed" then
+        nodeLabel = "Mixed"
+    elseif target.type == "mine" then
+        nodeLabel = "Mine"
+    else
+        nodeLabel = "Herb"
+    end
     local total = #PathPlanner.currentPath
     local index = PathPlanner.stopCursor
-    textNode:SetText(string.format("%s (%d/%d)", nodeLabel, index, total))
+    local memberCount = target.members and #target.members or 1
+    if memberCount > 1 then
+        textNode:SetText(string.format("%s (%d/%d)  ·  %d known nodes", nodeLabel, index, total, memberCount))
+    else
+        textNode:SetText(string.format("%s (%d/%d)", nodeLabel, index, total))
+    end
     
     -- New target: don't judge progress against the previous node's distance
     lastPathDistance = nil
     pathCheckTimer = 0
 end
 
+-- Draws a thin line from the minimap's center (you're always centered on
+-- your own minimap) to the current target's pin position - reusing the
+-- pin's REAL position (already correctly placed by HereBeDragons, including
+-- minimap rotation and edge-clamping for out-of-radius targets) instead of
+-- recalculating any of that separately. Independent of the HUD arrow
+-- `frame`'s own visibility - this is a minimap decoration, not part of that
+-- widget, so it keeps working even if the player hid the arrow itself.
+local function UpdateTrailLine()
+    if not trailLine then return end
+    if not (XalsXRDB and XalsXRDB.showTrailLine ~= false) then
+        trailLine:Hide()
+        return
+    end
+    if not PathPlanner:InProgress() then
+        trailLine:Hide()
+        return
+    end
+
+    local targetPin = addonTable.Markers and addonTable.Markers.GetTargetPin and addonTable.Markers:GetTargetPin()
+    if not targetPin then
+        trailLine:Hide()
+        return
+    end
+
+    local mx, my = Minimap:GetCenter()
+    local px, py = targetPin:GetCenter()
+    if not mx or not px then
+        trailLine:Hide()
+        return
+    end
+
+    local dx, dy = px - mx, py - my
+    local dist = math.sqrt(dx * dx + dy * dy)
+    if dist < 2 then
+        -- Close enough that a visible line would just be noise
+        trailLine:Hide()
+        return
+    end
+
+    trailLine:ClearAllPoints()
+    trailLine:SetSize(dist, TRAIL_LINE_WIDTH)
+    trailLine:SetPoint("CENTER", Minimap, "CENTER", dx / 2, dy / 2)
+    trailLine:SetRotation(math.atan2(dy, dx))
+    trailLine:Show()
+end
+
 function Beacon:RunUpdateLoop()
+    UpdateTrailLine()
+
     if not PathPlanner:InProgress() then
         self:Hide()
         return
@@ -193,7 +267,19 @@ function Beacon:RunUpdateLoop()
     
     local mapID = C_Map.GetBestMapForUnit("player")
     if not mapID then return end
-    
+
+    -- Redundant, tick-level safety net (don't rely solely on the zone-change
+    -- EVENT to catch this) - if the player's current map no longer matches
+    -- the map the route was actually plotted under, every distance/bearing
+    -- calculation below would be comparing two different coordinate spaces,
+    -- producing a nonsense number instead of erroring outright. PAUSES
+    -- rather than cancels (see PathPlanner:CheckZone) - a brief zone-boundary
+    -- clip shouldn't force a full replot.
+    PathPlanner:CheckZone()
+    if PathPlanner.paused then
+        return
+    end
+
     local px, py = nil, nil
     if Engine.HBD then
         px, py = Engine.HBD:GetPlayerZonePosition()
@@ -230,7 +316,7 @@ function Beacon:RunUpdateLoop()
     -- Arrival check runs regardless of whether the arrow itself is visible -
     -- route progression can't depend on the visual arrow being shown, since
     -- e.g. TomTom may be handling navigation instead while this stays hidden.
-    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 30
+    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 20
     if distance <= advanceDistance then
         PathPlanner:StepForward()
         return
