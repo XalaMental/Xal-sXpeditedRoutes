@@ -244,16 +244,18 @@ local function BuildFrame()
     subtitle:SetTextColor(Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
     frame.subtitle = subtitle
 
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    -- -8, not -2: keeps the button clear of the border (drawn 6px in, 2px
-    -- thick) instead of overlapping its corner.
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
-    close:SetScript("OnClick", function()
+    -- Branded flat "X" button instead of Blizzard's default red-X close
+    -- button template, matching the standalone Options window's close button
+    -- (and every other button in the addon) instead of clashing with them.
+    local close = Brand.MakeButton(frame, "X", 24, 24, function()
         -- Closing a manual (Gather-button) session ends it - stops tallying/timing.
         -- A route session just hides; PathPlanner is what ends that one.
         if RunTracker.sessionKind == "manual" then RunTracker:EndRun() end
         frame:Hide()
     end)
+    -- Brand.SAFE_MARGIN (14), not a hardcoded -8 - matches the standalone
+    -- Options window's close button exactly instead of sitting 6px too tight.
+    PixelUtil.SetPoint(close, "TOPRIGHT", frame, "TOPRIGHT", -Brand.SAFE_MARGIN, -Brand.SAFE_MARGIN)
 
     -- Ticks the live timer while a session is active and the window is open.
     frame:SetScript("OnUpdate", function(self, elapsed)
