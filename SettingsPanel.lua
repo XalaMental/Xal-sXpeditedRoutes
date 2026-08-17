@@ -37,7 +37,7 @@ local function GetStatsString()
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
                 and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
                 and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and mapID ~= "helperButtonFadeWhenIdle"
-                and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and type(nodes) == "table" then
+                and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -69,7 +69,7 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "dungeonCoords" and key ~= "dungeonButtonEnabled" and key ~= "dungeonButtonSide"
                 and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
                 and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
-                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" then
+                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled" then
                 XalsXRDB[key] = nil
             end
         end
@@ -207,11 +207,29 @@ local function BuildRootPanel()
     professionNote:SetJustifyH("LEFT")
     professionNote:SetText("Markers and routes automatically skip node types this character doesn't have the profession to gather - e.g. a pure-Herbalism character won't see Mining nodes another character on your account recorded.")
 
+    -- Lumberjacking gets its own on/off toggle, unlike Mining/Herbalism -
+    -- those come from actively choosing to level a profession, while
+    -- Lumberjacking comes from Player Housing content, so a character could
+    -- have the ability without ever wanting to gather wood on purpose.
+    -- Defaults on. Confirmed 2026-08-17.
+    local lumberCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
+    lumberCheck:SetPoint("TOPLEFT", professionNote, "BOTTOMLEFT", 2, -10)
+    lumberCheck.Text:SetText("Enable Lumberjacking gathering")
+    BumpFont(lumberCheck.Text, PANEL_LABEL_FONT_SIZE)
+    lumberCheck.Text:SetWordWrap(true)
+    lumberCheck.Text:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
+    lumberCheck:SetScript("OnClick", function(self)
+        XalsXRDB.lumberEnabled = self:GetChecked() and true or false
+        if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
+        if addonTable.QuickButton.Refresh then addonTable.QuickButton:Refresh() end
+    end)
+    rootPanel.lumberCheck = lumberCheck
+
     -- "Show the floating helper button" and its Reset Button Position button
     -- moved out to the dedicated Floating Button panel, 2026-08-09 - along
     -- with the new scale slider and that panel's own Defaults reset.
     local minimapCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
-    minimapCheck:SetPoint("TOPLEFT", professionNote, "BOTTOMLEFT", 2, -10)
+    minimapCheck:SetPoint("TOPLEFT", lumberCheck, "BOTTOMLEFT", 0, -10)
     -- The click-behavior explanation was dropped 2026-08-09 - it's redundant
     -- with the minimap button's own in-game tooltip, and just ate space/
     -- forced a wrap here for no reason.
@@ -288,6 +306,7 @@ local function BuildRootPanel()
     local RefreshRootPanel = function()
         haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         minimapCheck:SetChecked(not (XalsXRDB and XalsXRDB.minimap and XalsXRDB.minimap.hide == true))
+        lumberCheck:SetChecked(not (XalsXRDB and XalsXRDB.lumberEnabled == false))
         local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
