@@ -1,5 +1,27 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.0.0 - August 17, 2026
+
+---
+
+This one's mostly me catching a few things I realized weren't the best way to do them. TomTom's now the default way Routes navigates for you, made a handful of visual repairs, and fixed some dungeon navigation bugs that turned up along the way. Thanks for being part of the Xal family - hope this makes your routes a little smoother.
+
+### 🆕 New
+- **Dungeon portal routing** - routes you through the Timeways portal room in Silvermoon for King's Rest, Temple of Sethraliss, and Ruby Life Pools.
+- **Dungeon nav has its own arrow now**, fully independent from the gathering-route compass.
+- **TomTom sync defaults on** if TomTom's installed - our own arrow's still the fallback. Existing setups untouched; check/change it via the What's New popup.
+- **TomTom's arrow no longer sits on top of the node** - nudged to the side.
+
+### 🔧 Fixed
+- Minimap button's right-click now opens the Gather Tally window.
+- Gather Tally's item counts/status line no longer crowd the window's border.
+- TomTom waypoints for dungeon nav no longer vanish before you arrive.
+- Auto-advance distance now defaults to 50 yards (up from 20), slider goes to 150.
+
+### ⚙️ Under the hood
+- Fixed the gathering route's distance calc silently using an approximation instead of the real one.
+- Dungeon nav and TomTom no longer fight over TomTom's one arrow.
+
 ## 1.3.2 - August 10, 2026
 
 ---
