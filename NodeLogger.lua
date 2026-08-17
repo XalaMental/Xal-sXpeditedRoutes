@@ -25,7 +25,8 @@ local function SaveNode(uiMapID, x, y, gatherType)
     end
 
     table.insert(zoneNodes, { x = x, y = y, type = gatherType, lastGathered = time() })
-    print("|cff00ff00Xal's XR:|r " .. (gatherType == "mine" and "Vein" or "Herb") .. " saved to your database.")
+    local NODE_LABELS = { mine = "Vein", herb = "Herb", lumber = "Tree" }
+    print("|cff00ff00Xal's XR:|r " .. (NODE_LABELS[gatherType] or "Node") .. " saved to your database.")
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
     end
@@ -72,7 +73,7 @@ local NON_MAP_KEYS = {
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
     minimap = true, helperButtonScale = true, groupingDistanceYards = true, showTrailLine = true,
     boundaryNodes = true, helperButtonFadeWhenIdle = true, optionsWindowPoint = true,
-    dungeonCompassPosition = true,
+    dungeonCompassPosition = true, lumberEnabled = true,
 }
 
 function NodeLogger.RemoveDuplicates()
