@@ -112,6 +112,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.helperButtonFadeWhenIdle == nil then
                 XalsXRDB.helperButtonFadeWhenIdle = false
             end
+            if XalsXRDB.lumberEnabled == nil then
+                XalsXRDB.lumberEnabled = true
+            end
             if XalsXRDB.arrowProgressColor == nil then
                 XalsXRDB.arrowProgressColor = true
             end
