@@ -4,18 +4,20 @@
 -- A small, draggable floating control for one-click route control, for players who
 -- don't want to remember /xxr chat commands. It adapts to what THIS character can
 -- actually gather:
---   - Knows both Mining and Herbalism -> two buttons, stacked vertically, each an
---     independent on/off toggle. Both on at once = one combined route. Only one on
---     = a route restricted to that type. Both off = no route.
---   - Knows only one                  -> a single button for that profession
---   - Knows neither                   -> a single greyed placeholder, nothing to click
+--   - Mining (bottom-left), Herbalism (bottom-right), Lumberjacking (top-center,
+--     triangle layout, confirmed 2026-08-17) - each an independent on/off toggle.
+--     Any combination of icons lit builds one combined route through those types;
+--     all off = no route.
+--   - A profession this character doesn't know still gets its fixed slot position,
+--     just hidden, so the layout never shifts around based on what's learned.
+--   - Knows none of the three -> a single greyed placeholder, nothing to click
 --
 -- Each button is drawn with MarkerRenderer (the same shape system used for map/minimap
 -- pins) at a larger size, so it always matches whatever marker style is selected in
 -- Settings instead of being a generic shape of its own.
 --
 -- Click: flips that type's toggle and regenerates the route to match whichever
--- type(s) are now on (or clears it if both end up off).
+-- type(s) are now on (or clears it if all end up off).
 -- Drag the whole thing: reposition (position is saved).
 local addonName, addonTable = ...
 local QuickButton = addonTable.QuickButton
@@ -25,7 +27,7 @@ local MarkerRenderer = addonTable.MarkerRenderer
 local Brand = addonTable.BrandStyle
 
 local container = nil -- outer draggable frame
-local slotMine, slotHerb = nil, nil -- slotMine doubles as the only button when just one profession (or none) is known
+local slotMine, slotHerb, slotLumber = nil, nil, nil -- slotMine doubles as the only button when just one profession (or none) is known. slotLumber sits centered above the mine/herb pair, triangle-style.
 local gatherBtn = nil -- "Gather" button under the stack; opens the Gather Tally
 local dungeonBtn, dungeonMenu = nil, nil -- Xperimental dungeon-waypoint button + its popup list
 
@@ -96,12 +98,14 @@ local DISABLED_COLOR = { 0.4, 0.4, 0.4 }
 local refreshInterval = 0.5
 local refreshTimer = 0
 
-local LABELS = { mine = "Mining", herb = "Herbalism" }
+local LABELS = { mine = "Mining", herb = "Herbalism", lumber = "Lumberjacking" }
 
 -- Whether a given type is currently included in the active route - true whenever
 -- that type is running solo OR as part of an unrestricted (combined) route.
 local function IsTypeOn(nodeType)
-    return PathPlanner:InProgress() and (PathPlanner.pathTypeFilter == nil or PathPlanner.pathTypeFilter == nodeType)
+    if not PathPlanner:InProgress() then return false end
+    local filter = PathPlanner.pathTypeFilter
+    return filter == nil or filter[nodeType] == true
 end
 
 local function GetZoneNodeCount(nodeType)
@@ -120,21 +124,13 @@ end
 -- Flips one type's toggle and regenerates the route to match the resulting
 -- combination of on/off states.
 local function ToggleType(nodeType)
-    local mineOn = IsTypeOn("mine")
-    local herbOn = IsTypeOn("herb")
+    local on = { mine = IsTypeOn("mine"), herb = IsTypeOn("herb"), lumber = IsTypeOn("lumber") }
+    on[nodeType] = not on[nodeType]
 
-    if nodeType == "mine" then
-        mineOn = not mineOn
-    else
-        herbOn = not herbOn
-    end
-
-    if mineOn and herbOn then
+    if on.mine and on.herb and on.lumber then
         PathPlanner:PlotCourse()
-    elseif mineOn then
-        PathPlanner:PlotCourse("mine")
-    elseif herbOn then
-        PathPlanner:PlotCourse("herb")
+    elseif on.mine or on.herb or on.lumber then
+        PathPlanner:PlotCourse(on)
     else
         PathPlanner:CancelPath()
     end
@@ -187,12 +183,16 @@ local function CreateSlot(parent)
                 GameTooltip:AddLine("|cff00ff00Click|r: Add " .. label .. " to the route (starts one if none is active)")
             end
             GameTooltip:AddLine(label .. " nodes saved in this zone: |cffffffff" .. GetZoneNodeCount(self.nodeType) .. "|r")
-            if slotMine and slotHerb and slotMine:IsShown() and slotHerb:IsShown() then
-                GameTooltip:AddLine("|cff888888Tip: light up both icons for one combined route.|r")
+            local visibleSlots = 0
+            for _, s in ipairs({ slotMine, slotHerb, slotLumber }) do
+                if s and s:IsShown() then visibleSlots = visibleSlots + 1 end
+            end
+            if visibleSlots > 1 then
+                GameTooltip:AddLine("|cff888888Tip: light up multiple icons for one combined route.|r")
             end
         else
             GameTooltip:AddLine("No gathering professions known on this character.")
-            GameTooltip:AddLine("|cff888888Learn Mining or Herbalism to use this.|r")
+            GameTooltip:AddLine("|cff888888Learn Mining, Herbalism, or Lumberjacking to use this.|r")
         end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("|cff888888Drag|r: Move this")
@@ -232,7 +232,9 @@ local function ConfigureSlot(slot, nodeType)
         for _, tex in ipairs(slot.segTex or {}) do tex:Hide() end
         if slot.dotTex then slot.dotTex:Hide() end
         if slot.glowTex then
-            local glowColor = (nodeType == "herb") and MarkerRenderer.HERB_COLOR or MarkerRenderer.MINE_COLOR
+            local glowColor = (nodeType == "herb" and MarkerRenderer.HERB_COLOR)
+                or (nodeType == "lumber" and MarkerRenderer.LUMBER_COLOR)
+                or MarkerRenderer.MINE_COLOR
             slot.glowTex:ClearAllPoints()
             slot.glowTex:SetSize(64 * 1.6, 64 * 1.6)
             slot.glowTex:SetPoint("CENTER", slot.runeXTest, "CENTER", 0, 0)
@@ -399,29 +401,39 @@ local function UpdateLayout()
 
     local hasMining = Helpers.HasGatheringProfession(Helpers.MINING_SKILL_LINE, Helpers.MINING_NAMES)
     local hasHerb = Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES)
+    local hasLumber = Helpers.HasLumberjacking()
 
     -- Safety net: same detection-glitch guard as Markers.lua/PathPlanner.lua - "knows
-    -- neither" is far more likely stale/uncached profession data than reality.
-    if not hasMining and not hasHerb then
-        hasMining, hasHerb = true, true
+    -- none of the three" is far more likely stale/uncached detection than reality.
+    if not hasMining and not hasHerb and not hasLumber then
+        hasMining, hasHerb, hasLumber = true, true, true
     end
 
-    -- Mining and Herbalism each have a PERMANENT position - Mining always
-    -- left, Herbalism always right of the Gather button's own horizontal
-    -- center (x=0, since Gather is anchored TOP,0 below) - regardless of
-    -- which professions this character actually has. Deliberately NOT
-    -- conditional on "both known" anymore: a single-profession character
-    -- still gets that profession's fixed slot, just with the other one
-    -- hidden, so the layout never shifts around based on what's learned.
-    -- Confirmed 2026-08-09 - "don't care if it's a little off center...
-    -- have it be a permanent position" so professions being added/detected
-    -- later can't cause a misalignment.
+    -- Mining, Herbalism, and Lumberjacking each have a PERMANENT position -
+    -- Mining always left, Herbalism always right (of the Gather button's own
+    -- horizontal center, x=0), Lumberjacking always centered above that pair
+    -- (triangle layout, confirmed 2026-08-17) - regardless of which
+    -- professions this character actually has. Deliberately NOT conditional
+    -- on "all known" - a character missing one still gets that slot's fixed
+    -- position, just hidden, so the layout never shifts around based on what's
+    -- learned. Confirmed 2026-08-09 - "don't care if it's a little off
+    -- center... have it be a permanent position" so professions being
+    -- added/detected later can't cause a misalignment.
     local slotsWidth = SLOT_SIZE * 2 + SLOT_GAP
-    local slotsHeight = SLOT_SIZE
+    local rowHeight = SLOT_SIZE + COUNT_LABEL_SPACE + SLOT_GAP
     local halfOffset = SLOT_SIZE / 2 + SLOT_GAP / 2
 
+    slotLumber:ClearAllPoints()
+    slotLumber:SetPoint("TOP", container, "TOP", 0, 0)
+    if hasLumber then
+        ConfigureSlot(slotLumber, "lumber")
+        slotLumber:Show()
+    else
+        slotLumber:Hide()
+    end
+
     slotMine:ClearAllPoints()
-    slotMine:SetPoint("TOP", container, "TOP", -halfOffset, 0)
+    slotMine:SetPoint("TOP", container, "TOP", -halfOffset, -rowHeight)
     if hasMining then
         ConfigureSlot(slotMine, "mine")
         slotMine:Show()
@@ -430,7 +442,7 @@ local function UpdateLayout()
     end
 
     slotHerb:ClearAllPoints()
-    slotHerb:SetPoint("TOP", container, "TOP", halfOffset, 0)
+    slotHerb:SetPoint("TOP", container, "TOP", halfOffset, -rowHeight)
     if hasHerb then
         ConfigureSlot(slotHerb, "herb")
         slotHerb:Show()
@@ -438,11 +450,11 @@ local function UpdateLayout()
         slotHerb:Hide()
     end
 
-    -- The Gather button hangs below the slot(s) (past the bottom slot's count
+    -- The Gather button hangs below both rows (past the mine/herb row's count
     -- label), and the container grows to include it so the whole thing drags as one.
     if gatherBtn then
         gatherBtn:ClearAllPoints()
-        gatherBtn:SetPoint("TOP", container, "TOP", 0, -(slotsHeight + COUNT_LABEL_SPACE + SLOT_GAP))
+        gatherBtn:SetPoint("TOP", container, "TOP", 0, -(rowHeight * 2))
     end
 
     -- TEST, 2026-08-09: moved from beside the Gather button to centered
@@ -454,7 +466,7 @@ local function UpdateLayout()
     local dungeonBtnVisible = dungeonBtn and gatherBtn and DungeonNavAvailable()
         and XalsXRDB and XalsXRDB.dungeonButtonEnabled
 
-    local containerHeight = slotsHeight + COUNT_LABEL_SPACE + SLOT_GAP + (gatherBtn and GATHER_BTN_HEIGHT or 0)
+    local containerHeight = (rowHeight * 2) + (gatherBtn and GATHER_BTN_HEIGHT or 0)
     if dungeonBtnVisible then
         containerHeight = containerHeight + SLOT_GAP + DUNGEON_BTN_SIZE
     end
@@ -497,6 +509,7 @@ function QuickButton:Init()
 
     slotMine = CreateSlot(container)
     slotHerb = CreateSlot(container)
+    slotLumber = CreateSlot(container)
     gatherBtn = CreateGatherButton(container)
     dungeonBtn = CreateDungeonButton(container)
 
@@ -505,7 +518,7 @@ function QuickButton:Init()
     -- would silently replace. Hooking means hovering ANY slot/button in the
     -- cluster correctly counts as "still active" for the fade timer, not
     -- just the container frame's own (smaller) hit area.
-    for _, btn in ipairs({ slotMine, slotHerb, gatherBtn, dungeonBtn }) do
+    for _, btn in ipairs({ slotMine, slotHerb, slotLumber, gatherBtn, dungeonBtn }) do
         if btn then
             btn:HookScript("OnEnter", HandleHoverEnter)
             btn:HookScript("OnLeave", HandleHoverLeave)
