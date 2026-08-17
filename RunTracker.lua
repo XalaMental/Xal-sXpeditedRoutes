@@ -19,6 +19,7 @@ local addonName, addonTable = ...
 local RunTracker = addonTable.RunTracker
 local Helpers = addonTable.Helpers
 local Brand = addonTable.BrandStyle
+local MarkerRenderer = addonTable.MarkerRenderer
 
 -- Seconds after a successful gather during which incoming loot is counted toward
 -- the haul. Generous enough to cover auto-loot lag and multi-item nodes, short
@@ -91,7 +92,7 @@ end
 -- tally. The colored item link is stored verbatim so the window can show it with
 -- its real quality color (and hover for a tooltip) for free. Quantity is read as
 -- the first number after the link ("...|h|rx3."), locale-independently.
-local function AddLoot(msg)
+local function AddLoot(msg, gatherType)
     -- Retail switched item-link coloring from |cffRRGGBB to |cnIQ<quality>:, so
     -- match any color escape (|c.-) rather than assuming hex digits - the old
     -- hex-only pattern silently matched nothing on modern retail. Fall back to a
@@ -115,22 +116,31 @@ local function AddLoot(msg)
     if entry then
         entry.count = entry.count + count
     else
-        RunTracker.tally[key] = { link = link, icon = icon, count = count }
+        -- type is whichever gathering skill was active when the loot window
+        -- opened (see OnGatherSucceeded) - "mine"/"herb"/nil, used to group
+        -- the tally window's display. nil is a real possibility (loot from
+        -- something Helpers.DetectGatherType doesn't recognize) and gets its
+        -- own fallback section rather than being dropped.
+        RunTracker.tally[key] = { link = link, icon = icon, count = count, type = gatherType }
     end
 end
 
 function RunTracker:OnGatherSucceeded(spellID)
     if not self.active then return end
-    if not Helpers.DetectGatherType(spellID) then return end
-    -- Open (or extend) the window during which loot counts toward the haul.
+    local gatherType = Helpers.DetectGatherType(spellID)
+    if not gatherType then return end
+    -- Open (or extend) the window during which loot counts toward the haul,
+    -- and remember which profession triggered it so the loot that follows
+    -- gets tagged with the right type for grouping.
     self.lootWindowUntil = GetTime() + GATHER_LOOT_WINDOW
+    self.lootWindowType = gatherType
 end
 
 function RunTracker:OnLoot(msg)
     if not self.active then return end
     if GetTime() > self.lootWindowUntil then return end
     if not IsSelfLoot(msg) then return end
-    AddLoot(msg)
+    AddLoot(msg, self.lootWindowType)
     if frame and frame:IsShown() then
         self:Render()
     end
@@ -199,8 +209,28 @@ end
 local FRAME_WIDTH = 260
 local ROW_HEIGHT = 22
 local HEADER_HEIGHT = 52
+local SECTION_HEADER_HEIGHT = 20
+local ROW_INDENT = 10 -- item rows sit slightly indented under their section header
 local FOOTER_PAD = 12
 local MAX_ROWS = 15 -- cap the list; anything past this collapses into a "+N more" line
+
+-- Grouped display, per-profession - same colors used everywhere else in the
+-- addon for mine/herb (MarkerRenderer.MINE_COLOR/HERB_COLOR), not a new
+-- palette invented for this window. "other" catches loot whose gather type
+-- couldn't be determined (only shown if it actually has anything in it).
+local TALLY_GROUPS = {
+    { key = "mine", label = "Mining", color = MarkerRenderer.MINE_COLOR },
+    { key = "herb", label = "Herbalism", color = MarkerRenderer.HERB_COLOR },
+    { key = "other", label = "Other", color = { 0.6, 0.6, 0.6 } },
+}
+
+-- Collapse state per group - expanded by default (unlike Compendium's
+-- collapsed-by-default sections): this window's whole purpose is showing
+-- your live haul at a glance while gathering, so starting collapsed would
+-- work against that. Still collapsible via clicking the header, for anyone
+-- who wants to shrink it. Module-level, not persisted - resets each login,
+-- same as Compendium's section state.
+local sectionCollapsed = {}
 
 local function BuildFrame()
     local template = BackdropTemplateMixin and "BackdropTemplate" or nil
@@ -213,6 +243,7 @@ local function BuildFrame()
     -- Brand background + border (anchor-based, so the border stays correct
     -- as this window grows/shrinks with the row count).
     Brand.ApplyBackground(frame)
+    Brand.ApplyBackgroundImage(frame)
     Brand.DrawBorder(frame)
 
     -- Draggable, with the position remembered between runs (same approach as the
@@ -235,27 +266,40 @@ local function BuildFrame()
     frame:ClearAllPoints()
     frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
 
-    local title = Brand.Title(frame, "Gather Tally", 15, "TOPLEFT", frame, "TOPLEFT", Brand.SAFE_MARGIN, -Brand.SAFE_MARGIN)
+    -- Gather Tally's own top buffer, wider than the standard Brand.SAFE_MARGIN
+    -- (14px) - this window runs smaller than the other custom panels, so the
+    -- background art's own framing eats into that margin and reads cramped
+    -- at the standard value. Flagged directly 2026-08-17.
+    local TALLY_TOP_MARGIN = 20
+
+    local title = Brand.Title(frame, "Gather Tally", 15, "TOPLEFT", frame, "TOPLEFT", TALLY_TOP_MARGIN, -TALLY_TOP_MARGIN)
     title:SetJustifyH("LEFT")
     frame.title = title
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    -- Bounded on the right too (unlike before) - a long timer+count string
+    -- ("Route complete - 1:23:45 - 99 items") had nothing stopping it from
+    -- drawing straight past the window's right edge. Found during the
+    -- 2026-08-17 border audit, not yet seen live.
+    subtitle:SetPoint("RIGHT", frame, "RIGHT", -TALLY_TOP_MARGIN, 0)
+    subtitle:SetJustifyH("LEFT")
+    -- WordWrap has to stay ON here - WoW only actually respects a
+    -- FontString's anchor-derived width when wrap is enabled; with it off,
+    -- text just draws straight past the bounds regardless of anchors.
+    subtitle:SetWordWrap(true)
     subtitle:SetTextColor(Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
     frame.subtitle = subtitle
 
-    -- Branded flat "X" button instead of Blizzard's default red-X close
-    -- button template, matching the standalone Options window's close button
-    -- (and every other button in the addon) instead of clashing with them.
-    local close = Brand.MakeButton(frame, "X", 24, 24, function()
+    -- Text-link style close ("Close" in accent gold), not a boxed button -
+    -- confirmed preference 2026-08-16, matches every other window now.
+    local close = Brand.MakeCloseButton(frame, function()
         -- Closing a manual (Gather-button) session ends it - stops tallying/timing.
         -- A route session just hides; PathPlanner is what ends that one.
         if RunTracker.sessionKind == "manual" then RunTracker:EndRun() end
         frame:Hide()
     end)
-    -- Brand.SAFE_MARGIN (14), not a hardcoded -8 - matches the standalone
-    -- Options window's close button exactly instead of sitting 6px too tight.
-    PixelUtil.SetPoint(close, "TOPRIGHT", frame, "TOPRIGHT", -Brand.SAFE_MARGIN, -Brand.SAFE_MARGIN)
+    PixelUtil.SetPoint(close, "TOPRIGHT", frame, "TOPRIGHT", -TALLY_TOP_MARGIN, -TALLY_TOP_MARGIN)
 
     -- Ticks the live timer while a session is active and the window is open.
     frame:SetScript("OnUpdate", function(self, elapsed)
@@ -269,8 +313,45 @@ local function BuildFrame()
     end)
 
     frame.rows = {}
+    frame.headers = {}
     return frame
 end
+
+-- Grabs (or lazily creates) the colored section header for group `key` -
+-- pooled by key rather than by index (only ever 3 possible groups, and a
+-- stable key means the same header frame keeps its own click handler across
+-- renders instead of being reassigned one every time).
+local function AcquireHeader(key, label, color)
+    local header = frame.headers[key]
+    if header then return header end
+
+    header = CreateFrame("Button", nil, frame)
+    header:SetSize(FRAME_WIDTH - 24, SECTION_HEADER_HEIGHT)
+
+    header.bar = header:CreateTexture(nil, "ARTWORK")
+    header.bar:SetPoint("TOPLEFT", header, "TOPLEFT", 0, 2)
+    header.bar:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, 2)
+    header.bar:SetWidth(3)
+    header.bar:SetColorTexture(color[1], color[2], color[3], 1)
+
+    header.label = Brand.BodyFS(header, label, 12, color[1], color[2], color[3])
+    header.label:SetPoint("LEFT", header.bar, "RIGHT", 6, 0)
+    header.label:SetJustifyH("LEFT")
+
+    header.count = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    header.count:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+    header.count:SetJustifyH("RIGHT")
+
+    header:SetScript("OnClick", function()
+        sectionCollapsed[key] = not sectionCollapsed[key]
+        RunTracker:Render()
+    end)
+
+    frame.headers[key] = header
+    return header
+end
+
+local BASE_ROW_FONT = 12
 
 -- Grabs (or lazily creates) row `index`: an icon, the item's colored link, and a
 -- right-aligned count. Rows are pooled on the frame and reused between renders.
@@ -279,18 +360,30 @@ local function AcquireRow(index)
     if row then return row end
 
     row = CreateFrame("Frame", nil, frame)
-    row:SetSize(FRAME_WIDTH - 24, ROW_HEIGHT)
+    -- Rows sit ROW_INDENT further right than headers (see Render()), so their
+    -- width has to shrink by the same amount or row.count (anchored flush to
+    -- the row's own right edge) ends up almost touching the window border
+    -- instead of matching the header row's buffer. Flagged directly 2026-08-17.
+    row:SetSize(FRAME_WIDTH - 24 - ROW_INDENT, ROW_HEIGHT)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(18, 18)
     row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93) -- trim the default icon border
 
-    row.count = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.count:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    -- Fira Sans Medium for both - count gets an explicit bright warm-white
+    -- (not the default GameFontHighlight color) so it doesn't blend into the
+    -- background image, confirmed 2026-08-16 ("it blends too much"). Name
+    -- keeps no explicit color of its own - the item link's own embedded
+    -- quality-color escape codes drive its color, same as before.
+    row.count = row:CreateFontString(nil, "OVERLAY")
+    row.count:SetFont(Brand.BODY_FONT_PATH, BASE_ROW_FONT, "")
+    row.count:SetTextColor(0.92, 0.88, 0.76, 1)
+    row.count:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.count:SetJustifyH("RIGHT")
 
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.name = row:CreateFontString(nil, "OVERLAY")
+    row.name:SetFont(Brand.BODY_FONT_PATH, BASE_ROW_FONT, "")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
     row.name:SetPoint("RIGHT", row.count, "LEFT", -6, 0)
     row.name:SetJustifyH("LEFT")
@@ -310,16 +403,21 @@ local function AcquireRow(index)
     return row
 end
 
-local BASE_ROW_FONT = 12
 -- Applies the current icon/font-size options to a pooled row before it's filled.
 -- Font size is set absolutely (BASE * scale) so repeated renders never compound.
+-- Sets the font PATH directly (Brand.BODY_FONT_PATH) instead of reading it
+-- back via row.name:GetFont() first - if the font file ever fails to load
+-- for any reason (confirmed live 2026-08-16: threw "bad argument #1 to
+-- SetFont" because GetFont() returned nil, meaning the very first SetFont
+-- in AcquireRow silently failed and left the fontstring with no font at
+-- all), the old round-trip pattern would just keep re-feeding that nil
+-- back into SetFont forever. Setting the known-good path directly every
+-- time means a failed load only ever costs one render, never a hard error.
 local function StyleRow(row, showIcons, fontScale, rowH)
     row:SetHeight(rowH)
     local size = BASE_ROW_FONT * fontScale
-    local nFont, _, nFlags = row.name:GetFont()
-    row.name:SetFont(nFont, size, nFlags)
-    local cFont, _, cFlags = row.count:GetFont()
-    row.count:SetFont(cFont, size, cFlags)
+    row.name:SetFont(Brand.BODY_FONT_PATH, size, "")
+    row.count:SetFont(Brand.BODY_FONT_PATH, size, "")
     row.name:ClearAllPoints()
     if showIcons then
         row.icon:Show()
@@ -340,51 +438,96 @@ function RunTracker:Render()
     local fontScale = (XalsXRDB and XalsXRDB.haulFontScale) or 1
     local rowH = math.floor(ROW_HEIGHT * fontScale + 0.5)
 
-    local list = {}
+    -- Split into the three fixed groups (mine/herb/other) instead of one
+    -- flat list - "other" is whatever couldn't be typed at gather time (see
+    -- OnGatherSucceeded/AddLoot).
+    local buckets = { mine = {}, herb = {}, other = {} }
     local totalItems = 0
     for _, entry in pairs(self.tally) do
-        list[#list + 1] = entry
+        local bucketKey = (entry.type == "mine" or entry.type == "herb") and entry.type or "other"
+        table.insert(buckets[bucketKey], entry)
         totalItems = totalItems + entry.count
     end
-    table.sort(list, function(a, b)
+    local sortFn = function(a, b)
         if a.count ~= b.count then return a.count > b.count end
         return (a.link or "") < (b.link or "")
-    end)
-
-    local shown = math.min(#list, MAX_ROWS)
-    for i = 1, shown do
-        local entry = list[i]
-        local row = AcquireRow(i)
-        StyleRow(row, showIcons, fontScale, rowH)
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + (i - 1) * rowH))
-        row.icon:SetTexture(entry.icon or 134400) -- 134400 = generic "question mark" fallback icon
-        row.name:SetText(entry.link or "?")
-        row.count:SetText("x" .. entry.count)
-        row.link = entry.link
-        row:Show()
+    end
+    for _, group in ipairs(TALLY_GROUPS) do
+        table.sort(buckets[group.key], sortFn)
     end
 
-    local usedRows = shown
-    if #list > MAX_ROWS then
-        usedRows = shown + 1
-        local row = AcquireRow(usedRows)
+    local totalKinds = 0
+    for _, group in ipairs(TALLY_GROUPS) do
+        totalKinds = totalKinds + #buckets[group.key]
+    end
+
+    -- MAX_ROWS is a GLOBAL cap across every group combined, not per-group -
+    -- a header still shows (with its real "N kinds" count) even if the cap
+    -- was already hit by an earlier group and none of its own rows fit; the
+    -- "+N more types" line below covers the overall shortfall either way.
+    local usedRows = 0
+    local rowIndex = 0
+    local contentY = HEADER_HEIGHT
+    local rowsShownSoFar = 0
+
+    for _, group in ipairs(TALLY_GROUPS) do
+        local entries = buckets[group.key]
+        if #entries > 0 then
+            local header = AcquireHeader(group.key, group.label, group.color)
+            header:ClearAllPoints()
+            header:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -contentY)
+            header.count:SetText(string.format("%d kind%s", #entries, #entries == 1 and "" or "s"))
+            header:Show()
+            contentY = contentY + SECTION_HEADER_HEIGHT
+
+            if not sectionCollapsed[group.key] then
+                for _, entry in ipairs(entries) do
+                    if rowsShownSoFar < MAX_ROWS then
+                        rowIndex = rowIndex + 1
+                        rowsShownSoFar = rowsShownSoFar + 1
+                        local row = AcquireRow(rowIndex)
+                        StyleRow(row, showIcons, fontScale, rowH)
+                        row:ClearAllPoints()
+                        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12 + ROW_INDENT, -contentY)
+                        row.icon:SetTexture(entry.icon or 134400) -- 134400 = generic "question mark" fallback icon
+                        row.name:SetText(entry.link or "?")
+                        row.count:SetText("x" .. entry.count)
+                        row.link = entry.link
+                        row:Show()
+                        contentY = contentY + rowH
+                    end
+                end
+            end
+        end
+    end
+    usedRows = rowIndex
+
+    if totalKinds > MAX_ROWS then
+        rowIndex = rowIndex + 1
+        local row = AcquireRow(rowIndex)
         StyleRow(row, showIcons, fontScale, rowH)
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(HEADER_HEIGHT + shown * rowH))
+        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12 + ROW_INDENT, -contentY)
         row.icon:Hide()
-        row.name:SetText("|cff888888+" .. (#list - MAX_ROWS) .. " more types|r")
+        row.name:SetText("|cff888888+" .. (totalKinds - MAX_ROWS) .. " more types|r")
         row.count:SetText("")
         row.link = nil
         row:Show()
+        contentY = contentY + rowH
+        usedRows = rowIndex
     end
 
     for i = usedRows + 1, #frame.rows do
         frame.rows[i]:Hide()
     end
+    for _, group in ipairs(TALLY_GROUPS) do
+        if #buckets[group.key] == 0 and frame.headers[group.key] then
+            frame.headers[group.key]:Hide()
+        end
+    end
 
     -- Empty state so a freshly-opened window (or a run with nothing yet) isn't blank.
-    if #list == 0 then
+    if totalKinds == 0 then
         local row = AcquireRow(1)
         StyleRow(row, showIcons, fontScale, rowH)
         row:ClearAllPoints()
@@ -395,6 +538,7 @@ function RunTracker:Render()
         row.link = nil
         row:Show()
         usedRows = 1
+        contentY = HEADER_HEIGHT + rowH
     end
 
     -- Timer line: shown only when the matching toggle is on for this session kind.
@@ -419,7 +563,10 @@ function RunTracker:Render()
     parts[#parts + 1] = string.format("%d item%s", totalItems, totalItems == 1 and "" or "s")
     frame.subtitle:SetText(table.concat(parts, "  -  "))
 
-    frame:SetHeight(HEADER_HEIGHT + usedRows * rowH + FOOTER_PAD)
+    -- contentY already tracked the real accumulated height as headers and
+    -- rows were laid out (they're no longer a uniform height, unlike the old
+    -- flat list), so use that directly instead of re-deriving it.
+    frame:SetHeight(contentY + FOOTER_PAD)
 end
 
 function RunTracker:ShowWindow()
