@@ -33,8 +33,8 @@ function MinimapButton:Register()
         icon = MINIMAP_ICON,
         OnClick = function(_, button)
             if button == "RightButton" then
-                if addonTable.RunTracker and addonTable.RunTracker.ShowHaulCommand then
-                    addonTable.RunTracker:ShowHaulCommand()
+                if addonTable.RunTracker and addonTable.RunTracker.ShowWindow then
+                    addonTable.RunTracker:ShowWindow()
                 end
             else
                 if addonTable.SettingsPanel and addonTable.SettingsPanel.ToggleStandalone then
