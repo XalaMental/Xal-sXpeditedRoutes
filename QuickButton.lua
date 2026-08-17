@@ -43,6 +43,45 @@ local function OnDragStopShared()
     -- known-good saved position alone rather than saving something broken.
 end
 
+-- Fade-when-idle - OFF by default (explicit request 2026-08-16: "I don't
+-- want to put a fade on the floating button by default... but do put a fade
+-- into it as a toggle in settings"). Same hold/fade shape as Compendium's
+-- tracker window (5s hold, 0.4s fade), gated entirely behind the setting so
+-- it's a no-op unless the player turns it on themselves.
+local HOVER_FADE_HOLD = 5
+local HOVER_FADE_DURATION = 0.4
+local fadeOutToken = nil
+
+local function IsFadeEnabled()
+    return XalsXRDB and XalsXRDB.helperButtonFadeWhenIdle == true
+end
+
+local function HandleHoverEnter()
+    if not container then return end
+    fadeOutToken = nil
+    container:SetAlpha(1)
+end
+
+local function HandleHoverLeave()
+    if not container or not IsFadeEnabled() then return end
+    local token = {}
+    fadeOutToken = token
+    C_Timer.After(HOVER_FADE_HOLD, function()
+        if fadeOutToken ~= token then return end
+        if container:IsMouseOver() then return end
+        UIFrameFadeOut(container, HOVER_FADE_DURATION, container:GetAlpha(), 0)
+    end)
+end
+
+-- Called by the Settings checkbox - snaps back to fully visible immediately
+-- when turned off (so it doesn't stay faded from a previous idle state).
+function QuickButton:ApplyFadeSetting()
+    if container and not IsFadeEnabled() then
+        fadeOutToken = nil
+        container:SetAlpha(1)
+    end
+end
+
 local SLOT_SIZE = 40 -- clickable hit area
 local BUTTON_PIN_SIZE = 30 -- drawn shape size (bigger than the default 14px map pin)
 local SLOT_GAP = 4
@@ -324,6 +363,7 @@ local function CreateGatherButton(parent)
             addonTable.RunTracker:StartManualSession()
         end
     end)
+    Brand.ApplyBackgroundImage(btn)
     -- Bump the label size to fill the now-wider button proportionally,
     -- instead of small text floating in a lot of empty space.
     do
@@ -452,11 +492,25 @@ function QuickButton:Init()
 
     container:SetScript("OnDragStart", OnDragStartShared)
     container:SetScript("OnDragStop", OnDragStopShared)
+    container:SetScript("OnEnter", HandleHoverEnter)
+    container:SetScript("OnLeave", HandleHoverLeave)
 
     slotMine = CreateSlot(container)
     slotHerb = CreateSlot(container)
     gatherBtn = CreateGatherButton(container)
     dungeonBtn = CreateDungeonButton(container)
+
+    -- HookScript (not SetScript) on every child button - each already has
+    -- its own OnEnter/OnLeave for tooltips, which a plain SetScript here
+    -- would silently replace. Hooking means hovering ANY slot/button in the
+    -- cluster correctly counts as "still active" for the fade timer, not
+    -- just the container frame's own (smaller) hit area.
+    for _, btn in ipairs({ slotMine, slotHerb, gatherBtn, dungeonBtn }) do
+        if btn then
+            btn:HookScript("OnEnter", HandleHoverEnter)
+            btn:HookScript("OnLeave", HandleHoverLeave)
+        end
+    end
 
     container:SetScale((XalsXRDB and XalsXRDB.helperButtonScale) or 1)
 
