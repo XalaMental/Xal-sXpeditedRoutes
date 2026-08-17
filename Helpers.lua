@@ -43,6 +43,48 @@ Helpers.HERBALISM_SKILL_LINE = 182
 Helpers.MINING_NAMES = { "mining" }
 Helpers.HERBALISM_NAMES = { "herbalism", "herb" }
 
+-- Lumberjacking is NOT a real profession skill line - it's an ability granted
+-- through Midnight's Player Housing content (a Lumberjack Axe / "Find Lumber"
+-- quest chain), not something GetProfessions()/C_TradeSkillUI knows about at
+-- all. "Find Lumber" (spell 1256697) is the ability that actually gates
+-- whether lumber nodes show up on the map/minimap at all - confirmed directly
+-- in-game ("I couldn't see the nodes till it was activated"), and confirmed
+-- live 2026-08-17 via C_SpellBook.IsSpellKnown against all three candidate
+-- IDs: 1256697 (Find Lumber) = true, 1266232 (Lumberjack, the passive
+-- originally assumed to be this one) = false, 1239682 (Woodchopping, the
+-- gather cast itself) = false. So checking whether the player knows THIS
+-- spell is the real equivalent of the skill-line check the other two
+-- professions use. Distinct from the gather CAST itself (Woodchopping,
+-- 1239682, confirmed live via UNIT_SPELLCAST_SUCCEEDED - see
+-- KNOWN_GATHER_SPELLS below), which is what actually fires when a node is
+-- harvested - a spell can be the thing that fires on cast without also being
+-- "known" in the spellbook sense IsSpellKnown checks.
+Helpers.LUMBERJACK_PASSIVE_SPELL_ID = 1256697
+
+-- True if the character has the Find Lumber ability (can see/gather lumber
+-- nodes at all). No skill-line/profession-name equivalent exists for this one
+-- (see comment above) - IsSpellKnown is the only real signal. Checks the
+-- modern C_SpellBook namespace first (Midnight's replacement for the old
+-- global), falling back to the classic global for safety, same defensive
+-- pattern used elsewhere in this file for other renamed APIs.
+-- Manual opt-out, checked first: unlike Mining/Herbalism (an active choice to
+-- level), Lumberjacking comes from Player Housing content, so someone could
+-- have the passive without ever wanting to gather wood on purpose. Defaults
+-- on (Engine.lua) - this only ever short-circuits to false once the player
+-- explicitly turns it off in Settings.
+function Helpers.HasLumberjacking()
+    if XalsXRDB and XalsXRDB.lumberEnabled == false then
+        return false
+    end
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        return C_SpellBook.IsSpellKnown(Helpers.LUMBERJACK_PASSIVE_SPELL_ID) == true
+    end
+    if _G.IsSpellKnown then
+        return _G.IsSpellKnown(Helpers.LUMBERJACK_PASSIVE_SPELL_ID) == true
+    end
+    return false
+end
+
 -- Once we get a CONFIRMED answer for a profession (the API actually returned real
 -- data, not just "unavailable so we're guessing"), there's no reason to keep
 -- re-checking it - a character's known professions don't change mid-session in
@@ -233,6 +275,7 @@ local KNOWN_GATHER_SPELLS = {
     -- Retail (confirmed live)
     [32606] = "mine", [471013] = "mine", -- 471013: Midnight mining. 372610 ruled out (mount-related)
     [471009] = "herb", -- 471009: Midnight herbalism gather spell
+    [1239682] = "lumber", -- Woodchopping - confirmed live 2026-08-17 via a UNIT_SPELLCAST_SUCCEEDED watcher, printed right before the Thalassian Lumber loot message, twice
 
     -- Classic mining rank ladder: Apprentice -> Zen Master
     [2575] = "mine",  -- Apprentice
