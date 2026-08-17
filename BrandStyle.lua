@@ -58,18 +58,39 @@ function Brand.FS(parent, text, fontPath, size, flags, r, g, b)
     return fs
 end
 
--- ── Title()  ─ the branded Morpheus-font title treatment, with its
+-- ── Fonts ─────────────────────────────────────────────────────
+-- Simply Sans Bold (titles) and Fira Sans Medium (body text) - bundled here
+-- the same way Compendium/Quest Compass already bundle them, sourced from
+-- the shared Assets\Fonts library (see reference_shared_fonts_folder memory)
+-- rather than guessed at or copied ad-hoc. Replaces Morpheus, which every
+-- other addon in the suite had already moved off of.
+Brand.TITLE_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\CustomFont.ttf"
+Brand.BODY_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\FiraSans-Medium.ttf"
+
+-- ── Title()  ─ the branded title treatment (Simply Sans Bold), with its
 -- drop-shadow layer, in one call. Returns the visible (front) fontstring.
 function Brand.Title(parent, text, size, anchorPoint, relTo, relPoint, x, y)
-    local shadow = Brand.FS(parent, text, "Fonts\\MORPHEUS.TTF", size, "OUTLINE", 0.05, 0.04, 0.02)
+    local shadow = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE", 0.05, 0.04, 0.02)
     PixelUtil.SetPoint(shadow, anchorPoint, relTo, relPoint, x + 2, y - 2)
     shadow:SetJustifyH("CENTER")
 
-    local title = Brand.FS(parent, text, "Fonts\\MORPHEUS.TTF", size, "OUTLINE",
+    local title = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE",
         Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
     PixelUtil.SetPoint(title, anchorPoint, relTo, relPoint, x, y)
     title:SetJustifyH("CENTER")
     return title
+end
+
+-- ── BodyFS()  ─ a Fira Sans Medium fontstring for readable body text (item
+-- names, list labels, etc.) - the fixed body-text counterpart to Title()
+-- above, same idea as Compendium's BrandStyle.lua splash treatment (a fixed
+-- branded look, not the separately player-customizable font picker Core.lua
+-- has for its main tracker window - Routes doesn't have that system).
+function Brand.BodyFS(parent, text, size, r, g, b)
+    local fs = Brand.FS(parent, text, Brand.BODY_FONT_PATH, size, "", r, g, b)
+    fs:SetShadowOffset(1, -1)
+    fs:SetShadowColor(0, 0, 0, 1)
+    return fs
 end
 
 -- ── MakeButton()  ─ Xal's Compendium's flat button (the confirmed standard,
@@ -227,4 +248,93 @@ function Brand.ApplyBackground(f)
     bg:SetAllPoints()
     bg:SetColorTexture(Brand.BG[1], Brand.BG[2], Brand.BG[3], Brand.BG[4])
     return bg
+end
+
+-- ── ApplyBackgroundImage()  ─ the shared dark-swirl texture art, sitting on
+-- top of the flat background color (BORDER layer, below everything else -
+-- border/dividers/text all draw at ARTWORK/OVERLAY, above this), same
+-- treatment Compendium already uses on its own panels. Call AFTER
+-- ApplyBackground so the flat color shows through anywhere the image
+-- doesn't cover. Returns the texture so callers can hide/show it (e.g. a
+-- frameless mode toggle) without hunting for it again.
+function Brand.ApplyBackgroundImage(f)
+    local img = f:CreateTexture(nil, "BORDER")
+    img:SetAllPoints(f)
+    img:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\PanelBackground.jpg")
+    return img
+end
+
+-- ── MakeCloseButton()  ─ text-link style close ("Close" in accent gold,
+-- brightens to white on hover) - replaces the boxed "X" button used
+-- previously, matching Compendium's XComp.MakeCloseButton style exactly
+-- (confirmed preference 2026-08-16: "it doesn't create such a visual
+-- blemish"). Deliberately does NOT set its own anchor point - unlike
+-- Compendium (which always puts it bottom-right), Routes' existing windows
+-- have their own established close-button positions (top-right on the
+-- standalone Options window and Gather Tally); every call site anchors it
+-- itself, same convention as Brand.MakeButton.
+function Brand.MakeCloseButton(parent, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(50, 20)
+
+    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("CENTER")
+    label:SetText("Close")
+    label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    btn.label = label
+
+    btn:SetScript("OnEnter", function() label:SetTextColor(1, 1, 1, 1) end)
+    btn:SetScript("OnLeave", function()
+        label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    end)
+    btn:SetScript("OnClick", onClick or function() parent:Hide() end)
+
+    return btn
+end
+
+-- ── Discord link ──────────────────────────────────────────────
+-- A permanent, standing text link (not a per-release thing) meant to live on
+-- the What's New splash and the main Settings page - Lua can't open a
+-- browser directly, so clicking it pops the standard WoW copy-a-URL dialog
+-- (an auto-selected, read-only edit box) instead. One popup definition
+-- shared by every call site.
+Brand.DISCORD_URL = "https://discord.gg/9SwrQDJeCe"
+
+StaticPopupDialogs["XALXR_COPY_URL"] = {
+    text = "%s",
+    button1 = "Close",
+    hasEditBox = true,
+    editBoxWidth = 260,
+    OnShow = function(self, data)
+        self.editBox:SetText(data or Brand.DISCORD_URL)
+        self.editBox:HighlightText()
+        self.editBox:SetFocus()
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function Brand.MakeDiscordLink(parent)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(130, 20)
+
+    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("LEFT")
+    label:SetText("Join us on Discord")
+    label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    btn.label = label
+    btn:SetWidth(label:GetStringWidth())
+
+    btn:SetScript("OnEnter", function() label:SetTextColor(1, 1, 1, 1) end)
+    btn:SetScript("OnLeave", function()
+        label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    end)
+    btn:SetScript("OnClick", function()
+        StaticPopup_Show("XALXR_COPY_URL", nil, nil, Brand.DISCORD_URL)
+    end)
+
+    return btn
 end
