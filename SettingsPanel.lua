@@ -36,7 +36,8 @@ local function GetStatsString()
                 and mapID ~= "haulGatherTimer" and mapID ~= "haulRouteTimer" and mapID ~= "arrowTextScale"
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
                 and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
-                and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and type(nodes) == "table" then
+                and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and mapID ~= "helperButtonFadeWhenIdle"
+                and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -67,7 +68,8 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "haulGatherTimer" and key ~= "haulRouteTimer" and key ~= "arrowTextScale"
                 and key ~= "dungeonCoords" and key ~= "dungeonButtonEnabled" and key ~= "dungeonButtonSide"
                 and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
-                and key ~= "showTrailLine" and key ~= "boundaryNodes" then
+                and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
+                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" then
                 XalsXRDB[key] = nil
             end
         end
@@ -187,6 +189,10 @@ local function BuildRootPanel()
     title:SetPoint("LEFT", logo, "RIGHT", 10, 0)
     title:SetText("Xal's Xpedited Routes")
 
+    -- Standing link, not tied to any one release - lives here permanently.
+    local discordLink = Brand.MakeDiscordLink(rootPanel)
+    discordLink:SetPoint("TOPRIGHT", rootPanel, "TOPRIGHT", -16, -18)
+
     local credit = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(credit, PANEL_DESC_FONT_SIZE)
     credit:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -10)
@@ -223,12 +229,12 @@ local function BuildRootPanel()
     local slider = CreateFrame("Slider", "XalsXRAdvanceSlider", rootPanel, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 4, -20)
     slider:SetWidth(220)
-    slider:SetMinMaxValues(10, 60)
+    slider:SetMinMaxValues(10, 150)
     slider:SetValueStep(5)
     slider:SetObeyStepOnDrag(true)
     _G[slider:GetName() .. "Low"]:SetText("10 yd")
     BumpFont(_G[slider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[slider:GetName() .. "High"]:SetText("60 yd")
+    _G[slider:GetName() .. "High"]:SetText("150 yd")
     BumpFont(_G[slider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
     _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance")
     BumpFont(_G[slider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
@@ -282,7 +288,7 @@ local function BuildRootPanel()
     local RefreshRootPanel = function()
         haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         minimapCheck:SetChecked(not (XalsXRDB and XalsXRDB.minimap and XalsXRDB.minimap.hide == true))
-        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 20
+        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50
         slider:SetValue(dist)
         _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
         BumpFont(_G[slider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
@@ -362,12 +368,27 @@ local function BuildFloatingButtonPanel()
     scaleHelp:SetJustifyH("LEFT")
     scaleHelp:SetText("Resize the whole floating button. 100% is the default size.")
 
+    -- Off by default (explicit request 2026-08-16) - the button stays fully
+    -- visible at all times unless this is turned on.
+    local fadeCheck = CreateFrame("CheckButton", nil, floatingPanel, "UICheckButtonTemplate")
+    fadeCheck:SetPoint("TOPLEFT", scaleHelp, "BOTTOMLEFT", 2, -14)
+    fadeCheck.Text:SetText("Fade the button when you're not near it")
+    BumpFont(fadeCheck.Text, PANEL_LABEL_FONT_SIZE)
+    fadeCheck.Text:SetWordWrap(true)
+    fadeCheck.Text:SetPoint("RIGHT", floatingPanel, "RIGHT", -16, 0)
+    fadeCheck:SetScript("OnClick", function(self)
+        XalsXRDB.helperButtonFadeWhenIdle = self:GetChecked() and true or false
+        if QuickButton.ApplyFadeSetting then QuickButton:ApplyFadeSetting() end
+    end)
+    floatingPanel.fadeCheck = fadeCheck
+
     local RefreshFloatingPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
         local scalePct = math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5)
         scaleSlider:SetValue(scalePct)
         _G[scaleSlider:GetName() .. "Text"]:SetText("Scale: " .. scalePct .. "%")
         BumpFont(_G[scaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        fadeCheck:SetChecked(XalsXRDB and XalsXRDB.helperButtonFadeWhenIdle == true)
     end
     floatingPanel:SetScript("OnShow", RefreshFloatingPanel)
     floatingPanel.Refresh = RefreshFloatingPanel
@@ -900,7 +921,11 @@ local function BuildIntegrationsPanel()
     tomtomCheck.Text:SetPoint("RIGHT", integrationsPanel, "RIGHT", -16, 0)
     tomtomCheck:SetScript("OnClick", function(self)
         XalsXRDB.tomtomSyncEnabled = self:GetChecked() and true or false
-        if not XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.ClearWaypoints then
+        if XalsXRDB.tomtomSyncEnabled then
+            if addonTable.TomTomBridge.ShowIntegrationTip then
+                addonTable.TomTomBridge:ShowIntegrationTip()
+            end
+        elseif addonTable.TomTomBridge.ClearWaypoints then
             addonTable.TomTomBridge:ClearWaypoints()
         end
     end)
@@ -1103,24 +1128,42 @@ local function BuildStandaloneWindow()
     local f = CreateFrame("Frame", "XalsXRStandaloneOptions", UIParent, "BackdropTemplate")
     tinsert(UISpecialFrames, "XalsXRStandaloneOptions") -- lets the Escape key close it, like any other UI panel
     f:SetSize(FW, FH)
-    f:SetPoint("CENTER")
+    -- This window is 640x820 - too large for a small offset from CENTER to
+    -- meaningfully separate it from another addon's similarly large window.
+    -- Anchors to a screen CORNER instead (only used the first time; once
+    -- dragged, its real position is remembered permanently via
+    -- XalsXRDB.optionsWindowPoint) - part of a shared corner scheme across
+    -- every Xal's addon's big settings window, see the "Default window
+    -- position" rule in the shared brand-style memory.
+    local savedPoint = XalsXRDB.optionsWindowPoint
+    if savedPoint then
+        f:SetPoint(savedPoint[1], UIParent, savedPoint[2], savedPoint[3], savedPoint[4])
+    else
+        f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 40, 40)
+    end
     f:SetFrameStrata("DIALOG")
+    f:SetToplevel(true)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, relPoint, x, y = self:GetPoint()
+        XalsXRDB.optionsWindowPoint = { point, relPoint, x, y }
+    end)
     f:SetClampedToScreen(true)
 
     Brand.ApplyBackground(f)
+    Brand.ApplyBackgroundImage(f)
     Brand.DrawBorder(f)
     -- Centered (not left-justified) and given real room below the border,
     -- per design feedback 2026-08-09.
     Brand.Title(f, "Xal's Xpedited Routes", 30, "TOP", f, "TOP", 0, -28)
 
-    -- Branded flat button instead of Blizzard's default red-X close button
-    -- template, which clashed with the rest of the panel's look.
-    local closeBtn = Brand.MakeButton(f, "X", 24, 24, function() f:Hide() end)
+    -- Text-link style close ("Close" in accent gold), not a boxed button -
+    -- confirmed preference 2026-08-16.
+    local closeBtn = Brand.MakeCloseButton(f, function() f:Hide() end)
     PixelUtil.SetPoint(closeBtn, "TOPRIGHT", f, "TOPRIGHT", -Brand.SAFE_MARGIN, -Brand.SAFE_MARGIN)
 
     -- Horizontal divider separating the title from the tabs/content below -
@@ -1187,6 +1230,21 @@ function SettingsPanel:ToggleStandalone()
         ShowStandaloneTab(1)
         f:Show()
     end
+end
+
+-- Opens the standalone window straight to the Integrations tab (the TomTom
+-- checkbox lives there) - used by WhatsNew's upgrade-notice button so
+-- existing players can jump straight to the setting instead of hunting for
+-- it themselves.
+function SettingsPanel:OpenIntegrations()
+    local f = BuildStandaloneWindow()
+    for i, entry in ipairs(standalonePanels) do
+        if entry.label == "Integrations" then
+            ShowStandaloneTab(i)
+            break
+        end
+    end
+    f:Show()
 end
 
 function SettingsPanel:Init()
