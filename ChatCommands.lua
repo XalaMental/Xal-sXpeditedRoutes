@@ -46,7 +46,7 @@ local EXCLUDED_KEYS = {
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
     minimap = true, helperButtonScale = true, groupingDistanceYards = true, showTrailLine = true,
     boundaryNodes = true, helperButtonFadeWhenIdle = true, optionsWindowPoint = true,
-    dungeonCompassPosition = true,
+    dungeonCompassPosition = true, lumberEnabled = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
