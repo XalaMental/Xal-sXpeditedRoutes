@@ -13,7 +13,11 @@
 -- Item counts come from loot: gathering fires UNIT_SPELLCAST_SUCCEEDED (the same
 -- signal NodeLogger records nodes from), and the loot lands a beat later as
 -- CHAT_MSG_LOOT lines. Each successful gather opens a short "attribution window",
--- and any of YOUR loot inside that window is counted. Loot outside a window (a
+-- and any of YOUR loot inside that window is counted - EXCEPT if a loot window
+-- opens whose real source isn't the node you just gathered (a mob corpse, a
+-- fish catch landing in the same few seconds), confirmed via GetLootSourceInfo
+-- against the node's own GUID (see OnLootOpened) - that loot window closes the
+-- attribution early so its items never get miscounted. Loot outside a window (a
 -- mob killed between nodes, a quest reward) or a group member's loot is ignored.
 local addonName, addonTable = ...
 local RunTracker = addonTable.RunTracker
@@ -125,15 +129,65 @@ local function AddLoot(msg, gatherType)
     end
 end
 
+-- True only for a real GameObject GUID (the type gathering nodes actually
+-- are) - WoW GUIDs are type-prefixed strings ("GameObject-...", "Creature-
+-- ...", "Player-...", etc.). Used to sanity-check that "target" really was
+-- the node we just gathered before trusting it for loot-source matching -
+-- if this ever comes back false (target changed, gathering doesn't set a
+-- target in some edge case), the source-GUID check below just doesn't run
+-- rather than risk falsely excluding a real gather.
+local function IsGameObjectGUID(guid)
+    return guid ~= nil and guid:match("^GameObject%-") ~= nil
+end
+
 function RunTracker:OnGatherSucceeded(spellID)
-    if not self.active then return end
     local gatherType = Helpers.DetectGatherType(spellID)
     if not gatherType then return end
+    -- A successful, recognized gather always counts, even if nothing was
+    -- already tracking (no active route, never clicked Gather) - see
+    -- ResumeOrStartTracking above.
+    if not self.active then
+        self:ResumeOrStartTracking()
+    end
     -- Open (or extend) the window during which loot counts toward the haul,
     -- and remember which profession triggered it so the loot that follows
     -- gets tagged with the right type for grouping.
     self.lootWindowUntil = GetTime() + GATHER_LOOT_WINDOW
     self.lootWindowType = gatherType
+    -- The node's own GUID (gathering targets the object you interact with) -
+    -- used by OnLootOpened below to confirm a loot window opening inside
+    -- this attribution window is actually THIS node, not unrelated loot
+    -- (a mob corpse, a fish catch) that happened to land in the same few
+    -- seconds. nil (not gated) if "target" doesn't look like a real object.
+    local guid = UnitGUID("target")
+    self.lootWindowSourceGUID = IsGameObjectGUID(guid) and guid or nil
+end
+
+-- Fires right when a loot window opens - before any CHAT_MSG_LOOT lines for
+-- it arrive, so this can close the attribution window in time to stop
+-- unrelated loot (see IsGameObjectGUID comment above) from being counted.
+-- Confirmed live 2026-08-17: a Remora Fish's junk loot, killed right after
+-- chopping wood, was getting miscounted into the Lumberjacking tally.
+function RunTracker:OnLootOpened()
+    if not self.lootWindowSourceGUID then return end
+    if GetTime() > self.lootWindowUntil then return end
+    if not (GetNumLootItems and GetLootSourceInfo) then return end
+
+    local matched = false
+    for i = 1, GetNumLootItems() do
+        local sources = { GetLootSourceInfo(i) }
+        for j = 1, #sources, 2 do
+            if sources[j] == self.lootWindowSourceGUID then
+                matched = true
+                break
+            end
+        end
+        if matched then break end
+    end
+
+    if not matched then
+        self.lootWindowUntil = 0
+    end
 end
 
 function RunTracker:OnLoot(msg)
@@ -188,6 +242,31 @@ function RunTracker:StartManualSession()
     self:ShowWindow()
 end
 
+-- Called from OnGatherSucceeded when nothing is currently active - resumes
+-- tallying into whatever's already there (a route that just completed, a
+-- manual session that already ended, or a genuinely fresh empty tally)
+-- instead of requiring the player to already be mid-route or have
+-- remembered to click Gather first. Deliberately does NOT clear self.tally
+-- like StartRun/StartManualSession do - continuing the same haul, not
+-- starting a new one. Confirmed 2026-08-17: gathering something should
+-- always show up in the tally, not just gathering "on the clock" - mining/
+-- herb rarely hit this gap since a route usually stays active the whole
+-- session, but lumber nodes are sparse enough that gathering one with
+-- nothing active is the common case, not an edge case.
+function RunTracker:ResumeOrStartTracking()
+    if self.active then return end
+    self.active = true
+    self.sessionKind = "manual"
+    if not self.startTime then
+        self.startTime = time()
+    end
+    self.runDuration = nil
+    self.lootWindowUntil = 0
+    if not XalsXRDB or XalsXRDB.showHaulSummary ~= false then
+        self:ShowWindow()
+    end
+end
+
 function RunTracker:EndRun()
     if not self.active then return end
     self.active = false
@@ -221,6 +300,7 @@ local MAX_ROWS = 15 -- cap the list; anything past this collapses into a "+N mor
 local TALLY_GROUPS = {
     { key = "mine", label = "Mining", color = MarkerRenderer.MINE_COLOR },
     { key = "herb", label = "Herbalism", color = MarkerRenderer.HERB_COLOR },
+    { key = "lumber", label = "Lumberjacking", color = MarkerRenderer.LUMBER_COLOR },
     { key = "other", label = "Other", color = { 0.6, 0.6, 0.6 } },
 }
 
@@ -438,13 +518,13 @@ function RunTracker:Render()
     local fontScale = (XalsXRDB and XalsXRDB.haulFontScale) or 1
     local rowH = math.floor(ROW_HEIGHT * fontScale + 0.5)
 
-    -- Split into the three fixed groups (mine/herb/other) instead of one
+    -- Split into the four fixed groups (mine/herb/lumber/other) instead of one
     -- flat list - "other" is whatever couldn't be typed at gather time (see
     -- OnGatherSucceeded/AddLoot).
-    local buckets = { mine = {}, herb = {}, other = {} }
+    local buckets = { mine = {}, herb = {}, lumber = {}, other = {} }
     local totalItems = 0
     for _, entry in pairs(self.tally) do
-        local bucketKey = (entry.type == "mine" or entry.type == "herb") and entry.type or "other"
+        local bucketKey = buckets[entry.type] and entry.type or "other"
         table.insert(buckets[bucketKey], entry)
         totalItems = totalItems + entry.count
     end
@@ -603,6 +683,7 @@ function RunTracker:Init()
     local eventFrame = CreateFrame("Frame")
     eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     eventFrame:RegisterEvent("CHAT_MSG_LOOT")
+    eventFrame:RegisterEvent("LOOT_OPENED")
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
             local unit, _, spellID = ...
@@ -612,6 +693,8 @@ function RunTracker:Init()
         elseif event == "CHAT_MSG_LOOT" then
             local msg = ...
             RunTracker:OnLoot(msg)
+        elseif event == "LOOT_OPENED" then
+            RunTracker:OnLootOpened()
         end
     end)
 end
