@@ -189,14 +189,8 @@ function Beacon:Retarget()
         return
     end
     
-    local nodeLabel
-    if target.type == "mixed" then
-        nodeLabel = "Mixed"
-    elseif target.type == "mine" then
-        nodeLabel = "Mine"
-    else
-        nodeLabel = "Herb"
-    end
+    local NODE_LABELS = { mixed = "Mixed", mine = "Mine", herb = "Herb", lumber = "Lumber" }
+    local nodeLabel = NODE_LABELS[target.type] or "Node"
     local total = #PathPlanner.currentPath
     local index = PathPlanner.stopCursor
     local memberCount = target.members and #target.members or 1
