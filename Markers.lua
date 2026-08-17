@@ -180,12 +180,19 @@ function Markers:UpdatePins()
     -- open (assumes known) if detection is ever inconclusive.
     local showMining = Helpers.HasGatheringProfession(Helpers.MINING_SKILL_LINE, Helpers.MINING_NAMES)
     local showHerbs = Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES)
-    
-    -- Safety net: a character with saved nodes but detected as having NEITHER
-    -- profession is far more likely a detection glitch than reality. Rather than
+    local showLumber = Helpers.HasLumberjacking()
+
+    -- Safety net: a character with saved nodes but detected as having NONE of
+    -- the three is far more likely a detection glitch than reality. Rather than
     -- risk silently blanking the whole map again, show everything in that case.
-    if not showMining and not showHerbs then
-        showMining, showHerbs = true, true
+    if not showMining and not showHerbs and not showLumber then
+        showMining, showHerbs, showLumber = true, true, true
+    end
+
+    local function TypeIsVisible(nodeType)
+        return (nodeType == "mine" and showMining)
+            or (nodeType == "herb" and showHerbs)
+            or (nodeType == "lumber" and showLumber)
     end
     
     -- Get the player's current map for the minimap
@@ -197,8 +204,7 @@ function Markers:UpdatePins()
     -- Load pins on the minimap (only for the player's current map)
     if playerMapID and XalsXRDB[playerMapID] then
         for _, node in ipairs(XalsXRDB[playerMapID]) do
-            if node.x and node.y and node.type
-                and ((node.type == "mine" and showMining) or (node.type == "herb" and showHerbs)) then
+            if node.x and node.y and node.type and TypeIsVisible(node.type) then
                 local mPin = AcquireMinimapPin()
                 local isTarget = (targetNode and targetNode.x == node.x and targetNode.y == node.y)
                 local sameNodeAsBefore = (mPin.nodeX == node.x and mPin.nodeY == node.y)
@@ -232,8 +238,7 @@ function Markers:UpdatePins()
         local worldMapID = WorldMapFrame:GetMapID()
         if worldMapID and XalsXRDB[worldMapID] then
             for _, node in ipairs(XalsXRDB[worldMapID]) do
-                if node.x and node.y and node.type
-                    and ((node.type == "mine" and showMining) or (node.type == "herb" and showHerbs)) then
+                if node.x and node.y and node.type and TypeIsVisible(node.type) then
                     local wPin = AcquireWorldmapPin()
                     local isTarget = (targetNode and targetNode.x == node.x and targetNode.y == node.y)
                     SetPinAppearance(wPin, node.type, isTarget)
