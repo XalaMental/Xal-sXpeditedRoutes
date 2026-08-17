@@ -30,6 +30,7 @@ Engine.lua
 NodeLogger.lua
 PathPlanner.lua
 Beacon.lua
+DungeonBeacon.lua
 MarkerRenderer.lua
 QuickButton.lua
 Markers.lua
