@@ -19,8 +19,52 @@
 -- One-way: only ever pushes to TomTom, never reads anything back from it.
 local addonName, addonTable = ...
 local TomTomBridge = addonTable.TomTomBridge
+local Engine = addonTable.Engine
 
 local currentWaypointUID = nil
+
+-- How far (in real yards) to nudge the coordinate handed to TomTom away from
+-- the node's actual position, purely so its arrow doesn't render on top of
+-- the node model. Our own route logic (auto-advance, clustering, everything
+-- else) never sees this - it's applied only to what TomTom gets told.
+local TOMTOM_OFFSET_YARDS = 15
+
+-- Converts that yard offset into this zone's actual map-fraction scale via
+-- HereBeDragons' real per-zone size (GetZoneSize) - a flat fraction offset
+-- would be a wildly different real distance in a huge zone vs a small one,
+-- so it has to go through the zone's own scale, not a guessed constant.
+local function OffsetForTomTom(mapID, x, y)
+    if not (Engine.HBD and Engine.HBD.GetZoneSize) then return x, y end
+    local widthYards, heightYards = Engine.HBD:GetZoneSize(mapID)
+    if not widthYards or widthYards <= 0 or not heightYards or heightYards <= 0 then
+        return x, y
+    end
+    local dx = TOMTOM_OFFSET_YARDS / widthYards
+    local dy = TOMTOM_OFFSET_YARDS / heightYards
+    return math.min(x + dx, 1), math.min(y + dy, 1)
+end
+
+-- Shown every time TomTom sync gets turned on (settings checkbox or /xxr
+-- tomtom) - not just once ever, per direct request 2026-08-17. We can't set
+-- either of these ourselves: TomTom's arrow scale and "Arrival Distance"
+-- (when it switches to the downward "arrived" arrow) both come straight off
+-- the player's own TomTom profile with no per-addon override in its public
+-- API (confirmed directly from TomTom's real source, TomTom_CrazyArrow.lua
+-- and TomTom_Config.lua) - so the only thing we can do is point at TomTom's
+-- own options and suggest the values that keep its arrow from sitting on
+-- top of / hiding the actual node once you arrive.
+StaticPopupDialogs["XALXR_TOMTOM_TIP"] = {
+    text = "TomTom sync is on. Its arrow is TomTom's own, so this addon can't size it for you - but two tweaks in TomTom's own options (|cff00ff00/tomtom|r) help keep it from covering up the node when you arrive:\n\n|cffffcc00Scale|r - a smaller arrow overshadows less.\n|cffffcc00Arrival Distance|r - raise it a bit so the arrow switches away before you're standing right on top of the node.",
+    button1 = "Got it",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function TomTomBridge:ShowIntegrationTip()
+    StaticPopup_Show("XALXR_TOMTOM_TIP")
+end
 
 -- True once this addon has successfully handed TomTom an active waypoint.
 -- Used to decide whether our own compass should show itself, so the two
@@ -44,6 +88,17 @@ end
 function TomTomBridge:SyncCurrentStop(node, mapID)
     self:ClearWaypoints()
 
+    -- TomTom only has one arrow, period - unlike our own two now-independent
+    -- Beacon/DungeonBeacon widgets, there's nothing to split here. Dungeon
+    -- nav supersedes while it has an active destination, same rule as
+    -- everywhere else; ClearWaypoints() above already dropped our own
+    -- gathering waypoint, so TomTomBridge:IsActive() correctly reports
+    -- false and PathPlanner falls back to showing its own gathering arrow
+    -- instead. Flagged live 2026-08-17.
+    if addonTable.DungeonNav and addonTable.DungeonNav.activeTarget then
+        return
+    end
+
     if not TomTom then
         print("|cff888888Xal's XR:|r (TomTom not detected - global TomTom table doesn't exist)")
         return
@@ -58,13 +113,15 @@ function TomTomBridge:SyncCurrentStop(node, mapID)
     end
 
     local label = (node.type == "mine" and "Xal's Mining" or "Xal's Herbalism")
+    local tx, ty = OffsetForTomTom(mapID, node.x, node.y)
     local ok, uidOrErr = pcall(function()
-        return TomTom:AddWaypoint(mapID, node.x, node.y, {
+        return TomTom:AddWaypoint(mapID, tx, ty, {
             title = label,
             persistent = false,
             minimap = true,
             world = true,
             silent = true,
+            crazy = true,
         })
     end)
     if ok and uidOrErr then
