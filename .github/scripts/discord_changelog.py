@@ -47,8 +47,12 @@ def parse_heading(heading):
 
 
 def build_content(version, date, body):
-    """Plain-text Discord message: big title, Released line, section headings,
-    bullets, then the download URL (bare, so Discord unfurls the CurseForge card)."""
+    """Plain-text Discord message body: big title, Released line, section
+    headings, bullets. Does NOT include the download link - main() appends
+    that separately, AFTER truncation, so a long changelog can never chop
+    the link itself (real bug fixed 2026-08-16: the old version truncated
+    the title+body+link all together as one blind character slice, which
+    cut the CurseForge URL in half mid-string on a long release)."""
     out = [f"# {ADDON_EMOJI} {ADDON_NAME} — {version}"]
     if date:
         out.append(f"**Released:** {date}")
@@ -64,7 +68,7 @@ def build_content(version, date, body):
             out.append(line)
     text = "\n".join(out)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()  # collapse runs of blank lines
-    return f"{text}\n\nDownload: {CURSEFORGE_URL}"
+    return text
 
 
 def main():
@@ -83,9 +87,12 @@ def main():
 
     heading, body = section
     version, date = parse_heading(heading)
+    download_line = f"\n\nDownload: {CURSEFORGE_URL}"
+    body_budget = MAX_CONTENT - len(download_line) - 5  # 5 chars for a trailing "\n…"
     content = build_content(version, date, body)
-    if len(content) > MAX_CONTENT:
-        content = content[:MAX_CONTENT - 20].rstrip() + "\n…"
+    if len(content) > body_budget:
+        content = content[:body_budget].rstrip() + "\n…"
+    content += download_line
 
     payload = {"content": content, "allowed_mentions": {"parse": []}}
     data = json.dumps(payload).encode("utf-8")
