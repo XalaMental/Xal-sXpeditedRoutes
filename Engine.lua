@@ -80,7 +80,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 XalsXRDB.compassPosition = { point = "CENTER", x = 0, y = 180 }
             end
             if XalsXRDB.autoAdvanceDistance == nil then
-                XalsXRDB.autoAdvanceDistance = 20
+                XalsXRDB.autoAdvanceDistance = 50
             end
             if XalsXRDB.showHelperButton == nil then
                 XalsXRDB.showHelperButton = true
@@ -109,6 +109,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.showTrailLine == nil then
                 XalsXRDB.showTrailLine = true
             end
+            if XalsXRDB.helperButtonFadeWhenIdle == nil then
+                XalsXRDB.helperButtonFadeWhenIdle = false
+            end
             if XalsXRDB.arrowProgressColor == nil then
                 XalsXRDB.arrowProgressColor = true
             end
@@ -124,9 +127,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.arrowTextScale == nil then
                 XalsXRDB.arrowTextScale = 1
             end
-            if XalsXRDB.tomtomSyncEnabled == nil then
-                XalsXRDB.tomtomSyncEnabled = false
-            end
+            -- Left unset here on purpose - TomTom (a separate addon) isn't
+            -- guaranteed to have loaded yet by the time OUR ADDON_LOADED
+            -- fires, so checking for it here would be unreliable. The real
+            -- first-time default gets decided at PLAYER_LOGIN instead, once
+            -- every addon is guaranteed loaded.
             if XalsXRDB.freshnessMinutes == nil then
                 XalsXRDB.freshnessMinutes = Helpers.DEFAULT_FRESHNESS_MINUTES
             end
@@ -195,6 +200,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if addonTable.NodeLogger.Init then addonTable.NodeLogger:Init() end
             if addonTable.PathPlanner.Init then addonTable.PathPlanner:Init() end
             if addonTable.Beacon.Init then addonTable.Beacon:Init() end
+            if addonTable.DungeonBeacon.Init then addonTable.DungeonBeacon:Init() end
             if addonTable.Markers.Init then addonTable.Markers:Init() end
             if addonTable.SettingsPanel.Init then addonTable.SettingsPanel:Init() end
             if addonTable.QuickButton.Init then addonTable.QuickButton:Init() end
@@ -232,9 +238,22 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if addonTable.QuickButton.Refresh then
             addonTable.QuickButton:Refresh()
         end
+        if addonTable.DungeonNav.OnZoneChanged then
+            addonTable.DungeonNav:OnZoneChanged()
+        end
     elseif event == "SKILL_LINES_CHANGED" then
         HandleSkillLinesChanged()
     elseif event == "TRADE_SKILL_LIST_UPDATE" or event == "PLAYER_LOGIN" then
+        if event == "PLAYER_LOGIN" and XalsXRDB and XalsXRDB.tomtomSyncEnabled == nil then
+            -- First-time default, decided here (not ADDON_LOADED) so every
+            -- addon is guaranteed loaded by now: if TomTom's actually
+            -- installed, most players are going to be using it, so sync
+            -- defaults ON instead of making them go find the checkbox.
+            -- Never overrides a choice the player already made - this only
+            -- ever fires once, the first time tomtomSyncEnabled is nil.
+            -- Confirmed 2026-08-17.
+            XalsXRDB.tomtomSyncEnabled = (TomTom ~= nil)
+        end
         ProfessionCheckTick()
     end
 end)
