@@ -29,10 +29,39 @@ DungeonNav.SEASON2 = {
     { name = "Den of Nalorakk",      uiMapID = 2437, x = 0.314, y = 0.839 }, -- Zul'Aman
     { name = "The Blinding Vale",    uiMapID = 2576, x = 0.278, y = 0.779 }, -- Harandar
     { name = "Voidscar Arena",       uiMapID = 2444, x = 0.536, y = 0.344 }, -- Voidstorm
-    { name = "Ruby Life Pools",      uiMapID = 2022, x = 0.600, y = 0.758 }, -- The Waking Shores
-    { name = "Temple of Sethraliss", uiMapID = 864,  x = 0.519, y = 0.267 }, -- Vol'dun
-    { name = "King's Rest",          uiMapID = 862,  x = 0.376, y = 0.394 }, -- Zuldazar
+    { name = "Ruby Life Pools",      uiMapID = 2022, x = 0.600, y = 0.758,
+      portal = { uiMapID = 2266, x = 0.761, y = 0.616 } }, -- The Waking Shores / Millennia's Threshold
+    { name = "Temple of Sethraliss", uiMapID = 864,  x = 0.519, y = 0.267,
+      portal = { uiMapID = 2266, x = 0.701, y = 0.714 } }, -- Vol'dun / Millennia's Threshold
+    { name = "King's Rest",          uiMapID = 862,  x = 0.376, y = 0.394,
+      portal = { uiMapID = 2266, x = 0.733, y = 0.480 } }, -- Zuldazar / Millennia's Threshold
 }
+
+-- The instanced portal room in Silvermoon City ("Millennia's Threshold"), reached via
+-- the Timeways portal, and the portal's own position in Silvermoon. Dungeons above
+-- with a `.portal` field can be reached this way as an alternative to the real
+-- open-world entrance: /xxr dungeon <name> points at the Silvermoon hub portal first,
+-- then auto-switches to that dungeon's specific portal once you actually step inside
+-- Millennia's Threshold (uiMapID 2266, confirmed via /run print(C_Map.GetBestMapForUnit).
+DungeonNav.THRESHOLD_MAP_ID = 2266
+DungeonNav.TIMEWAYS_HUB = { uiMapID = 2393, x = 0.421, y = 0.582 } -- Silvermoon City
+
+-- The dungeon (by SEASON2 entry) we're waiting to auto-point at once the player steps
+-- into Millennia's Threshold. Cleared once consumed or overwritten by a new /xxr
+-- dungeon command.
+DungeonNav.pendingPortalTarget = nil
+
+-- The waypoint we most recently set, kept around so OnZoneChanged() can
+-- silently reassert it. Dungeon nav destinations are often far away and
+-- necessarily cross several zone boundaries just to walk there - unlike a
+-- gathering route, that's expected and fine, so nothing here should ever
+-- drop on a normal zone change. Reported live 2026-08-17 ("totally drops
+-- upon a zone change"); reasserting on every zone-change event is a robust
+-- fix regardless of the exact underlying cause (native waypoints, TomTom,
+-- and this addon's own compass can all lose track of a far-off target
+-- independently - reapplying all three together sidesteps having to prove
+-- which one actually dropped it). Cleared on arrival.
+DungeonNav.activeTarget = nil
 
 local function HasWaypointAPI()
     return C_Map and C_Map.SetUserWaypoint and CreateVector2D
@@ -136,8 +165,10 @@ local function LocationFor(dungeon, discovered)
 end
 
 -- Sets the native super-tracked waypoint (Blizzard map pin + on-screen distance),
--- and mirrors to TomTom when the sync option is enabled.
-function DungeonNav:SetWaypoint(uiMapID, x, y, label)
+-- and mirrors to TomTom when the sync option is enabled. `silent` skips the chat
+-- line and the activeTarget bookkeeping - used when OnZoneChanged reasserts an
+-- already-active target rather than setting a genuinely new one.
+function DungeonNav:SetWaypoint(uiMapID, x, y, label, silent)
     if not HasWaypointAPI() then
         print("|cffff9900Xal's XR:|r Dungeon waypoints need a modern (retail) client.")
         return false
@@ -152,13 +183,47 @@ function DungeonNav:SetWaypoint(uiMapID, x, y, label)
         print("|cffff9900Xal's XR:|r Couldn't set that waypoint (map data unavailable).")
         return false
     end
+    -- Same rule as the gathering route (see PathPlanner.lua): TomTom is
+    -- opt-in, so our own compass is the default. Only stand down for TomTom
+    -- once it's actually been handed the waypoint successfully - otherwise
+    -- (TomTom not installed, sync off, or the call itself fails) our arrow
+    -- covers it, same as it always has.
+    local tomtomActive = false
     if XalsXRDB and XalsXRDB.tomtomSyncEnabled and TomTom and TomTom.AddWaypoint then
-        pcall(function()
+        tomtomActive = pcall(function()
             TomTom:AddWaypoint(uiMapID, x, y,
-                { title = label, persistent = false, minimap = true, world = true, silent = true })
+                {
+                    title = label, persistent = false, minimap = true, world = true, silent = true, crazy = true,
+                    -- Explicit, small overrides - without these, TomTom falls
+                    -- back to the player's own saved profile values for both,
+                    -- which are tuned for gathering-route stops (a cluster of
+                    -- nodes, fine to clear/arrive from further out) and were
+                    -- clearing the ENTIRE waypoint - pin and arrow both -
+                    -- well before actually reaching a precise dungeon portal.
+                    -- cleardistance is the real culprit for "it just
+                    -- disappeared" (confirmed against TomTom's real source,
+                    -- TomTom_Config.lua) - it deletes the waypoint outright,
+                    -- unlike arrivaldistance which only flips the arrow to
+                    -- its "arrived" state.
+                    cleardistance = 10,
+                    arrivaldistance = 10,
+                })
         end)
     end
-    print(string.format("|cff00ccffXal's XR:|r Waypoint set to |cff00ff00%s|r.", label or "the dungeon"))
+    -- Own dedicated arrow (DungeonBeacon.lua) - fully independent from the
+    -- gathering route's Beacon, so the two can never fight over one shared
+    -- frame again. Clears itself (and DungeonNav.activeTarget) on arrival.
+    if addonTable.DungeonBeacon and addonTable.DungeonBeacon.Show then
+        if tomtomActive then
+            if addonTable.DungeonBeacon.Clear then addonTable.DungeonBeacon:Clear() end
+        else
+            addonTable.DungeonBeacon:Show(uiMapID, x, y, label)
+        end
+    end
+    if not silent then
+        self.activeTarget = { uiMapID = uiMapID, x = x, y = y, label = label }
+        print(string.format("|cff00ccffXal's XR:|r Waypoint set to |cff00ff00%s|r.", label or "the dungeon"))
+    end
     return true
 end
 
@@ -200,6 +265,18 @@ function DungeonNav:Command(arg)
     for _, d in ipairs(self.SEASON2) do
         local slug = Slug(d.name)
         if slug == want or slug:find(want, 1, true) or d.name:lower():find(want, 1, true) then
+            if d.portal then
+                local here = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                if here == self.THRESHOLD_MAP_ID then
+                    self.pendingPortalTarget = nil
+                    self:SetWaypoint(d.portal.uiMapID, d.portal.x, d.portal.y, d.name .. " Portal")
+                else
+                    self.pendingPortalTarget = d
+                    self:SetWaypoint(self.TIMEWAYS_HUB.uiMapID, self.TIMEWAYS_HUB.x, self.TIMEWAYS_HUB.y,
+                        "Timeways Portal (" .. d.name .. ")")
+                end
+                return
+            end
             local loc = LocationFor(d, discovered)
             if loc then
                 self:SetWaypoint(loc.uiMapID, loc.x, loc.y, d.name)
@@ -210,6 +287,30 @@ function DungeonNav:Command(arg)
         end
     end
     print("|cffff9900Xal's XR:|r Unknown dungeon. Type |cff00ff00/xxr dungeon|r for the list.")
+end
+
+-- Called on zone change (see Engine.lua). If we sent the player to the Timeways hub
+-- for a specific dungeon and they've now actually stepped into Millennia's Threshold,
+-- swap the waypoint to that dungeon's own portal so the last stretch is covered too.
+function DungeonNav:OnZoneChanged()
+    if not (C_Map and C_Map.GetBestMapForUnit) then return end
+    local here = C_Map.GetBestMapForUnit("player")
+
+    if self.pendingPortalTarget and here == self.THRESHOLD_MAP_ID then
+        local d = self.pendingPortalTarget
+        self.pendingPortalTarget = nil
+        self:SetWaypoint(d.portal.uiMapID, d.portal.x, d.portal.y, d.name .. " Portal")
+        return
+    end
+
+    -- Reassert whatever's still active, silently, on every zone change - a
+    -- dungeon trip normally crosses several zones just walking there, and
+    -- nothing about that should ever drop the waypoint. See the
+    -- activeTarget/HasFixedTarget comments above for the full story.
+    if self.activeTarget then
+        local t = self.activeTarget
+        self:SetWaypoint(t.uiMapID, t.x, t.y, t.label, true)
+    end
 end
 
 -- Records the player's current map + position as a dungeon's entrance (persisted in
