@@ -7,6 +7,7 @@
 --
 --   Green = Herbalism node
 --   Red   = Mining node
+--   Blue  = Lumberjacking node
 --
 -- No separate "active target" color - the current route destination is the same
 -- green/red as any other node, just with a small dot marked at its center so it
@@ -23,6 +24,9 @@ local MarkerRenderer = addonTable.MarkerRenderer
 
 MarkerRenderer.HERB_COLOR = { 0.15, 0.85, 0.25 }
 MarkerRenderer.MINE_COLOR = { 0.85, 0.2, 0.2 }
+MarkerRenderer.LUMBER_COLOR = { 0.15, 0.3, 0.75 }
+
+local NODE_COLORS = { mine = MarkerRenderer.MINE_COLOR, herb = MarkerRenderer.HERB_COLOR, lumber = MarkerRenderer.LUMBER_COLOR }
 
 local MAX_SEGMENTS = 12 -- the hollow X outline needs 12
 
@@ -146,7 +150,7 @@ end
 -- Convenience wrapper: picks color/thickness from node type + a base size, then
 -- draws. This is what most callers actually want to use.
 function MarkerRenderer.SetAppearance(pin, nodeType, isTarget, baseSize, styleKey, alphaOverride)
-    local color = (nodeType == "mine") and MarkerRenderer.MINE_COLOR or MarkerRenderer.HERB_COLOR
+    local color = NODE_COLORS[nodeType] or MarkerRenderer.HERB_COLOR
     styleKey = styleKey or (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
 
     local size = isTarget and math.floor(baseSize * 1.4 + 0.5) or baseSize
