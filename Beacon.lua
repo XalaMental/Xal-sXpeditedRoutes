@@ -182,7 +182,7 @@ end
 
 function Beacon:Retarget()
     if not frame or not frame:IsShown() then return end
-    
+
     local target = PathPlanner:CurrentStop()
     if not target then
         self:Hide()
@@ -264,7 +264,7 @@ function Beacon:RunUpdateLoop()
         self:Hide()
         return
     end
-    
+
     local mapID = C_Map.GetBestMapForUnit("player")
     if not mapID then return end
 
@@ -301,7 +301,16 @@ function Beacon:RunUpdateLoop()
     local deltaX, deltaY = nil, nil
     
     if Engine.HBD then
-        distance, deltaX, deltaY = Engine.HBD:GetZoneDistance(mapID, px, py, target.x, target.y)
+        -- Was missing the destination zone ID (GetZoneDistance takes
+        -- oZone, oX, oY, dZone, dX, dY - 6 args) - target.x was silently
+        -- sliding into the dZone slot instead. Always fell through to the
+        -- yards-per-unit fallback below instead of HereBeDragons' real
+        -- calc. mapID for both sides is correct here: PathPlanner:CheckZone
+        -- (called just above) already pauses the route the moment the
+        -- player's map diverges from the one the route was plotted under,
+        -- so by this point they're guaranteed to match. Found during the
+        -- 2026-08-17 border audit, fixed on request.
+        distance, deltaX, deltaY = Engine.HBD:GetZoneDistance(mapID, px, py, mapID, target.x, target.y)
     end
     
     -- Fallback if HereBeDragons can't calculate distances - shares the same
@@ -316,7 +325,7 @@ function Beacon:RunUpdateLoop()
     -- Arrival check runs regardless of whether the arrow itself is visible -
     -- route progression can't depend on the visual arrow being shown, since
     -- e.g. TomTom may be handling navigation instead while this stays hidden.
-    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 20
+    local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50
     if distance <= advanceDistance then
         PathPlanner:StepForward()
         return
