@@ -112,7 +112,8 @@ function TomTomBridge:SyncCurrentStop(node, mapID)
         return
     end
 
-    local label = (node.type == "mine" and "Xal's Mining" or "Xal's Herbalism")
+    local TOMTOM_LABELS = { mine = "Xal's Mining", herb = "Xal's Herbalism", lumber = "Xal's Lumberjacking", mixed = "Xal's Gathering" }
+    local label = TOMTOM_LABELS[node.type] or "Xal's Gathering"
     local tx, ty = OffsetForTomTom(mapID, node.x, node.y)
     local ok, uidOrErr = pcall(function()
         return TomTom:AddWaypoint(mapID, tx, ty, {
