@@ -9,6 +9,7 @@ addonTable.Helpers = {}
 addonTable.NodeLogger = {}
 addonTable.PathPlanner = {}
 addonTable.Beacon = {}
+addonTable.DungeonBeacon = {}
 addonTable.Markers = {}
 addonTable.SettingsPanel = {}
 addonTable.QuickButton = {}
