@@ -1,5 +1,19 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.1.0 - August 17, 2026
+
+---
+
+Lumberjacking's been on my list for a while, and this is me finally getting it in - it's now a real third gathering type right alongside Mining and Herbalism, with its own icon, its own color, and its own spot in the Gather Tally. Wasn't as simple as just adding a color though - I had to actually track down the real spell IDs Lumberjacking uses (my first guess from research turned out wrong, so I double-checked everything live before trusting it), and along the way I found a couple of real bugs worth fixing regardless of Lumberjacking - gathering something wasn't always showing up in your tally if you weren't already mid-route, and loot from something unrelated could occasionally get miscounted into the wrong section. Both fixed. Thanks for being part of the Xal family - hope you enjoy chopping some wood.
+
+### 🆕 New
+- **Lumberjacking support** - a full third gathering type alongside Mining and Herbalism: its own map/minimap pins, its own icon on the floating helper button, and its own Gather Tally section. Routes and combines with Mining/Herbalism the same way those two already combine with each other. Retail only (Lumberjacking itself doesn't exist on Classic). Toggle it off in Options → General if you'd rather not see it.
+- Lumber nodes don't group into a shared stop the way Mining/Herbalism can - they're spread out enough that grouping wasn't helping.
+
+### 🔧 Fixed
+- Fixed gathering something not showing up in the Gather Tally at all if you weren't already mid-route or hadn't clicked Gather first.
+- Fixed unrelated loot (a killed critter, a fish catch) landing right after a gather sometimes getting miscounted into that gather's tally section.
+
 ## 2.0.0 - August 17, 2026
 
 ---
