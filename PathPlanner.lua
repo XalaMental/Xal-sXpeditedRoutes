@@ -7,7 +7,7 @@ local Helpers = addonTable.Helpers
 PathPlanner.currentPath = nil
 PathPlanner.stopCursor = nil
 PathPlanner.pathMapID = nil
-PathPlanner.pathTypeFilter = nil -- "mine", "herb", or nil for an unfiltered/mixed route
+PathPlanner.pathTypeFilter = nil -- nil for an unfiltered/mixed route, or a set table like {mine=true, herb=true} to restrict to specific types
 PathPlanner.paused = false -- true while outside the route's zone (see CheckZone)
 
 -- Route construction: a greedy nearest-first build, then a 2-opt local-search
@@ -57,13 +57,22 @@ local function BuildClusters(mapID, stops, radius)
     local clusters = {}
     for _, stop in ipairs(stops) do
         local joined = nil
-        for _, cluster in ipairs(clusters) do
-            local coordDeltaX, coordDeltaY = cluster.anchor.x - stop.x, cluster.anchor.y - stop.y
-            local coordDelta = math.sqrt(coordDeltaX * coordDeltaX + coordDeltaY * coordDeltaY)
-            if coordDelta <= MAX_CLUSTER_COORD_DELTA
-                and DistanceBetween(mapID, cluster.anchor.x, cluster.anchor.y, stop.x, stop.y) <= radius then
-                joined = cluster
-                break
+        -- Lumber nodes never join (or get joined into) a cluster - they're
+        -- spread out enough in practice that grouping doesn't help yet,
+        -- unlike mine/herb which are often genuinely dense. Each lumber
+        -- node always gets its own stop. Confirmed 2026-08-17; revisit if
+        -- lumber node density ever changes.
+        if stop.type ~= "lumber" then
+            for _, cluster in ipairs(clusters) do
+                if cluster.type ~= "lumber" then
+                    local coordDeltaX, coordDeltaY = cluster.anchor.x - stop.x, cluster.anchor.y - stop.y
+                    local coordDelta = math.sqrt(coordDeltaX * coordDeltaX + coordDeltaY * coordDeltaY)
+                    if coordDelta <= MAX_CLUSTER_COORD_DELTA
+                        and DistanceBetween(mapID, cluster.anchor.x, cluster.anchor.y, stop.x, stop.y) <= radius then
+                        joined = cluster
+                        break
+                    end
+                end
             end
         end
         if joined then
@@ -191,22 +200,26 @@ function PathPlanner:PlotCourse(typeFilter)
     end
 
     -- Restrict to node types this character can actually gather, plus (if
-    -- given) a hard restriction to a single type - used by the floating
-    -- helper button's per-profession buttons.
+    -- given) a hard restriction to a specific set of types - used by the
+    -- floating helper button's per-profession buttons. typeFilter is either
+    -- nil (no restriction beyond known professions) or a set table like
+    -- {mine=true, herb=true} naming exactly which types are allowed.
     local knowsMining = Helpers.HasGatheringProfession(Helpers.MINING_SKILL_LINE, Helpers.MINING_NAMES)
     local knowsHerbs = Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES)
+    local knowsLumber = Helpers.HasLumberjacking()
 
-    -- Safety net: same detection-glitch guard as Markers.lua - a "knows neither"
-    -- reading is far more likely stale/uncached profession data than reality, so
+    -- Safety net: same detection-glitch guard as Markers.lua - "knows none of
+    -- the three" is far more likely stale/uncached detection than reality, so
     -- don't let it alone block routing (typeFilter still applies below).
-    if not knowsMining and not knowsHerbs then
-        knowsMining, knowsHerbs = true, true
+    if not knowsMining and not knowsHerbs and not knowsLumber then
+        knowsMining, knowsHerbs, knowsLumber = true, true, true
     end
 
-    local excludeMining = not knowsMining or typeFilter == "herb"
-    local excludeHerbs = not knowsHerbs or typeFilter == "mine"
+    local excludeMining = not knowsMining or (typeFilter and not typeFilter.mine)
+    local excludeHerbs = not knowsHerbs or (typeFilter and not typeFilter.herb)
+    local excludeLumber = not knowsLumber or (typeFilter and not typeFilter.lumber)
 
-    if excludeMining and excludeHerbs then
+    if excludeMining and excludeHerbs and excludeLumber then
         print("|cffcc0000Xal's XR:|r No routable node types for this character right now (check your known professions).|r")
         return
     end
@@ -228,6 +241,7 @@ function PathPlanner:PlotCourse(typeFilter)
     local stops = {}
     for _, node in ipairs(XalsXRDB[mapID]) do
         local excluded = (node.type == "mine" and excludeMining) or (node.type == "herb" and excludeHerbs)
+            or (node.type == "lumber" and excludeLumber)
         if not excluded and not IsBoundaryNode(node) then
             table.insert(stops, { x = node.x, y = node.y, type = node.type, lastGathered = node.lastGathered })
         end
@@ -270,7 +284,14 @@ function PathPlanner:PlotCourse(typeFilter)
         addonTable.RunTracker:StartRun()
     end
 
-    local typeLabel = (typeFilter == "mine" and "Mining ") or (typeFilter == "herb" and "Herbalism ") or ""
+    local typeLabel = ""
+    if typeFilter then
+        local names = {}
+        if typeFilter.mine then table.insert(names, "Mining") end
+        if typeFilter.herb then table.insert(names, "Herbalism") end
+        if typeFilter.lumber then table.insert(names, "Lumberjacking") end
+        if #names > 0 then typeLabel = table.concat(names, " + ") .. " " end
+    end
     print("|cff00ccffXal's XR:|r " .. typeLabel .. "gathering route generated with |cff00ff00" .. #route .. "|r stops (|cff00ff00" .. #stops .. "|r nodes).")
 
     if addonTable.Markers.UpdatePins then
