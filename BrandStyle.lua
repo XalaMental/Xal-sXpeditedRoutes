@@ -93,72 +93,29 @@ function Brand.BodyFS(parent, text, size, r, g, b)
     return fs
 end
 
--- ── MakeButton()  ─ Xal's Compendium's flat button (the confirmed standard,
--- verified 2026-08-09 straight from Options.lua's MakeFlatButton): thin
--- border, semi-transparent dark fill, plain white label, no bevel/gradient -
--- reads cleanly even in a horizontal row, which is exactly what Courier's
--- beveled version didn't do. Border color changed 2026-08-09 from a plain
--- light grey to the same accent gold as the panel border, so buttons read
--- as part of the same branded frame instead of a mismatched grey outline;
--- label text stays white either way. Selected vs. normal state is now
--- carried entirely by fill brightness (see SetSelected below).
--- Call btn:SetSelected(true/false) for a brighter fill (tabs).
-local BTN_BORDER = { Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1 }
-local BTN_BORDER_SELECTED = { Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1 }
 -- Unselected label color - a warm amber-orange (matched from a reference
 -- screenshot of WoW's own "World Quests" header text, 2026-08-09). Not the
 -- same as Brand.GOLD (that's the muted secondary body-text tone used
 -- elsewhere) - this is deliberately more vivid/orange so an inactive
--- button label still pops against the dark fill.
+-- button label still pops against the dark background.
 local BTN_LABEL_UNSELECTED = { 0.95, 0.60, 0.10 }
 
+-- Questlink style, confirmed 2026-08-17 (replaces the old boxed/bordered
+-- button entirely - "I don't like the blocky look... the link style looks
+-- better"): plain text, no fill, no border, same as Brand.MakeCloseButton's
+-- established look. Frame size/hit-area, click handling, and the selected/
+-- unselected color-swap logic are unchanged, so every existing call site
+-- (sidebar tabs, action buttons, etc.) keeps working with zero layout
+-- changes - only the rendering dropped the box.
 function Brand.MakeButton(parent, text, w, h, onClick)
-    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local btn = CreateFrame("Button", nil, parent)
     PixelUtil.SetSize(btn, w, h)
-    -- Fill only - no backdrop edge. Blizzard's backdrop-edge system computes
-    -- each side's thickness independently and isn't guaranteed to come out
-    -- symmetric at a non-integer UI Scale (confirmed 2026-08-09: it was
-    -- rendering every button's left/right border at visibly different
-    -- thickness, uniformly, at 71% scale). Border is hand-drawn below
-    -- instead, using the same pixel-snapped technique as Brand.DrawBorder.
-    btn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-    })
-    btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-
-    local thick = Brand.LINE_THICKNESS
-    local borderTop = btn:CreateTexture(nil, "ARTWORK")
-    PixelUtil.SetPoint(borderTop, "TOPLEFT", btn, "TOPLEFT", 0, 0)
-    PixelUtil.SetPoint(borderTop, "TOPRIGHT", btn, "TOPRIGHT", 0, 0)
-    PixelUtil.SetHeight(borderTop, thick)
-
-    local borderBottom = btn:CreateTexture(nil, "ARTWORK")
-    PixelUtil.SetPoint(borderBottom, "BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-    PixelUtil.SetPoint(borderBottom, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
-    PixelUtil.SetHeight(borderBottom, thick)
-
-    local borderLeft = btn:CreateTexture(nil, "ARTWORK")
-    PixelUtil.SetPoint(borderLeft, "TOPLEFT", btn, "TOPLEFT", 0, 0)
-    PixelUtil.SetPoint(borderLeft, "BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-    PixelUtil.SetWidth(borderLeft, thick)
-
-    local borderRight = btn:CreateTexture(nil, "ARTWORK")
-    PixelUtil.SetPoint(borderRight, "TOPRIGHT", btn, "TOPRIGHT", 0, 0)
-    PixelUtil.SetPoint(borderRight, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
-    PixelUtil.SetWidth(borderRight, thick)
-
-    local function SetBorderColor(r, g, b, a)
-        borderTop:SetColorTexture(r, g, b, a)
-        borderBottom:SetColorTexture(r, g, b, a)
-        borderLeft:SetColorTexture(r, g, b, a)
-        borderRight:SetColorTexture(r, g, b, a)
-    end
-    SetBorderColor(BTN_BORDER[1], BTN_BORDER[2], BTN_BORDER[3], BTN_BORDER[4])
 
     -- Label starts in the dim gold tone (not selected/pressed) and switches
     -- to white via SetSelected below - gives an at-a-glance read of which
-    -- tab is active instead of relying on the subtle fill-brightness
-    -- difference alone. Confirmed 2026-08-09.
+    -- tab is active. Confirmed 2026-08-09, still the mechanism now that the
+    -- box/border is gone - it's the ONLY visual state left, so it's doing
+    -- more work than before.
     local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("CENTER")
     label:SetText(text)
@@ -166,33 +123,30 @@ function Brand.MakeButton(parent, text, w, h, onClick)
     btn.label = label
 
     btn:SetScript("OnEnter", function(self)
-        if not self.selected then self:SetBackdropColor(0.18, 0.18, 0.18, 0.75) end
+        if not self.selected then label:SetTextColor(1, 1, 1, 1) end
     end)
     btn:SetScript("OnLeave", function(self)
-        if not self.selected then self:SetBackdropColor(0.1, 0.1, 0.1, 0.6) end
+        if not self.selected then
+            label:SetTextColor(BTN_LABEL_UNSELECTED[1], BTN_LABEL_UNSELECTED[2], BTN_LABEL_UNSELECTED[3], 1)
+        end
     end)
     if onClick then btn:SetScript("OnClick", onClick) end
 
     function btn:SetSelected(selected)
         self.selected = selected
         if selected then
-            self:SetBackdropColor(0.22, 0.22, 0.22, 0.85)
-            SetBorderColor(BTN_BORDER_SELECTED[1], BTN_BORDER_SELECTED[2], BTN_BORDER_SELECTED[3], BTN_BORDER_SELECTED[4])
             label:SetTextColor(1, 1, 1, 1)
         else
-            self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-            SetBorderColor(BTN_BORDER[1], BTN_BORDER[2], BTN_BORDER[3], BTN_BORDER[4])
             label:SetTextColor(BTN_LABEL_UNSELECTED[1], BTN_LABEL_UNSELECTED[2], BTN_LABEL_UNSELECTED[3], 1)
         end
     end
 
-    -- Exposed so call sites that need a one-off custom border color (e.g. a
-    -- destructive/danger-styled button) have a real hook, same idea as
-    -- SetSelected above - there is only ONE button implementation in this
-    -- addon; every call site drives it through these methods rather than
-    -- hand-rolling its own border. Confirmed standard 2026-08-09.
+    -- Was a border-color hook before the box existed - kept as the same
+    -- method name/signature so call sites (e.g. the red "Delete Everything"
+    -- reset button) don't need touching, just now tints the label itself
+    -- instead of a border that no longer exists.
     function btn:SetBorderColor(r, g, bC, a)
-        SetBorderColor(r, g, bC, a)
+        label:SetTextColor(r, g, bC, a)
     end
 
     return btn
