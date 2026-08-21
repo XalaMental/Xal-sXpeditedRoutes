@@ -22,6 +22,7 @@ BrandStyle.lua
 WhatsNew.lua
 Helpers.lua
 Engine.lua
+API.lua
 NodeLogger.lua
 PathPlanner.lua
 Beacon.lua
