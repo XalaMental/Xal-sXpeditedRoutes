@@ -1,5 +1,18 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.2.0 - August 20, 2026
+
+---
+
+Made two changes this time - swapped every button in the addon over to a cleaner text-link look instead of the boxed style, since that's what's been looking better across my other addons lately, and laid the groundwork for a companion addon (Xal's Routes Data) that'll let you import a big batch of pre-collected nodes instead of starting your own collection from scratch. Thanks for being part of the Xal family - hope you like the cleaner look.
+
+### 🆕 New
+- **Cleaner button style** - every button in the addon (settings tabs, action buttons) now shows as clean text instead of a boxed button.
+- **Groundwork for node importing** - lays the plumbing for pulling in a big batch of pre-collected nodes from a companion addon (Xal's Routes Data, coming soon), instead of starting your own collection from scratch.
+
+### 🔧 Fixed
+- Fixed the Gather button and the Settings "Defaults" button crashing when you hovered them, caused by the button style change above.
+
 ## 2.1.0 - August 17, 2026
 
 ---
