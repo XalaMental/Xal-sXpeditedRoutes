@@ -146,14 +146,12 @@ local function CreateDefaultsButton(parentPanel, popupName)
     -- Brand.MakeButton already wires its own OnEnter/OnLeave hover-brighten;
     -- re-set here to ALSO keep that AND add the tooltip, same pattern as
     -- the Gather button's OnEnter/OnLeave override.
-    btn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(0.18, 0.18, 0.18, 0.75)
+    btn:HookScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Reset this panel's settings to their defaults.")
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+    btn:HookScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
 
