@@ -375,16 +375,14 @@ local function CreateGatherButton(parent)
     -- Brand.MakeButton already wires OnEnter/OnLeave for its own hover
     -- brighten effect; re-set here to ALSO keep that effect AND add the
     -- tooltip, rather than replacing it outright.
-    btn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(0.18, 0.18, 0.18, 0.75)
+    btn:HookScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("|cff00ccffXal's Xpedited Routes|r")
         GameTooltip:AddLine("|cff00ff00Click|r: Open the Gather Tally and start tracking your haul.")
         GameTooltip:AddLine("|cff888888Drag|r: Move this")
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+    btn:HookScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
     btn:RegisterForDrag("LeftButton")
