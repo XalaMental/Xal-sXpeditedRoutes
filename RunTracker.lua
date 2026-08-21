@@ -13,12 +13,12 @@
 -- Item counts come from loot: gathering fires UNIT_SPELLCAST_SUCCEEDED (the same
 -- signal NodeLogger records nodes from), and the loot lands a beat later as
 -- CHAT_MSG_LOOT lines. Each successful gather opens a short "attribution window",
--- and any of YOUR loot inside that window is counted - EXCEPT if a loot window
--- opens whose real source isn't the node you just gathered (a mob corpse, a
--- fish catch landing in the same few seconds), confirmed via GetLootSourceInfo
--- against the node's own GUID (see OnLootOpened) - that loot window closes the
--- attribution early so its items never get miscounted. Loot outside a window (a
--- mob killed between nodes, a quest reward) or a group member's loot is ignored.
+-- and any of YOUR loot inside that window is counted - EXCEPT anything that isn't
+-- actually a known gathering material for that type (see KNOWN_MATERIAL_ITEMS) -
+-- mob loot (a killed critter, a fish catch) landing in the same few seconds as a
+-- real gather doesn't get counted just because of timing. Loot outside a window
+-- (a mob killed between nodes, a quest reward) or a group member's loot is
+-- ignored regardless.
 local addonName, addonTable = ...
 local RunTracker = addonTable.RunTracker
 local Helpers = addonTable.Helpers
@@ -92,6 +92,43 @@ end
 -- Tally capture
 --------------------------------------------------------------------------------
 
+-- Known gathering-material item IDs, keyed by type - the tally only counts a
+-- gather-attributed item if it's actually in this list. Mob loot (a killed
+-- critter, a fish catch) landing within the same attribution window as a
+-- real gather was getting miscounted otherwise - confirmed live 2026-08-17
+-- (a Fetid Eye and a fur, both real mob loot, ended up in the Lumberjacking
+-- section). A GUID-based fix (matching the loot window's real source
+-- against the gathered node) was tried first and didn't reliably solve it,
+-- so this replaces that approach with an explicit allowlist instead - a fur
+-- will never come from an ore node, full stop, regardless of any targeting/
+-- timing ambiguity a GUID check depends on.
+-- VERIFY BEFORE RELEASE / EXTEND AS NEEDED: only covers materials confirmed
+-- in-game or via Wowhead so far (current Midnight tier). Add a new
+-- material's item ID here the first time it's confirmed to actually be a
+-- gather drop - same maintenance model as Helpers.lua's KNOWN_GATHER_SPELLS.
+local KNOWN_MATERIAL_ITEMS = {
+    mine = {
+        [237359] = true, -- Refulgent Copper Ore
+        [237362] = true, -- Umbral Tin Ore (lower-quality variant)
+        [237363] = true, -- Umbral Tin Ore
+        [237364] = true, -- Brilliant Silver Ore
+        [237366] = true, -- Dazzling Thorium
+        [236949] = true, -- Mote of Light (bonus proc, also obtainable via Herbalism/Skinning)
+    },
+    herb = {
+        [236761] = true, -- Tranquility Bloom
+        [236776] = true, -- Argentleaf
+        [236774] = true, -- Azeroot
+        [236778] = true, -- Mana Lily
+        [236770] = true, -- Sanguithorn
+        [236780] = true, -- Nocturnal Lotus (rare bonus proc)
+        [236949] = true, -- Mote of Light (bonus proc)
+    },
+    lumber = {
+        [256963] = true, -- Thalassian Lumber
+    },
+}
+
 -- Pulls the item link and quantity out of a loot chat line and adds it to the
 -- tally. The colored item link is stored verbatim so the window can show it with
 -- its real quality color (and hover for a tooltip) for free. Quantity is read as
@@ -114,6 +151,18 @@ local function AddLoot(msg, gatherType)
     end
 
     local itemID, _, _, _, icon = GetInstant(link)
+
+    -- Reject anything that isn't actually a known material for this gather
+    -- type - mob loot (a killed critter, a fish catch) landing in the same
+    -- attribution window as a real gather doesn't get counted just because
+    -- of timing. Only rejects when we have a real allowlist for this type
+    -- AND a resolved itemID to check - never blocks something we simply
+    -- couldn't identify.
+    if gatherType and KNOWN_MATERIAL_ITEMS[gatherType] and itemID
+        and not KNOWN_MATERIAL_ITEMS[gatherType][itemID] then
+        return
+    end
+
     local key = itemID or link -- fall back to the link itself if the ID isn't resolvable
 
     local entry = RunTracker.tally[key]
@@ -127,17 +176,6 @@ local function AddLoot(msg, gatherType)
         -- own fallback section rather than being dropped.
         RunTracker.tally[key] = { link = link, icon = icon, count = count, type = gatherType }
     end
-end
-
--- True only for a real GameObject GUID (the type gathering nodes actually
--- are) - WoW GUIDs are type-prefixed strings ("GameObject-...", "Creature-
--- ...", "Player-...", etc.). Used to sanity-check that "target" really was
--- the node we just gathered before trusting it for loot-source matching -
--- if this ever comes back false (target changed, gathering doesn't set a
--- target in some edge case), the source-GUID check below just doesn't run
--- rather than risk falsely excluding a real gather.
-local function IsGameObjectGUID(guid)
-    return guid ~= nil and guid:match("^GameObject%-") ~= nil
 end
 
 function RunTracker:OnGatherSucceeded(spellID)
@@ -154,40 +192,6 @@ function RunTracker:OnGatherSucceeded(spellID)
     -- gets tagged with the right type for grouping.
     self.lootWindowUntil = GetTime() + GATHER_LOOT_WINDOW
     self.lootWindowType = gatherType
-    -- The node's own GUID (gathering targets the object you interact with) -
-    -- used by OnLootOpened below to confirm a loot window opening inside
-    -- this attribution window is actually THIS node, not unrelated loot
-    -- (a mob corpse, a fish catch) that happened to land in the same few
-    -- seconds. nil (not gated) if "target" doesn't look like a real object.
-    local guid = UnitGUID("target")
-    self.lootWindowSourceGUID = IsGameObjectGUID(guid) and guid or nil
-end
-
--- Fires right when a loot window opens - before any CHAT_MSG_LOOT lines for
--- it arrive, so this can close the attribution window in time to stop
--- unrelated loot (see IsGameObjectGUID comment above) from being counted.
--- Confirmed live 2026-08-17: a Remora Fish's junk loot, killed right after
--- chopping wood, was getting miscounted into the Lumberjacking tally.
-function RunTracker:OnLootOpened()
-    if not self.lootWindowSourceGUID then return end
-    if GetTime() > self.lootWindowUntil then return end
-    if not (GetNumLootItems and GetLootSourceInfo) then return end
-
-    local matched = false
-    for i = 1, GetNumLootItems() do
-        local sources = { GetLootSourceInfo(i) }
-        for j = 1, #sources, 2 do
-            if sources[j] == self.lootWindowSourceGUID then
-                matched = true
-                break
-            end
-        end
-        if matched then break end
-    end
-
-    if not matched then
-        self.lootWindowUntil = 0
-    end
 end
 
 function RunTracker:OnLoot(msg)
@@ -683,7 +687,6 @@ function RunTracker:Init()
     local eventFrame = CreateFrame("Frame")
     eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     eventFrame:RegisterEvent("CHAT_MSG_LOOT")
-    eventFrame:RegisterEvent("LOOT_OPENED")
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "UNIT_SPELLCAST_SUCCEEDED" then
             local unit, _, spellID = ...
@@ -693,8 +696,6 @@ function RunTracker:Init()
         elseif event == "CHAT_MSG_LOOT" then
             local msg = ...
             RunTracker:OnLoot(msg)
-        elseif event == "LOOT_OPENED" then
-            RunTracker:OnLootOpened()
         end
     end)
 end
