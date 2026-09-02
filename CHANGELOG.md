@@ -1,5 +1,14 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.3.1 - September 2, 2026
+
+---
+
+Just added some screenshots of the new look to the CurseForge page, so you can actually see the Compact style before you update. Thanks for being part of the Xal family.
+
+### 🆕 New
+- Added screenshots of the new Compact-style floating helper, dungeon icon, Gather Tally, and Settings window to the CurseForge page.
+
 ## 2.3.0 - September 2, 2026
 
 ---
