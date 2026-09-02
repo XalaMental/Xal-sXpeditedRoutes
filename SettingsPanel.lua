@@ -20,6 +20,7 @@ local Brand = addonTable.BrandStyle
 local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel, gatherPanel, floatingPanel
 local statsText = nil
 local pinStyleButtons = {}
+local helperLayoutButtons = {}
 
 local function GetStatsString()
     local totalNodes = 0
@@ -37,7 +38,9 @@ local function GetStatsString()
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
                 and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
                 and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and mapID ~= "helperButtonFadeWhenIdle"
-                and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled" and type(nodes) == "table" then
+                and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled"
+                and mapID ~= "helperButtonLayout" and mapID ~= "dungeonButtonPosition"
+                and mapID ~= "gatherTallyLayout" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -69,7 +72,9 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "dungeonCoords" and key ~= "dungeonButtonEnabled" and key ~= "dungeonButtonSide"
                 and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
                 and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
-                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled" then
+                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled"
+                and key ~= "helperButtonLayout" and key ~= "dungeonButtonPosition"
+                and key ~= "gatherTallyLayout" then
                 XalsXRDB[key] = nil
             end
         end
@@ -89,13 +94,15 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
 -- Floating Button panel before promoting the pattern into BrandStyle for
 -- every panel across every addon.
 StaticPopupDialogs["XALXR_RESET_FLOATING_DEFAULTS"] = {
-    text = "Reset the Floating Button panel to its defaults (shown, 100% scale)?",
+    text = "Reset the Floating Button panel to its defaults (shown, Compact style, 100% scale)?",
     button1 = "Reset",
     button2 = "Cancel",
     OnAccept = function()
         XalsXRDB.showHelperButton = nil
         XalsXRDB.helperButtonScale = nil
+        XalsXRDB.helperButtonLayout = nil
         QuickButton:Show()
+        if QuickButton.ApplyLayout then QuickButton:ApplyLayout() end
         if QuickButton.ApplyScale then QuickButton:ApplyScale() end
         if floatingPanel and floatingPanel.Refresh then floatingPanel.Refresh() end
     end,
@@ -109,6 +116,7 @@ local function CreateHeader(parentPanel, anchorTo, text, yOffset)
     local header = parentPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yOffset or -20)
     header:SetText(text)
+    header:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
     return header
 end
 
@@ -357,8 +365,34 @@ local function BuildFloatingButtonPanel()
         QuickButton:ResetPosition()
     end)
 
+    -- Layout picker - Compact (default) vs. Classic, confirmed 2026-09-01
+    -- after "the whole thing is blocky": Compact drops the triangle and the
+    -- boxed Gather button for a smaller, left-aligned column + a Gather text
+    -- link. Classic keeps the original look for anyone who preferred it.
+    local layoutHeader = CreateHeader(floatingPanel, resetButtonPosBtn, "Cluster Style", -18)
+
+    local layoutOptions = { "compact", "classic" }
+    local layoutLabels = { compact = "Compact", classic = "Classic" }
+    local layoutBtnWidth = 170
+    helperLayoutButtons = {}
+    for i, key in ipairs(layoutOptions) do
+        local btn = CreateButton(floatingPanel, layoutHeader, (i - 1) * (layoutBtnWidth + 8), -10,
+            layoutLabels[key], layoutBtnWidth, function()
+                XalsXRDB.helperButtonLayout = key
+                QuickButton:ApplyLayout()
+                for optKey, optBtn in pairs(helperLayoutButtons) do
+                    optBtn:SetSelected(optKey == key)
+                end
+            end)
+        helperLayoutButtons[key] = btn
+    end
+
+    local layoutBottom = CreateFrame("Frame", nil, floatingPanel)
+    layoutBottom:SetSize(1, 1)
+    layoutBottom:SetPoint("TOPLEFT", layoutHeader, "BOTTOMLEFT", 0, -40)
+
     local scaleSlider = CreateFrame("Slider", "XalsXRHelperScaleSlider", floatingPanel, "OptionsSliderTemplate")
-    scaleSlider:SetPoint("TOPLEFT", resetButtonPosBtn, "BOTTOMLEFT", 4, -24)
+    scaleSlider:SetPoint("TOPLEFT", layoutBottom, "BOTTOMLEFT", 4, -4)
     scaleSlider:SetWidth(220)
     scaleSlider:SetMinMaxValues(50, 150)
     scaleSlider:SetValueStep(5)
@@ -401,6 +435,10 @@ local function BuildFloatingButtonPanel()
 
     local RefreshFloatingPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
+        local currentLayout = (XalsXRDB and XalsXRDB.helperButtonLayout) or "compact"
+        for optKey, optBtn in pairs(helperLayoutButtons) do
+            optBtn:SetSelected(optKey == currentLayout)
+        end
         local scalePct = math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5)
         scaleSlider:SetValue(scalePct)
         _G[scaleSlider:GetName() .. "Text"]:SetText("Scale: " .. scalePct .. "%")
@@ -982,7 +1020,36 @@ local function BuildGatherTallyPanel()
     intro:SetJustifyH("LEFT")
     intro:SetText("The live window that tallies what you gather. Open it with the Gather button on the floating helper, or /xxr haul.")
 
-    local displayHeader = CreateHeader(gatherPanel, intro, "Display", -18)
+    -- Style picker - Compact (default) vs. Classic, same pattern and same
+    -- naming as the floating helper's Cluster Style. Compact drops the
+    -- background/border, recolors the header orange, shows items as
+    -- standalone borderless popups, and lets you click the title to
+    -- collapse to just the header bar. Classic is today's look, unchanged.
+    -- Confirmed 2026-09-01.
+    local styleHeader = CreateHeader(gatherPanel, intro, "Style", -18)
+
+    local tallyLayoutOptions = { "compact", "classic" }
+    local tallyLayoutLabels = { compact = "Compact", classic = "Classic" }
+    local tallyLayoutBtnWidth = 170
+    local tallyLayoutButtons = {}
+    for i, key in ipairs(tallyLayoutOptions) do
+        local btn = CreateButton(gatherPanel, styleHeader, (i - 1) * (tallyLayoutBtnWidth + 8), -10,
+            tallyLayoutLabels[key], tallyLayoutBtnWidth, function()
+                XalsXRDB.gatherTallyLayout = key
+                if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+                for optKey, optBtn in pairs(tallyLayoutButtons) do
+                    optBtn:SetSelected(optKey == key)
+                end
+            end)
+        tallyLayoutButtons[key] = btn
+    end
+    gatherPanel.tallyLayoutButtons = tallyLayoutButtons
+
+    local styleBottom = CreateFrame("Frame", nil, gatherPanel)
+    styleBottom:SetSize(1, 1)
+    styleBottom:SetPoint("TOPLEFT", styleHeader, "BOTTOMLEFT", 0, -40)
+
+    local displayHeader = CreateHeader(gatherPanel, styleBottom, "Display", -6)
 
     local iconsCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
     iconsCheck:SetPoint("TOPLEFT", displayHeader, "BOTTOMLEFT", 2, -8)
@@ -1073,16 +1140,24 @@ local function BuildGatherTallyPanel()
 
     -- The old "put it on the left" side toggle was removed 2026-08-09 - the
     -- dungeon button no longer sits beside the Gather button at all, it's
-    -- centered underneath it now, so dungeonButtonSide stopped doing
-    -- anything visible the moment that positioning changed.
+    -- its own independent draggable piece now (2026-09-01), so
+    -- dungeonButtonSide stopped doing anything visible.
     local dungeonHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(dungeonHelp, PANEL_DESC_FONT_SIZE)
     dungeonHelp:SetPoint("TOPLEFT", dungeonEnableCheck, "BOTTOMLEFT", -2, -16)
     dungeonHelp:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
     dungeonHelp:SetJustifyH("LEFT")
-    dungeonHelp:SetText("Adds a small map icon next to the Gather button. Click it to pick a Season 2 dungeon and drop a waypoint at its entrance. Also available as /xxr dungeon.")
+    dungeonHelp:SetText("A small, separately draggable map icon - not attached to the Gather button. Click it to pick a Season 2 dungeon and drop a waypoint at its entrance. Also available as /xxr dungeon.")
+
+    local resetDungeonPosBtn = CreateButton(gatherPanel, dungeonHelp, 2, -10, "Reset Dungeon Button Position", 220, function()
+        QuickButton:ResetDungeonPosition()
+    end)
 
     local RefreshGatherPanel = function()
+        local currentTallyLayout = (XalsXRDB and XalsXRDB.gatherTallyLayout) or "compact"
+        for optKey, optBtn in pairs(tallyLayoutButtons) do
+            optBtn:SetSelected(optKey == currentTallyLayout)
+        end
         iconsCheck:SetChecked(not (XalsXRDB and XalsXRDB.haulShowIcons == false))
         local pct = math.floor(((XalsXRDB and XalsXRDB.haulFontScale) or 1) * 100 + 0.5)
         sizeSlider:SetValue(pct)
@@ -1171,12 +1246,24 @@ local function BuildStandaloneWindow()
     end)
     f:SetClampedToScreen(true)
 
-    Brand.ApplyBackground(f)
-    Brand.ApplyBackgroundImage(f)
-    Brand.DrawBorder(f)
+    -- Solid dark indigo instead of Brand.BG + the swirl background image -
+    -- confirmed 2026-09-02 ("we're removing the background image... I
+    -- wanted a dark blue bordering on purple"). Scoped to just this window,
+    -- not Brand.BG itself, so Classic Gather Tally's background is untouched.
+    local WINDOW_BG = { 0.03, 0.028, 0.06 } -- #08070f
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
+
+    local borderTop, borderBottom, borderLeft, borderRight = Brand.DrawBorder(f)
+    for _, line in ipairs({ borderTop, borderBottom, borderLeft, borderRight }) do
+        line:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
+    end
+
     -- Centered (not left-justified) and given real room below the border,
     -- per design feedback 2026-08-09.
-    Brand.Title(f, "Xal's Xpedited Routes", 30, "TOP", f, "TOP", 0, -28)
+    local windowTitle = Brand.Title(f, "Xal's Xpedited Routes", 30, "TOP", f, "TOP", 0, -28)
+    windowTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
 
     -- Text-link style close ("Close" in accent gold), not a boxed button -
     -- confirmed preference 2026-08-16.
@@ -1196,7 +1283,7 @@ local function BuildStandaloneWindow()
 
     local vDivider = f:CreateTexture(nil, "ARTWORK")
     vDivider:SetWidth(Brand.LINE_THICKNESS)
-    vDivider:SetColorTexture(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    vDivider:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
     vDivider:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 10, 0)
     vDivider:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMRIGHT", 10, 0)
 
@@ -1264,6 +1351,38 @@ function SettingsPanel:OpenIntegrations()
     f:Show()
 end
 
+-- Recolors every checkbox label and slider Low/High/Text on a panel (and its
+-- children) to the new default orange - covers every checkbox/slider across
+-- every settings panel from ONE call per panel, instead of touching each of
+-- the ~25 individual widgets at its own creation site. Confirmed 2026-09-02
+-- ("anything that has the gold yellow in it, I want it to turn to our
+-- orange"). Blizzard's checkbox/slider templates default that text gold;
+-- this just overrides it after the fact.
+local function RecolorLabelsOrange(panel)
+    local o = Brand.ACCENT_ORANGE
+    local function walk(f)
+        if not f or not f.GetObjectType then return end
+        local otype = f:GetObjectType()
+        if otype == "CheckButton" and f.Text then
+            f.Text:SetTextColor(o[1], o[2], o[3])
+        elseif otype == "Slider" then
+            local name = f:GetName()
+            if name then
+                for _, suffix in ipairs({ "Text", "Low", "High" }) do
+                    local fs = _G[name .. suffix]
+                    if fs then fs:SetTextColor(o[1], o[2], o[3]) end
+                end
+            end
+        end
+        if f.GetChildren then
+            for _, child in ipairs({ f:GetChildren() }) do
+                walk(child)
+            end
+        end
+    end
+    walk(panel)
+end
+
 function SettingsPanel:Init()
     if rootPanel then return end
     BuildRootPanel()
@@ -1273,6 +1392,10 @@ function SettingsPanel:Init()
     BuildGatherTallyPanel()
     BuildDataPanel()
     BuildIntegrationsPanel()
+
+    for _, panel in ipairs({ rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }) do
+        RecolorLabelsOrange(panel)
+    end
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         -- Modern Settings API (retail 10.0+), with real sub-sections in the category tree
