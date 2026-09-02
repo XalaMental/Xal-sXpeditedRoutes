@@ -1,5 +1,20 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.3.0 - September 2, 2026
+
+---
+
+I've been sitting with the UI for a while now, and I finally sat back, took a real look at it, and realized I just didn't love how it had come together. So this one's a full overhaul, styling-wise - I went for something more minimalistic and cleaner across the whole addon, and honestly, I'm pretty happy with how it turned out. Took a lot of nitpicking to get here. I'm calling the new look "Compact" since that's basically what it is, and it's the new default - but if you're attached to the old look, it's still there, just relabeled "Classic" so you can switch back anytime. Found and fixed a handful of real bugs along the way too. Hope you like the cleaner look as much as I do.
+
+### 🆕 New
+- **Compact style (new default)** - a full visual overhaul across the whole addon: deep orange accents, dark indigo backgrounds, no boxed borders. Covers the floating helper button, Gather Tally, Settings window, and the What's New popup.
+- **Floating helper redesign** - "Gather" is now a plain orange text link sitting above the profession X's instead of a boxed button, the dungeon-portal shortcut now floats independently with its own draggable position, and the active gathering type shows with a soft colored glow instead of a dot.
+- **Gather Tally redesign** - items now pop up individually as icon + name + count, each with its own colored border, instead of one boxed list. Click the "Gather Tally" title to collapse it down to just a total count, click again to expand it back out.
+- **Classic style preserved** - the original look for the floating helper, Gather Tally, and What's New popup is still there if you'd rather keep it - switch it back per-window in Settings.
+
+### 🔧 Fixed
+- Removed a leftover "glow behind the Gather text" setting that no longer did anything.
+
 ## 2.2.0 - August 20, 2026
 
 ---
@@ -11,6 +26,7 @@ Made two changes this time - swapped every button in the addon over to a cleaner
 - **Groundwork for node importing** - lays the plumbing for pulling in a big batch of pre-collected nodes from a companion addon (Xal's Routes Data, coming soon), instead of starting your own collection from scratch.
 
 ### 🔧 Fixed
+- Fixed unrelated loot (a killed critter, a fish catch) still occasionally getting miscounted into the wrong Gather Tally section - last version's fix for this didn't reliably catch every case.
 - Fixed the Gather button and the Settings "Defaults" button crashing when you hovered them, caused by the button style change above.
 
 ## 2.1.0 - August 17, 2026
