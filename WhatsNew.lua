@@ -7,7 +7,7 @@
 -- .toc at runtime) against the last version this player actually saw, and
 -- only pops up when they differ.
 --
--- Claude already writes CHANGELOG.md by hand before every release, in Dev,
+-- CHANGELOG.md already gets written by hand before every release, in Dev,
 -- before Jason ever commits/pushes anything - same moment, update WHATS_NEW
 -- below (the "date" field and the intro/sections content) to match. It's
 -- one more file touched during normal release prep, nothing extra for Jason
@@ -89,12 +89,23 @@ local function BuildFrame(installedVersion)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetClampedToScreen(true)
 
-    Brand.ApplyBackground(f)
-    Brand.ApplyBackgroundImage(f)
-    Brand.DrawBorder(f)
+    -- Solid dark indigo instead of the swirl background image, orange
+    -- border/titles instead of bronze-gold - same treatment as the
+    -- standalone Settings window, confirmed 2026-09-02 ("I think it looks
+    -- better than the green background").
+    local WINDOW_BG = { 0.03, 0.028, 0.06 } -- #08070f
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
+
+    local borderTop, borderBottom, borderLeft, borderRight = Brand.DrawBorder(f)
+    for _, line in ipairs({ borderTop, borderBottom, borderLeft, borderRight }) do
+        line:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
+    end
 
     local data = W.WHATS_NEW
-    Brand.Title(f, "What's New", 26, "TOP", f, "TOP", 0, -24)
+    local mainTitle = Brand.Title(f, "What's New", 26, "TOP", f, "TOP", 0, -24)
+    mainTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
 
     -- "installedVersion" is the REAL live version (from CheckAndShow), not a
     -- hand-typed field - it always matches whatever actually got tagged.
@@ -127,7 +138,8 @@ local function BuildFrame(installedVersion)
         -- stroke, it doesn't make a font bold). Called out directly
         -- 2026-08-17 - the previous version LOOKED like styled text, not an
         -- actual bold heading.
-        Brand.Title(f, section.heading, 18, "TOPLEFT", f, "TOPLEFT", 30, -y)
+        local sectionTitle = Brand.Title(f, section.heading, 18, "TOPLEFT", f, "TOPLEFT", 30, -y)
+        sectionTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
         y = y + 26
         Brand.DrawDivider(f, 30, y, FW - 60)
         y = y + 12
