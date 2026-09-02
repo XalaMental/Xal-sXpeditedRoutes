@@ -5,6 +5,12 @@ on:
   push:
     tags:
       - '**'
+  # Manual run button on the repo's Actions tab. Needed because a tag pushed
+  # in the SAME push that first adds this file can arrive before GitHub has
+  # registered the workflow, so the release never fires and nothing reports an
+  # error (hit on Xal's Reins' first push, 2026-08-19). With this, the release
+  # can be started by hand against an existing tag instead of retagging.
+  workflow_dispatch:
 
 env:
   CF_API_KEY: ${{ secrets.CF_API_KEY }}
