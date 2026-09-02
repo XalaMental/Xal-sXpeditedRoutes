@@ -20,7 +20,8 @@ addonTable.BrandStyle = {}
 local Brand = addonTable.BrandStyle
 
 -- ── Colours (r, g, b) ─────────────────────────────────────────
-Brand.ACCENT = { 0.72, 0.55, 0.22 }   -- warm bronze-gold
+Brand.ACCENT = { 0.72, 0.55, 0.22 }   -- warm bronze-gold - kept as-is, this is what "Classic" style options stay pinned to
+Brand.ACCENT_ORANGE = { 0.72, 0.30, 0.0 } -- new default accent (replaces bronze-gold as the default look), confirmed 2026-09-02
 Brand.GOLD   = { 0.60, 0.47, 0.30 }   -- secondary/body text tone
 Brand.BG     = { 0.035, 0.035, 0.035, 1 } -- near-black, fully opaque
 Brand.LINE_THICKNESS = 2 -- minimum for ANY border/divider - never go below this
@@ -93,12 +94,11 @@ function Brand.BodyFS(parent, text, size, r, g, b)
     return fs
 end
 
--- Unselected label color - a warm amber-orange (matched from a reference
--- screenshot of WoW's own "World Quests" header text, 2026-08-09). Not the
--- same as Brand.GOLD (that's the muted secondary body-text tone used
--- elsewhere) - this is deliberately more vivid/orange so an inactive
--- button label still pops against the dark background.
-local BTN_LABEL_UNSELECTED = { 0.95, 0.60, 0.10 }
+-- Unselected label color - now the same Brand.ACCENT_ORANGE used everywhere
+-- else as the new default accent (was its own separate amber-orange before
+-- 2026-09-02; unified so there's one orange app-wide, not two close-but-not-
+-- identical shades side by side).
+local BTN_LABEL_UNSELECTED = Brand.ACCENT_ORANGE
 
 -- Questlink style, confirmed 2026-08-17 (replaces the old boxed/bordered
 -- button entirely - "I don't like the blocky look... the link style looks
