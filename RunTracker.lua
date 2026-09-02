@@ -316,6 +316,54 @@ local TALLY_GROUPS = {
 -- same as Compendium's section state.
 local sectionCollapsed = {}
 
+-- Compact style: no background/border, orange header, flat borderless item
+-- popups instead of grouped rows in a shared panel. Classic keeps today's
+-- look exactly. Confirmed 2026-09-01, Compact is the default going forward.
+local function IsCompactTally()
+    return not (XalsXRDB and XalsXRDB.gatherTallyLayout == "classic")
+end
+
+-- Same orange as the floating helper button's "Gather" text link - one
+-- color, used consistently across both redesigned pieces.
+local TALLY_ORANGE = { 0.72, 0.30, 0.0 }
+
+-- Whether the Compact header is collapsed to just its title bar (title,
+-- total count, Close) - toggled by clicking the title. Module-level, not
+-- persisted, same convention as sectionCollapsed above. Classic never reads
+-- this; the title isn't clickable there.
+local compactMinimized = false
+
+-- Pulls the item-quality color out of a colored item link - either the
+-- classic |cffRRGGBB hex form or the newer |cnIQ<n>: indexed form (looked
+-- up against Blizzard's own ITEM_QUALITY_COLORS table). Falls back to
+-- white if neither pattern is found rather than guessing.
+local function GetLinkColor(link)
+    if not link then return 1, 1, 1 end
+    local hex = link:match("|cff(%x%x%x%x%x%x)")
+    if hex then
+        local r = tonumber(hex:sub(1, 2), 16) / 255
+        local g = tonumber(hex:sub(3, 4), 16) / 255
+        local b = tonumber(hex:sub(5, 6), 16) / 255
+        return r, g, b
+    end
+    local qIndex = link:match("|cnIQ(%d+):")
+    qIndex = qIndex and tonumber(qIndex)
+    if qIndex and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[qIndex] then
+        local c = ITEM_QUALITY_COLORS[qIndex]
+        return c.r, c.g, c.b
+    end
+    return 1, 1, 1
+end
+
+-- Pulls the plain visible name out of a colored item link ("[Refulgent
+-- Copper Ore]" -> "Refulgent Copper Ore"). Compact's rows color the whole
+-- name via SetTextColor from GetLinkColor above instead of relying on the
+-- link's own embedded |c color codes, so they need the bare text here.
+local function GetItemNameFromLink(link)
+    if not link then return nil end
+    return link:match("%[(.-)%]")
+end
+
 local function BuildFrame()
     local template = BackdropTemplateMixin and "BackdropTemplate" or nil
     frame = CreateFrame("Frame", "XalsXRHaulFrame", UIParent, template)
@@ -325,10 +373,13 @@ local function BuildFrame()
     frame:SetClampedToScreen(true)
 
     -- Brand background + border (anchor-based, so the border stays correct
-    -- as this window grows/shrinks with the row count).
-    Brand.ApplyBackground(frame)
-    Brand.ApplyBackgroundImage(frame)
-    Brand.DrawBorder(frame)
+    -- as this window grows/shrinks with the row count). Built unconditionally
+    -- and toggled Show/Hide per-style in ApplyTallyStyle() below, rather than
+    -- being skipped outright for Compact - keeps a style switch instant with
+    -- no rebuild needed.
+    frame.bg = Brand.ApplyBackground(frame)
+    frame.bgImage = Brand.ApplyBackgroundImage(frame)
+    frame.borderTop, frame.borderBottom, frame.borderLeft, frame.borderRight = Brand.DrawBorder(frame)
 
     -- Draggable, with the position remembered between runs (same approach as the
     -- helper button).
@@ -356,9 +407,28 @@ local function BuildFrame()
     -- at the standard value. Flagged directly 2026-08-17.
     local TALLY_TOP_MARGIN = 20
 
+    -- Same title treatment for both styles - only the color changes
+    -- (ApplyTallyStyle). This is the addon's one shared branded title look;
+    -- the floating helper's "Gather" text was changed to match THIS font
+    -- and shadow, not the other way around. Confirmed 2026-09-02.
     local title = Brand.Title(frame, "Gather Tally", 15, "TOPLEFT", frame, "TOPLEFT", TALLY_TOP_MARGIN, -TALLY_TOP_MARGIN)
     title:SetJustifyH("LEFT")
     frame.title = title
+
+    -- Compact-only: clicking the title toggles minimized/expanded. A plain
+    -- FontString can't take clicks on its own, so a transparent Button sits
+    -- over it instead - sized to the actual rendered text so the hit area
+    -- doesn't cover the whole header row. Classic never toggles this (the
+    -- click still registers but Render() ignores compactMinimized there).
+    local titleClick = CreateFrame("Button", nil, frame)
+    titleClick:SetPoint("TOPLEFT", title, "TOPLEFT", 0, 0)
+    titleClick:SetSize(math.max(1, title:GetStringWidth()), 18)
+    titleClick:SetScript("OnClick", function()
+        if not IsCompactTally() then return end
+        compactMinimized = not compactMinimized
+        RunTracker:Render()
+    end)
+    frame.titleClick = titleClick
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
@@ -384,6 +454,8 @@ local function BuildFrame()
         frame:Hide()
     end)
     PixelUtil.SetPoint(close, "TOPRIGHT", frame, "TOPRIGHT", -TALLY_TOP_MARGIN, -TALLY_TOP_MARGIN)
+    frame.close = close
+    frame.TALLY_TOP_MARGIN = TALLY_TOP_MARGIN
 
     -- Ticks the live timer while a session is active and the window is open.
     frame:SetScript("OnUpdate", function(self, elapsed)
@@ -398,6 +470,7 @@ local function BuildFrame()
 
     frame.rows = {}
     frame.headers = {}
+    frame.compactRows = {}
     return frame
 end
 
@@ -487,6 +560,85 @@ local function AcquireRow(index)
     return row
 end
 
+-- Compact's item row: icon on the left, name + count on the right, no shared
+-- background - each is its own standalone popup rather than a row in a
+-- list box. The item-quality color runs across the top, cuts across the
+-- corner at an angle (a chamfer - WoW can't draw an actual rounded curve on
+-- a flat-color texture the way the mockup's CSS could), then continues
+-- halfway down the right edge. The icon also gets a thin colored square
+-- behind it as a border. Confirmed 2026-09-01.
+local COMPACT_ROW_HEIGHT = 34
+local COMPACT_ICON_SIZE = 22
+local COMPACT_ROW_WIDTH = FRAME_WIDTH - 24
+local COMPACT_CHAMFER = 8
+local COMPACT_BORDER_THICKNESS = 2
+
+-- Positions+rotates a texture to form a line from (x1,y1) to (x2,y2), offsets
+-- in WoW's own y-up space, relative to row's TOPLEFT corner - same technique
+-- QuickButton.lua's hollow-X icons use, just anchored from a corner instead
+-- of a center.
+local function PlaceRowBar(row, tex, x1, y1, x2, y2, thickness, color)
+    local dx, dy = x2 - x1, y2 - y1
+    local length = math.max(math.sqrt(dx * dx + dy * dy), 0.1)
+    local angle = math.atan2(dy, dx)
+    tex:ClearAllPoints()
+    tex:SetSize(length, thickness)
+    tex:SetPoint("CENTER", row, "TOPLEFT", (x1 + x2) / 2, (y1 + y2) / 2)
+    tex:SetRotation(angle)
+    tex:SetColorTexture(color[1], color[2], color[3], 1)
+    tex:Show()
+end
+
+local function AcquireCompactRow(index)
+    local row = frame.compactRows[index]
+    if row then return row end
+
+    row = CreateFrame("Frame", nil, frame)
+    row:SetHeight(COMPACT_ROW_HEIGHT)
+
+    row.topBar = row:CreateTexture(nil, "ARTWORK")
+    row.diagonalBar = row:CreateTexture(nil, "ARTWORK")
+    row.rightBar = row:CreateTexture(nil, "ARTWORK")
+
+    row.iconBorder = row:CreateTexture(nil, "BACKGROUND")
+    row.iconBorder:SetSize(COMPACT_ICON_SIZE + 4, COMPACT_ICON_SIZE + 4)
+
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(COMPACT_ICON_SIZE, COMPACT_ICON_SIZE)
+    row.icon:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -8)
+    row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    row.iconBorder:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+
+    row.count = row:CreateFontString(nil, "OVERLAY")
+    row.count:SetFont(Brand.BODY_FONT_PATH, 12, "")
+    row.count:SetTextColor(0.92, 0.88, 0.76, 1)
+    row.count:SetShadowColor(0, 0, 0, 1)
+    row.count:SetShadowOffset(2, -2)
+    row.count:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -10)
+    row.count:SetJustifyH("RIGHT")
+
+    row.name = row:CreateFontString(nil, "OVERLAY")
+    row.name:SetFont(Brand.BODY_FONT_PATH, 13, "")
+    row.name:SetShadowColor(0, 0, 0, 1)
+    row.name:SetShadowOffset(2, -2)
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+    row.name:SetPoint("RIGHT", row.count, "LEFT", -6, 0)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetWordWrap(false)
+
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+        if not self.link then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(self.link)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    frame.compactRows[index] = row
+    return row
+end
+
 -- Applies the current icon/font-size options to a pooled row before it's filled.
 -- Font size is set absolutely (BASE * scale) so repeated renders never compound.
 -- Sets the font PATH directly (Brand.BODY_FONT_PATH) instead of reading it
@@ -513,11 +665,63 @@ local function StyleRow(row, showIcons, fontScale, rowH)
     row.name:SetPoint("RIGHT", row.count, "LEFT", -6, 0)
 end
 
--- Repaints the window from the current tally. Called live on each gather, on a
--- half-second tick while active (so the timer moves), and once when a run ends.
-function RunTracker:Render()
-    if not frame then return end
+-- Shows/hides the background+border and recolors the header for whichever
+-- style is currently selected. Cheap enough to call on every render rather
+-- than only on a style change - always leaves the frame in a correct state
+-- regardless of what it looked like before.
+local function ApplyTallyStyle()
+    local compact = IsCompactTally()
+    frame.bg:SetShown(not compact)
+    frame.bgImage:SetShown(not compact)
+    frame.borderTop:SetShown(not compact)
+    frame.borderBottom:SetShown(not compact)
+    frame.borderLeft:SetShown(not compact)
+    frame.borderRight:SetShown(not compact)
 
+    if compact then
+        frame.title:SetTextColor(TALLY_ORANGE[1], TALLY_ORANGE[2], TALLY_ORANGE[3])
+        frame.subtitle:SetTextColor(TALLY_ORANGE[1], TALLY_ORANGE[2], TALLY_ORANGE[3])
+    else
+        frame.title:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3])
+        frame.subtitle:SetTextColor(Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
+    end
+end
+
+-- Builds the subtitle text shared by both styles: Classic keeps the full
+-- "Gathering - 1:23 - 6 items" phrasing; Compact drops the verb entirely
+-- (the "Gather Tally" title already says what this is - confirmed
+-- 2026-09-01, "it already says gather tally, gathered is redundant") and
+-- just shows the timer (if enabled) and the count.
+local function BuildSubtitleText(compact, totalItems)
+    local kind = (RunTracker.active and RunTracker.sessionKind) or RunTracker.lastKind
+    local showTimer = (kind == "route" and XalsXRDB and XalsXRDB.haulRouteTimer)
+        or (kind == "manual" and XalsXRDB and XalsXRDB.haulGatherTimer)
+    local duration = RunTracker.active and (time() - RunTracker.startTime) or (RunTracker.runDuration or 0)
+    local countText = string.format("%d item%s", totalItems, totalItems == 1 and "" or "s")
+
+    if compact then
+        local parts = {}
+        if showTimer then parts[#parts + 1] = FormatDuration(duration) end
+        parts[#parts + 1] = countText
+        return table.concat(parts, "  -  ")
+    end
+
+    local verb
+    if RunTracker.active then
+        verb = "Gathering"
+    elseif kind == "manual" then
+        verb = "Session ended"
+    else
+        verb = "Route complete"
+    end
+    local parts = { verb }
+    if showTimer then parts[#parts + 1] = FormatDuration(duration) end
+    parts[#parts + 1] = countText
+    return table.concat(parts, "  -  ")
+end
+
+-- Classic rendering - unchanged from the original grouped-panel layout.
+local function RenderClassic()
     local showIcons = not (XalsXRDB and XalsXRDB.haulShowIcons == false)
     local fontScale = (XalsXRDB and XalsXRDB.haulFontScale) or 1
     local rowH = math.floor(ROW_HEIGHT * fontScale + 0.5)
@@ -527,7 +731,7 @@ function RunTracker:Render()
     -- OnGatherSucceeded/AddLoot).
     local buckets = { mine = {}, herb = {}, lumber = {}, other = {} }
     local totalItems = 0
-    for _, entry in pairs(self.tally) do
+    for _, entry in pairs(RunTracker.tally) do
         local bucketKey = buckets[entry.type] and entry.type or "other"
         table.insert(buckets[bucketKey], entry)
         totalItems = totalItems + entry.count
@@ -625,32 +829,145 @@ function RunTracker:Render()
         contentY = HEADER_HEIGHT + rowH
     end
 
-    -- Timer line: shown only when the matching toggle is on for this session kind.
-    -- Gather Timer covers manual (Gather-button) sessions; Route Timer covers routes.
-    -- Both default off, so by default the subtitle is just the item count.
-    local kind = (self.active and self.sessionKind) or self.lastKind
-    local showTimer = (kind == "route" and XalsXRDB and XalsXRDB.haulRouteTimer)
-        or (kind == "manual" and XalsXRDB and XalsXRDB.haulGatherTimer)
-    local duration = self.active and (time() - self.startTime) or (self.runDuration or 0)
-
-    local verb
-    if self.active then
-        verb = "Gathering"
-    elseif kind == "manual" then
-        verb = "Session ended"
-    else
-        verb = "Route complete"
-    end
-
-    local parts = { verb }
-    if showTimer then parts[#parts + 1] = FormatDuration(duration) end
-    parts[#parts + 1] = string.format("%d item%s", totalItems, totalItems == 1 and "" or "s")
-    frame.subtitle:SetText(table.concat(parts, "  -  "))
+    frame.subtitle:SetText(BuildSubtitleText(false, totalItems))
 
     -- contentY already tracked the real accumulated height as headers and
     -- rows were laid out (they're no longer a uniform height, unlike the old
     -- flat list), so use that directly instead of re-deriving it.
     frame:SetHeight(contentY + FOOTER_PAD)
+end
+
+-- Compact rendering - flat list (no per-profession headers/grouping), each
+-- item its own standalone borderless popup. Collapses to just the header
+-- bar when compactMinimized is set (toggled by clicking the title).
+local function RenderCompact()
+    -- Hide every Classic-only pooled frame - Compact never uses them.
+    for _, row in ipairs(frame.rows) do row:Hide() end
+    for _, header in pairs(frame.headers) do header:Hide() end
+
+    local flat = {}
+    local totalItems = 0
+    for _, entry in pairs(RunTracker.tally) do
+        table.insert(flat, entry)
+        totalItems = totalItems + entry.count
+    end
+    table.sort(flat, function(a, b)
+        if a.count ~= b.count then return a.count > b.count end
+        return (a.link or "") < (b.link or "")
+    end)
+
+    frame.subtitle:SetText(BuildSubtitleText(true, totalItems))
+
+    if compactMinimized then
+        for _, row in ipairs(frame.compactRows) do row:Hide() end
+
+        frame.subtitle:ClearAllPoints()
+        frame.subtitle:SetPoint("LEFT", frame.title, "RIGHT", 10, 0)
+        frame.close:ClearAllPoints()
+        frame.close:SetPoint("LEFT", frame.subtitle, "RIGHT", 14, 0)
+
+        frame:SetHeight(frame.TALLY_TOP_MARGIN * 2 + 16)
+        return
+    end
+
+    -- Expanded: header stays in its normal two-line spot, item popups drop
+    -- down below it.
+    frame.subtitle:ClearAllPoints()
+    frame.subtitle:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -4)
+    frame.subtitle:SetPoint("RIGHT", frame, "RIGHT", -frame.TALLY_TOP_MARGIN, 0)
+    frame.close:ClearAllPoints()
+    PixelUtil.SetPoint(frame.close, "TOPRIGHT", frame, "TOPRIGHT", -frame.TALLY_TOP_MARGIN, -frame.TALLY_TOP_MARGIN)
+
+    local contentY = HEADER_HEIGHT
+    local rowIndex = 0
+    local shown = 0
+
+    -- Plain single-line top bar for the two utility rows (empty state, "+N
+    -- more") - no chamfer, no icon border, they're not real items.
+    local function ShowUtilityRow(row, text)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -contentY)
+        row:SetWidth(COMPACT_ROW_WIDTH)
+        PlaceRowBar(row, row.topBar, 0, -1, COMPACT_ROW_WIDTH, -1, COMPACT_BORDER_THICKNESS, { 0.5, 0.5, 0.5 })
+        row.diagonalBar:Hide()
+        row.rightBar:Hide()
+        row.iconBorder:Hide()
+        row.icon:Hide()
+        row.name:ClearAllPoints()
+        row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+        row.name:SetText(text)
+        row.count:SetText("")
+        row.link = nil
+        row:Show()
+        contentY = contentY + COMPACT_ROW_HEIGHT
+    end
+
+    if #flat == 0 then
+        ShowUtilityRow(AcquireCompactRow(1), "|cff888888Nothing gathered yet...|r")
+        rowIndex = 1
+    else
+        local half = COMPACT_ROW_HEIGHT / 2
+        for _, entry in ipairs(flat) do
+            if shown < MAX_ROWS then
+                rowIndex = rowIndex + 1
+                shown = shown + 1
+                local row = AcquireCompactRow(rowIndex)
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -contentY)
+                row:SetWidth(COMPACT_ROW_WIDTH)
+
+                local r, g, b = GetLinkColor(entry.link)
+                local color = { r, g, b }
+                -- Top edge, chamfered corner, then halfway down the right
+                -- edge - one continuous line built from three rotated bars,
+                -- same technique the floating button's icons use.
+                PlaceRowBar(row, row.topBar, 0, -1, COMPACT_ROW_WIDTH - COMPACT_CHAMFER, -1,
+                    COMPACT_BORDER_THICKNESS, color)
+                PlaceRowBar(row, row.diagonalBar, COMPACT_ROW_WIDTH - COMPACT_CHAMFER, -1,
+                    COMPACT_ROW_WIDTH, -(1 + COMPACT_CHAMFER), COMPACT_BORDER_THICKNESS, color)
+                PlaceRowBar(row, row.rightBar, COMPACT_ROW_WIDTH, -(1 + COMPACT_CHAMFER),
+                    COMPACT_ROW_WIDTH, -half, COMPACT_BORDER_THICKNESS, color)
+
+                row.iconBorder:SetColorTexture(r, g, b, 1)
+                row.iconBorder:Show()
+                row.icon:Show()
+                row.icon:SetTexture(entry.icon or 134400)
+                row.name:ClearAllPoints()
+                row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+                row.name:SetPoint("RIGHT", row.count, "LEFT", -6, 0)
+                row.name:SetTextColor(r, g, b)
+                row.name:SetText(GetItemNameFromLink(entry.link) or "?")
+                row.count:SetText("x" .. entry.count)
+                row.link = entry.link
+                row:Show()
+                contentY = contentY + COMPACT_ROW_HEIGHT
+            end
+        end
+
+        if #flat > MAX_ROWS then
+            rowIndex = rowIndex + 1
+            ShowUtilityRow(AcquireCompactRow(rowIndex), "|cff888888+" .. (#flat - MAX_ROWS) .. " more|r")
+        end
+    end
+
+    for i = rowIndex + 1, #frame.compactRows do
+        frame.compactRows[i]:Hide()
+    end
+
+    frame:SetHeight(contentY + FOOTER_PAD)
+end
+
+-- Repaints the window from the current tally. Called live on each gather, on a
+-- half-second tick while active (so the timer moves), and once when a run ends.
+function RunTracker:Render()
+    if not frame then return end
+    ApplyTallyStyle()
+    if IsCompactTally() then
+        RenderCompact()
+    else
+        RenderClassic()
+    end
 end
 
 function RunTracker:ShowWindow()
