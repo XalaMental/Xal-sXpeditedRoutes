@@ -1,5 +1,18 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.4.0 - September 30, 2026
+
+---
+
+Brought Routes into the current family look - the same dark, clean style the rest of my addons have been moving to. Also decided it was finally time to drop Classic entirely; Compact's been the better version this whole time, and keeping two styles around was just extra weight for no real benefit. Nothing you actually use is going anywhere - every feature's still here, just wearing the new look.
+
+### 🆕 New
+- **Full visual refresh** - every title, header, divider, button, and slider across the whole addon now uses one consistent dark red accent, no more orange or gold anywhere.
+- **Discord link moved to the Settings sidebar** - a small logo link at the bottom of the Settings window's sidebar, replacing the text link that used to sit on the General page.
+
+### 🔧 Fixed
+- **Classic style removed** - the older alternate look for the floating helper and Gather Tally is gone. Compact (the default since 2.2.0) is now the only style - nothing to pick between anymore, and every feature that was in Classic still works the same way in Compact.
+
 ## 2.3.1 - September 2, 2026
 
 ---
