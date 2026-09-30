@@ -20,7 +20,6 @@ local Brand = addonTable.BrandStyle
 local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel, gatherPanel, floatingPanel
 local statsText = nil
 local pinStyleButtons = {}
-local helperLayoutButtons = {}
 
 local function GetStatsString()
     local totalNodes = 0
@@ -39,8 +38,7 @@ local function GetStatsString()
                 and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
                 and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and mapID ~= "helperButtonFadeWhenIdle"
                 and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled"
-                and mapID ~= "helperButtonLayout" and mapID ~= "dungeonButtonPosition"
-                and mapID ~= "gatherTallyLayout" and type(nodes) == "table" then
+                and mapID ~= "dungeonButtonPosition" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -73,8 +71,7 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
                 and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
                 and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled"
-                and key ~= "helperButtonLayout" and key ~= "dungeonButtonPosition"
-                and key ~= "gatherTallyLayout" then
+                and key ~= "dungeonButtonPosition" then
                 XalsXRDB[key] = nil
             end
         end
@@ -94,15 +91,13 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
 -- Floating Button panel before promoting the pattern into BrandStyle for
 -- every panel across every addon.
 StaticPopupDialogs["XALXR_RESET_FLOATING_DEFAULTS"] = {
-    text = "Reset the Floating Button panel to its defaults (shown, Compact style, 100% scale)?",
+    text = "Reset the Floating Button panel to its defaults (shown, 100% scale)?",
     button1 = "Reset",
     button2 = "Cancel",
     OnAccept = function()
         XalsXRDB.showHelperButton = nil
         XalsXRDB.helperButtonScale = nil
-        XalsXRDB.helperButtonLayout = nil
         QuickButton:Show()
-        if QuickButton.ApplyLayout then QuickButton:ApplyLayout() end
         if QuickButton.ApplyScale then QuickButton:ApplyScale() end
         if floatingPanel and floatingPanel.Refresh then floatingPanel.Refresh() end
     end,
@@ -116,7 +111,7 @@ local function CreateHeader(parentPanel, anchorTo, text, yOffset)
     local header = parentPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yOffset or -20)
     header:SetText(text)
-    header:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
+    header:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
     return header
 end
 
@@ -194,10 +189,7 @@ local function BuildRootPanel()
     local title = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("LEFT", logo, "RIGHT", 10, 0)
     title:SetText("Xal's Xpedited Routes")
-
-    -- Standing link, not tied to any one release - lives here permanently.
-    local discordLink = Brand.MakeDiscordLink(rootPanel)
-    discordLink:SetPoint("TOPRIGHT", rootPanel, "TOPRIGHT", -16, -18)
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local credit = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(credit, PANEL_DESC_FONT_SIZE)
@@ -336,6 +328,7 @@ local function BuildFloatingButtonPanel()
     local title = floatingPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Floating Button")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local intro = floatingPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(intro, PANEL_DESC_FONT_SIZE)
@@ -365,34 +358,8 @@ local function BuildFloatingButtonPanel()
         QuickButton:ResetPosition()
     end)
 
-    -- Layout picker - Compact (default) vs. Classic, confirmed 2026-09-01
-    -- after "the whole thing is blocky": Compact drops the triangle and the
-    -- boxed Gather button for a smaller, left-aligned column + a Gather text
-    -- link. Classic keeps the original look for anyone who preferred it.
-    local layoutHeader = CreateHeader(floatingPanel, resetButtonPosBtn, "Cluster Style", -18)
-
-    local layoutOptions = { "compact", "classic" }
-    local layoutLabels = { compact = "Compact", classic = "Classic" }
-    local layoutBtnWidth = 170
-    helperLayoutButtons = {}
-    for i, key in ipairs(layoutOptions) do
-        local btn = CreateButton(floatingPanel, layoutHeader, (i - 1) * (layoutBtnWidth + 8), -10,
-            layoutLabels[key], layoutBtnWidth, function()
-                XalsXRDB.helperButtonLayout = key
-                QuickButton:ApplyLayout()
-                for optKey, optBtn in pairs(helperLayoutButtons) do
-                    optBtn:SetSelected(optKey == key)
-                end
-            end)
-        helperLayoutButtons[key] = btn
-    end
-
-    local layoutBottom = CreateFrame("Frame", nil, floatingPanel)
-    layoutBottom:SetSize(1, 1)
-    layoutBottom:SetPoint("TOPLEFT", layoutHeader, "BOTTOMLEFT", 0, -40)
-
     local scaleSlider = CreateFrame("Slider", "XalsXRHelperScaleSlider", floatingPanel, "OptionsSliderTemplate")
-    scaleSlider:SetPoint("TOPLEFT", layoutBottom, "BOTTOMLEFT", 4, -4)
+    scaleSlider:SetPoint("TOPLEFT", resetButtonPosBtn, "BOTTOMLEFT", 4, -24)
     scaleSlider:SetWidth(220)
     scaleSlider:SetMinMaxValues(50, 150)
     scaleSlider:SetValueStep(5)
@@ -435,10 +402,6 @@ local function BuildFloatingButtonPanel()
 
     local RefreshFloatingPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
-        local currentLayout = (XalsXRDB and XalsXRDB.helperButtonLayout) or "compact"
-        for optKey, optBtn in pairs(helperLayoutButtons) do
-            optBtn:SetSelected(optKey == currentLayout)
-        end
         local scalePct = math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5)
         scaleSlider:SetValue(scalePct)
         _G[scaleSlider:GetName() .. "Text"]:SetText("Scale: " .. scalePct .. "%")
@@ -461,6 +424,7 @@ local function BuildWaypointPanel()
     local title = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Waypoint")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local intro = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(intro, PANEL_DESC_FONT_SIZE)
@@ -613,6 +577,7 @@ local function BuildMarkersPanel()
     local title = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Map Markers")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local pinStyleHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(pinStyleHelp, PANEL_DESC_FONT_SIZE)
@@ -836,6 +801,7 @@ local function BuildDataPanel()
     local title = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Database")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     statsText = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     statsText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
@@ -958,6 +924,7 @@ local function BuildIntegrationsPanel()
     local title = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Integrations")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local intro = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(intro, PANEL_DESC_FONT_SIZE)
@@ -1012,6 +979,7 @@ local function BuildGatherTallyPanel()
     local title = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Gather Tally")
+    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     local intro = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     BumpFont(intro, PANEL_DESC_FONT_SIZE)
@@ -1020,78 +988,7 @@ local function BuildGatherTallyPanel()
     intro:SetJustifyH("LEFT")
     intro:SetText("The live window that tallies what you gather. Open it with the Gather button on the floating helper, or /xxr haul.")
 
-    -- Style picker - Compact (default) vs. Classic, same pattern and same
-    -- naming as the floating helper's Cluster Style. Compact drops the
-    -- background/border, recolors the header orange, shows items as
-    -- standalone borderless popups, and lets you click the title to
-    -- collapse to just the header bar. Classic is today's look, unchanged.
-    -- Confirmed 2026-09-01.
-    local styleHeader = CreateHeader(gatherPanel, intro, "Style", -18)
-
-    local tallyLayoutOptions = { "compact", "classic" }
-    local tallyLayoutLabels = { compact = "Compact", classic = "Classic" }
-    local tallyLayoutBtnWidth = 170
-    local tallyLayoutButtons = {}
-    for i, key in ipairs(tallyLayoutOptions) do
-        local btn = CreateButton(gatherPanel, styleHeader, (i - 1) * (tallyLayoutBtnWidth + 8), -10,
-            tallyLayoutLabels[key], tallyLayoutBtnWidth, function()
-                XalsXRDB.gatherTallyLayout = key
-                if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
-                for optKey, optBtn in pairs(tallyLayoutButtons) do
-                    optBtn:SetSelected(optKey == key)
-                end
-            end)
-        tallyLayoutButtons[key] = btn
-    end
-    gatherPanel.tallyLayoutButtons = tallyLayoutButtons
-
-    local styleBottom = CreateFrame("Frame", nil, gatherPanel)
-    styleBottom:SetSize(1, 1)
-    styleBottom:SetPoint("TOPLEFT", styleHeader, "BOTTOMLEFT", 0, -40)
-
-    local displayHeader = CreateHeader(gatherPanel, styleBottom, "Display", -6)
-
-    local iconsCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
-    iconsCheck:SetPoint("TOPLEFT", displayHeader, "BOTTOMLEFT", 2, -8)
-    iconsCheck.Text:SetText("Show item icons (off = clean text-only list)")
-    BumpFont(iconsCheck.Text, PANEL_LABEL_FONT_SIZE)
-    iconsCheck.Text:SetWordWrap(true)
-    iconsCheck.Text:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    iconsCheck:SetScript("OnClick", function(self)
-        XalsXRDB.haulShowIcons = self:GetChecked() and true or false
-        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
-    end)
-    gatherPanel.iconsCheck = iconsCheck
-
-    local sizeSlider = CreateFrame("Slider", "XalsXRHaulFontSlider", gatherPanel, "OptionsSliderTemplate")
-    sizeSlider:SetPoint("TOPLEFT", iconsCheck, "BOTTOMLEFT", 4, -30)
-    sizeSlider:SetWidth(220)
-    sizeSlider:SetMinMaxValues(100, 200)
-    sizeSlider:SetValueStep(10)
-    sizeSlider:SetObeyStepOnDrag(true)
-    _G[sizeSlider:GetName() .. "Low"]:SetText("100%")
-    BumpFont(_G[sizeSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[sizeSlider:GetName() .. "High"]:SetText("200%")
-    BumpFont(_G[sizeSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[sizeSlider:GetName() .. "Text"]:SetText("Text size")
-    BumpFont(_G[sizeSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    sizeSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 10 + 0.5) * 10
-        XalsXRDB.haulFontScale = value / 100
-        _G[self:GetName() .. "Text"]:SetText("Text size: " .. value .. "%")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
-    end)
-    gatherPanel.sizeSlider = sizeSlider
-
-    local sizeHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(sizeHelp, PANEL_DESC_FONT_SIZE)
-    sizeHelp:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", -6, -16)
-    sizeHelp:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    sizeHelp:SetJustifyH("LEFT")
-    sizeHelp:SetText("Scales the text in the tally list up or down.")
-
-    local timerHeader = CreateHeader(gatherPanel, sizeHelp, "Timers", -18)
+    local timerHeader = CreateHeader(gatherPanel, intro, "Timers", -18)
 
     local gatherTimerCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
     gatherTimerCheck:SetPoint("TOPLEFT", timerHeader, "BOTTOMLEFT", 2, -8)
@@ -1154,15 +1051,6 @@ local function BuildGatherTallyPanel()
     end)
 
     local RefreshGatherPanel = function()
-        local currentTallyLayout = (XalsXRDB and XalsXRDB.gatherTallyLayout) or "compact"
-        for optKey, optBtn in pairs(tallyLayoutButtons) do
-            optBtn:SetSelected(optKey == currentTallyLayout)
-        end
-        iconsCheck:SetChecked(not (XalsXRDB and XalsXRDB.haulShowIcons == false))
-        local pct = math.floor(((XalsXRDB and XalsXRDB.haulFontScale) or 1) * 100 + 0.5)
-        sizeSlider:SetValue(pct)
-        _G[sizeSlider:GetName() .. "Text"]:SetText("Text size: " .. pct .. "%")
-        BumpFont(_G[sizeSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
         gatherTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulGatherTimer == true)
         routeTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulRouteTimer == true)
         dungeonEnableCheck:SetChecked(XalsXRDB and XalsXRDB.dungeonButtonEnabled == true)
@@ -1193,10 +1081,27 @@ local standaloneFrame, standaloneContent
 local standaloneTabs = {}
 local standalonePanels
 
+-- Family-wide standard confirmed 2026-09-20: a standalone window's sidebar
+-- tabs use Brand.HEADER_COLOR when selected and a muted blue-gray when not,
+-- NOT the shared Brand.MakeButton white/orange scheme every other button in
+-- this addon still uses (marker-style pickers, arrow-style pickers, etc.) -
+-- scoped to just these sidebar tabs by recoloring the
+-- label after Brand.MakeButton builds it, same pattern as Brand.Title()'s
+-- override, rather than changing MakeButton itself. HookScript on OnLeave
+-- restores the right color after a hover, since MakeButton's own OnLeave
+-- would otherwise put it back to its own white/orange.
+local SIDEBAR_UNSELECTED_COLOR = { 0.196, 0.196, 0.392 } -- #323264
+local function SetSidebarTabSelected(tab, selected)
+    tab:SetSelected(selected)
+    local color = selected and Brand.HEADER_COLOR or SIDEBAR_UNSELECTED_COLOR
+    tab.label:SetTextColor(color[1], color[2], color[3], 1)
+    tab.sidebarSelected = selected
+end
+
 local function ShowStandaloneTab(index)
     local entry = standalonePanels[index]
     for i, tab in ipairs(standaloneTabs) do
-        tab:SetSelected(i == index)
+        SetSidebarTabSelected(tab, i == index)
     end
     for i, other in ipairs(standalonePanels) do
         if i ~= index then other.panel:Hide() end
@@ -1249,21 +1154,22 @@ local function BuildStandaloneWindow()
     -- Solid dark indigo instead of Brand.BG + the swirl background image -
     -- confirmed 2026-09-02 ("we're removing the background image... I
     -- wanted a dark blue bordering on purple"). Scoped to just this window,
-    -- not Brand.BG itself, so Classic Gather Tally's background is untouched.
+    -- not Brand.BG itself.
     local WINDOW_BG = { 0.03, 0.028, 0.06 } -- #08070f
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
 
-    local borderTop, borderBottom, borderLeft, borderRight = Brand.DrawBorder(f)
-    for _, line in ipairs({ borderTop, borderBottom, borderLeft, borderRight }) do
-        line:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
-    end
+    -- Outer window border, at the family-wide inset (1, flush against the
+    -- true outer edge) - color defaults to Brand.DIVIDER_COLOR now (2026-09-20
+    -- standard), no override needed.
+    Brand.DrawBorder(f, 1)
 
     -- Centered (not left-justified) and given real room below the border,
-    -- per design feedback 2026-08-09.
+    -- per design feedback 2026-08-09. Recolored to Brand.HEADER_COLOR
+    -- (2026-09-20 family-wide standard for a window's main title).
     local windowTitle = Brand.Title(f, "Xal's Xpedited Routes", 30, "TOP", f, "TOP", 0, -28)
-    windowTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
+    windowTitle:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     -- Text-link style close ("Close" in accent gold), not a boxed button -
     -- confirmed preference 2026-08-16.
@@ -1273,7 +1179,10 @@ local function BuildStandaloneWindow()
     -- Horizontal divider separating the title from the tabs/content below -
     -- same feedback pass. Pushed down 8px from its original 58 to give the
     -- larger (30pt, up from 20pt) title room to breathe without crowding it.
-    local headerDivider = Brand.DrawDivider(f, Brand.SAFE_MARGIN, 66, FW - Brand.SAFE_MARGIN * 2)
+    -- Uses DrawHeaderDivider (2026-09-20) since this is THE one header
+    -- divider directly under the main title - every other divider in this
+    -- window stays on Brand.DrawDivider's muted tone.
+    Brand.DrawHeaderDivider(f, Brand.SAFE_MARGIN, 66, FW - Brand.SAFE_MARGIN * 2)
 
     -- Left-side tab list, matching the established sidebar-tabs convention.
     local sidebar = CreateFrame("Frame", nil, f)
@@ -1281,9 +1190,11 @@ local function BuildStandaloneWindow()
     sidebar:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
     sidebar:SetWidth(132)
 
+    -- Sidebar/content divider - NOT the header divider, so it stays on the
+    -- muted Brand.DIVIDER_COLOR tone (2026-09-20), not orange.
     local vDivider = f:CreateTexture(nil, "ARTWORK")
     vDivider:SetWidth(Brand.LINE_THICKNESS)
-    vDivider:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
+    vDivider:SetColorTexture(Brand.DIVIDER_COLOR[1], Brand.DIVIDER_COLOR[2], Brand.DIVIDER_COLOR[3], 1)
     vDivider:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 10, 0)
     vDivider:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMRIGHT", 10, 0)
 
@@ -1309,6 +1220,13 @@ local function BuildStandaloneWindow()
     local anchorTab = nil
     for i, entry in ipairs(standalonePanels) do
         local tab = Brand.MakeButton(sidebar, entry.label, 116, 24, function() ShowStandaloneTab(i) end)
+        -- Restores the sidebar-specific color after a hover, since
+        -- MakeButton's own OnLeave (already wired via SetScript inside
+        -- MakeButton) would otherwise reset the label to white/orange.
+        tab:HookScript("OnLeave", function(self)
+            local color = self.sidebarSelected and Brand.HEADER_COLOR or SIDEBAR_UNSELECTED_COLOR
+            self.label:SetTextColor(color[1], color[2], color[3], 1)
+        end)
         tab:ClearAllPoints()
         if anchorTab then
             PixelUtil.SetPoint(tab, "TOPLEFT", anchorTab, "BOTTOMLEFT", 0, -4)
@@ -1318,6 +1236,12 @@ local function BuildStandaloneWindow()
         standaloneTabs[i] = tab
         anchorTab = tab
     end
+
+    -- Bottom-pinned sidebar Discord logo link, family standard confirmed
+    -- 2026-09-20 - just the logo, no separate text, distinct from the text
+    -- link already on the General page.
+    local sidebarDiscord = Brand.MakeDiscordLogoLink(sidebar, 100)
+    sidebarDiscord:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", TAB_SIDE_PAD, 0)
 
     f:Hide()
     standaloneFrame = f
@@ -1352,14 +1276,14 @@ function SettingsPanel:OpenIntegrations()
 end
 
 -- Recolors every checkbox label and slider Low/High/Text on a panel (and its
--- children) to the new default orange - covers every checkbox/slider across
+-- children) to the one accent color - covers every checkbox/slider across
 -- every settings panel from ONE call per panel, instead of touching each of
 -- the ~25 individual widgets at its own creation site. Confirmed 2026-09-02
 -- ("anything that has the gold yellow in it, I want it to turn to our
--- orange"). Blizzard's checkbox/slider templates default that text gold;
--- this just overrides it after the fact.
+-- accent"), color updated 2026-09-25. Blizzard's checkbox/slider templates
+-- default that text gold; this just overrides it after the fact.
 local function RecolorLabelsOrange(panel)
-    local o = Brand.ACCENT_ORANGE
+    local o = Brand.HEADER_COLOR
     local function walk(f)
         if not f or not f.GetObjectType then return end
         local otype = f:GetObjectType()
