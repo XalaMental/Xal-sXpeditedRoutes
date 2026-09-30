@@ -98,14 +98,16 @@ local function BuildFrame(installedVersion)
     bg:SetAllPoints()
     bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
 
-    local borderTop, borderBottom, borderLeft, borderRight = Brand.DrawBorder(f)
-    for _, line in ipairs({ borderTop, borderBottom, borderLeft, borderRight }) do
-        line:SetColorTexture(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3], 1)
-    end
+    -- Outer window border, at the family-wide inset (1, flush against the
+    -- true outer edge) - color defaults to Brand.DIVIDER_COLOR now (2026-09-20
+    -- standard), no override needed.
+    Brand.DrawBorder(f, 1)
 
     local data = W.WHATS_NEW
+    -- Recolored to Brand.HEADER_COLOR (2026-09-20 family-wide standard for a
+    -- window's main title) - was Brand.ACCENT_ORANGE.
     local mainTitle = Brand.Title(f, "What's New", 26, "TOP", f, "TOP", 0, -24)
-    mainTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
+    mainTitle:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 
     -- "installedVersion" is the REAL live version (from CheckAndShow), not a
     -- hand-typed field - it always matches whatever actually got tagged.
@@ -114,7 +116,9 @@ local function BuildFrame(installedVersion)
     verLine:SetPoint("TOP", f, "TOP", 0, -58)
     verLine:SetJustifyH("CENTER")
 
-    Brand.DrawDivider(f, 30, 78, FW - 60)
+    -- The ONE header divider directly under the main title - uses
+    -- DrawHeaderDivider (2026-09-20), not the muted Brand.DrawDivider.
+    Brand.DrawHeaderDivider(f, 30, 78, FW - 60)
 
     -- Standing link, every splash regardless of that version's content -
     -- not part of the release notes themselves.
@@ -139,7 +143,7 @@ local function BuildFrame(installedVersion)
         -- 2026-08-17 - the previous version LOOKED like styled text, not an
         -- actual bold heading.
         local sectionTitle = Brand.Title(f, section.heading, 18, "TOPLEFT", f, "TOPLEFT", 30, -y)
-        sectionTitle:SetTextColor(Brand.ACCENT_ORANGE[1], Brand.ACCENT_ORANGE[2], Brand.ACCENT_ORANGE[3])
+        sectionTitle:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
         y = y + 26
         Brand.DrawDivider(f, 30, y, FW - 60)
         y = y + 12
