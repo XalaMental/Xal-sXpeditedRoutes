@@ -20,10 +20,22 @@ addonTable.BrandStyle = {}
 local Brand = addonTable.BrandStyle
 
 -- ── Colours (r, g, b) ─────────────────────────────────────────
-Brand.ACCENT = { 0.72, 0.55, 0.22 }   -- warm bronze-gold - kept as-is, this is what "Classic" style options stay pinned to
-Brand.ACCENT_ORANGE = { 0.72, 0.30, 0.0 } -- new default accent (replaces bronze-gold as the default look), confirmed 2026-09-02
-Brand.GOLD   = { 0.60, 0.47, 0.30 }   -- secondary/body text tone
+-- #681417, a dark brick red. Confirmed 2026-09-25: this is the ONE accent
+-- color for the new default look, no exceptions - window titles, header
+-- dividers, selected sidebar links, section headers within a page, sliders,
+-- action links/buttons, Close/text-link buttons. No gold, no orange, no
+-- yellow anywhere (confirmed again 2026-09-30 - the old bronze-gold
+-- Brand.ACCENT and muted-gold Brand.GOLD are both retired, pointed at this
+-- same color below rather than deleted outright, so nothing that reads
+-- Brand.ACCENT/Brand.GOLD anywhere in this addon needs its own edit).
+Brand.HEADER_COLOR = { 0.4078, 0.0784, 0.0902 }
+Brand.ACCENT = Brand.HEADER_COLOR
+Brand.GOLD = Brand.HEADER_COLOR
 Brand.BG     = { 0.035, 0.035, 0.035, 1 } -- near-black, fully opaque
+-- #101020, a near-black indigo - replaces the old muted brown for every
+-- OTHER divider (section/list/sidebar dividers, not the one header divider
+-- above) and for panel/card edges (Brand.DrawBorder's default color).
+Brand.DIVIDER_COLOR = { 0.0627, 0.0627, 0.1255 }
 Brand.LINE_THICKNESS = 2 -- minimum for ANY border/divider - never go below this
 -- Minimum gap between a panel's true outer edge and the nearest button/text
 -- (close buttons especially). DrawBorder()'s line occupies out to 8px in
@@ -71,8 +83,10 @@ Brand.BODY_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\FiraSans-M
 -- ── Title()  ─ the branded title treatment (Simply Sans Bold), with its
 -- drop-shadow layer, in one call. Returns the visible (front) fontstring.
 function Brand.Title(parent, text, size, anchorPoint, relTo, relPoint, x, y)
-    local shadow = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE", 0.05, 0.04, 0.02)
-    PixelUtil.SetPoint(shadow, anchorPoint, relTo, relPoint, x + 2, y - 2)
+    -- Shadow offset/color bumped 2026-09-20 (family-wide) - the original
+    -- (+2,-2) near-black read as barely-there once seen live at real size.
+    local shadow = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE", 0, 0, 0)
+    PixelUtil.SetPoint(shadow, anchorPoint, relTo, relPoint, x + 4, y - 4)
     shadow:SetJustifyH("CENTER")
 
     local title = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE",
@@ -94,11 +108,9 @@ function Brand.BodyFS(parent, text, size, r, g, b)
     return fs
 end
 
--- Unselected label color - now the same Brand.ACCENT_ORANGE used everywhere
--- else as the new default accent (was its own separate amber-orange before
--- 2026-09-02; unified so there's one orange app-wide, not two close-but-not-
--- identical shades side by side).
-local BTN_LABEL_UNSELECTED = Brand.ACCENT_ORANGE
+-- Unselected label color - the same Brand.HEADER_COLOR used everywhere else
+-- as the one accent color, no exceptions (confirmed 2026-09-25).
+local BTN_LABEL_UNSELECTED = Brand.HEADER_COLOR
 
 -- Questlink style, confirmed 2026-08-17 (replaces the old boxed/bordered
 -- button entirely - "I don't like the blocky look... the link style looks
@@ -161,7 +173,11 @@ end
 function Brand.DrawBorder(f, inset)
     inset = inset or 6
     local thick = Brand.LINE_THICKNESS
-    local r, g, b = Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3]
+    -- Family-wide standard 2026-09-20: DIVIDER_COLOR (a subtle near-black
+    -- indigo line), not Brand.ACCENT - a call site that needs a Classic-
+    -- pinned bronze border or the new-default orange must recolor the
+    -- returned textures itself afterward, same pattern as Brand.Title().
+    local r, g, b = Brand.DIVIDER_COLOR[1], Brand.DIVIDER_COLOR[2], Brand.DIVIDER_COLOR[3]
 
     local top = f:CreateTexture(nil, "ARTWORK")
     PixelUtil.SetPoint(top, "TOPLEFT", f, "TOPLEFT", inset, -inset)
@@ -193,7 +209,16 @@ end
 -- ── DrawDivider()  ─ the thin section-separator line used between content
 -- blocks (feature lists, header bars, etc.)
 function Brand.DrawDivider(parent, x, y, width)
-    return Brand.T(parent, x, y, width, Brand.LINE_THICKNESS, 0.16, 0.12, 0.05, 1)
+    return Brand.T(parent, x, y, width, Brand.LINE_THICKNESS,
+        Brand.DIVIDER_COLOR[1], Brand.DIVIDER_COLOR[2], Brand.DIVIDER_COLOR[3], 1)
+end
+
+-- ── DrawHeaderDivider()  ─ same as DrawDivider, but in Brand.HEADER_COLOR -
+-- used ONLY for the single divider directly under a window's main title,
+-- never for section dividers within a page (those stay Brand.DrawDivider).
+function Brand.DrawHeaderDivider(parent, x, y, width)
+    return Brand.T(parent, x, y, width, Brand.LINE_THICKNESS,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
 end
 
 -- ── ApplyBackground()  ─ the standard opaque near-black frame background.
@@ -286,6 +311,37 @@ function Brand.MakeDiscordLink(parent)
     btn:SetScript("OnLeave", function()
         label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
     end)
+    btn:SetScript("OnClick", function()
+        StaticPopup_Show("XALXR_COPY_URL", nil, nil, Brand.DISCORD_URL)
+    end)
+
+    return btn
+end
+
+-- Logo-only Discord link (no text label) - a standing sidebar entry, family
+-- standard confirmed 2026-09-20 ("just the logo, no separate text"), ported
+-- to this addon 2026-09-30. Distinct from Brand.MakeDiscordLink above (the
+-- text version, still used on the General settings page) - this one is for
+-- a standalone window's sidebar specifically. Real Discord blurple wordmark
+-- art (Discord's own official logo file, not hand-drawn), shipped
+-- pre-resized rather than relying on the GPU to minify a huge source at
+-- render time - same lesson as the minimap icon technique.
+Brand.DISCORD_LOGO_ICON = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\DiscordLogo"
+local DISCORD_LOGO_ASPECT = 42 / 280
+
+function Brand.MakeDiscordLogoLink(parent, width)
+    width = width or 140
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(width, width * DISCORD_LOGO_ASPECT)
+
+    local logo = btn:CreateTexture(nil, "ARTWORK")
+    logo:SetAllPoints()
+    logo:SetTexture(Brand.DISCORD_LOGO_ICON)
+    logo:SetAlpha(0.9)
+    btn.logo = logo
+
+    btn:SetScript("OnEnter", function() logo:SetAlpha(1) end)
+    btn:SetScript("OnLeave", function() logo:SetAlpha(0.9) end)
     btn:SetScript("OnClick", function()
         StaticPopup_Show("XALXR_COPY_URL", nil, nil, Brand.DISCORD_URL)
     end)
