@@ -11,15 +11,12 @@
 --     just hidden, so the layout never shifts around based on what's learned.
 --   - Knows none of the three -> a single greyed placeholder, nothing to click
 --
--- Two layouts, picked in Settings (XalsXRDB.helperButtonLayout, "compact" default):
---   Compact - Gather as a glowing text link on top, the three X's stacked in one
---     left-aligned column below it, each smaller with its node-count centered
---     inside the X instead of hanging below it.
---   Classic - the original layout: mine/herb triangle-topped-by-lumber, a boxed
---     "Gather" button underneath.
--- Confirmed 2026-09-01: Compact replaces the old triangle+box look as the default
--- after "the whole thing is blocky" feedback - Classic is kept for anyone who
--- preferred the original.
+-- One layout: Gather as a glowing text link on top, the three X's stacked in
+-- one left-aligned column below it, each smaller with its node-count centered
+-- inside the X instead of hanging below it. Confirmed 2026-09-01 as the
+-- replacement for the old triangle+boxed-button look ("the whole thing is
+-- blocky"); the old "Classic" alternate layout was removed entirely
+-- 2026-09-24 - this is the only look now.
 --
 -- The dungeon-waypoint shortcut is its OWN separate draggable frame (not part of
 -- this cluster at all) so it can be tucked somewhere out of the way independently
@@ -42,7 +39,7 @@ local Brand = addonTable.BrandStyle
 
 local container = nil -- outer draggable frame for the profession cluster + Gather
 local slotMine, slotHerb, slotLumber = nil, nil, nil
-local gatherBtn = nil -- opens the Gather Tally; boxed button (Classic) or text link (Compact)
+local gatherBtn = nil -- opens the Gather Tally; plain text link
 local dungeonContainer, dungeonMenu = nil, nil -- fully independent draggable piece
 
 local function OnDragStartShared()
@@ -110,48 +107,25 @@ function QuickButton:ApplyFadeSetting()
     end
 end
 
-local function IsCompactLayout()
-    return not (XalsXRDB and XalsXRDB.helperButtonLayout == "classic")
-end
-
--- Classic sizes (unchanged from the original layout)
-local SLOT_SIZE = 40 -- clickable hit area
-local BUTTON_PIN_SIZE = 30 -- drawn shape size
-local COUNT_LABEL_SPACE = 20 -- room reserved below the slot for the count label
-local GATHER_BTN_HEIGHT = 24
-local GATHER_BTN_WIDTH = SLOT_SIZE * 2 + 4 -- spans the mine/herb pair's combined width
-
--- Compact sizes - smaller hit area/mark, count moves inside the X instead of
+-- Slot sizing - smaller hit area/mark, count sits inside the X instead of
 -- needing space below it, confirmed 2026-09-01.
 local COMPACT_PIN_SIZE = 26
--- Deliberately small padding, not the Classic +10 - the drawn X fills almost
--- the entire frame, so a 0px icon-to-icon gap actually reads as the icons
--- touching instead of hiding a 5px-per-side margin inside each frame.
+-- The drawn X fills almost the entire frame, so a 0px icon-to-icon gap
+-- actually reads as the icons touching instead of hiding a margin per side.
 local COMPACT_HIT_PADDING = 2
 local COMPACT_SLOT_SIZE = COMPACT_PIN_SIZE + COMPACT_HIT_PADDING
 local COMPACT_GATHER_HEIGHT = 18
 
-local SLOT_GAP = 4
 local COMPACT_GAP = 6 -- Gather-to-first-X gap
 local COMPACT_ICON_GAP = 0 -- X-to-X gap - tighter than the Gather gap, confirmed 2026-09-01
-
--- The rune-X icon art is baked at a fixed 64px/30px ratio (see ConfigureSlot) -
--- this keeps that same proportion when the drawn pin size shrinks for Compact.
-local RUNE_TEX_SCALE = 64 / BUTTON_PIN_SIZE
 
 -- Independent now (2026-09-01) - no longer forced to match the profession X
 -- icons' size since it's not visually stacked with them anymore.
 local DUNGEON_BTN_SIZE = 48
-local DISABLED_COLOR = { 0.4, 0.4, 0.4 }
 local refreshInterval = 0.5
 local refreshTimer = 0
 
 local LABELS = { mine = "Mining", herb = "Herbalism", lumber = "Lumberjacking" }
-
--- Gather text-link colors (Compact layout) - deep orange, plain black
--- shadow (see CreateCompactGatherButton), no colored glow.
-local GATHER_COLOR = { 0.72, 0.30, 0.0 }
-local GATHER_COLOR_HOVER = { 0.88, 0.42, 0.05 }
 
 -- Whether a given type is currently included in the active route - true whenever
 -- that type is running solo OR as part of an unrestricted (combined) route.
@@ -189,29 +163,12 @@ local function ToggleType(nodeType)
     end
 end
 
--- Builds one slot button: a clickable area, rendered via MarkerRenderer, with a
--- node-count label either below it (Classic) or centered inside it (Compact).
--- Called once per slot at Init - after that, ConfigureSlot() just repaints/rebinds it.
+-- Builds one slot button: a clickable area, rendered as a Compact X, with the
+-- node-count label centered inside it. Called once per slot at Init - after
+-- that, ConfigureSlot() just repaints/rebinds it.
 local function CreateSlot(parent)
     local slot = CreateFrame("Button", nil, parent)
-    slot:SetSize(SLOT_SIZE, SLOT_SIZE)
-
-    -- The rune-X icon: two complete baked variants (idle = transparent
-    -- interior, active = interior pre-filled solid yellow) instead of
-    -- layering a separate tintable mask - simpler, and avoids any
-    -- layering/z-order fragility. ConfigureSlot just swaps which one
-    -- SetTexture points at and resizes it to match the current layout.
-    -- Classic-only: soft glow behind the rune icon. Its own texture, created
-    -- here directly - not shared with or read from MarkerRenderer/map pins.
-    local glowTex = slot:CreateTexture(nil, "BACKGROUND")
-    glowTex:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
-    glowTex:Hide()
-    slot.glowTex = glowTex
-
-    local runeXTest = slot:CreateTexture(nil, "ARTWORK")
-    runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Test")
-    runeXTest:SetPoint("CENTER", slot, "CENTER", 0, 0)
-    slot.runeXTest = runeXTest
+    slot:SetSize(COMPACT_SLOT_SIZE, COMPACT_SLOT_SIZE)
 
     local countText = slot:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     countText:SetTextColor(1, 1, 1, 1)
@@ -290,10 +247,10 @@ local COMPACT_COLORS = {
 local COMPACT_DISABLED_COLOR = { 0.4, 0.4, 0.4 }
 
 -- The original muted red/green/blue, from before Compact's line color became
--- bright neon - used ONLY as the active-route glow now, never as the line
--- itself. Confirmed 2026-09-02: using the same bright color for both would
--- just wash the line out instead of standing apart from it.
-local COMPACT_CLASSIC_COLORS = {
+-- bright neon - used ONLY as the active-route glow, never as the line itself.
+-- Confirmed 2026-09-02: using the same bright color for both would just wash
+-- the line out instead of standing apart from it.
+local GLOW_COLORS = {
     mine = { 0.85, 0.2, 0.2 },
     herb = { 0.15, 0.85, 0.25 },
     lumber = { 0.15, 0.3, 0.75 },
@@ -336,9 +293,9 @@ end
 
 -- Draws the Compact X onto `slot` - the line itself is always solid color,
 -- full opacity, no glow. isTarget (the active route target) adds a soft
--- glow behind it in classicColor (the muted original palette), not the
--- line's own bright color.
-local function DrawCompactX(slot, color, size, thickness, isTarget, classicColor)
+-- glow behind it in glowColor (the muted original palette), not the line's
+-- own bright color.
+local function DrawCompactX(slot, color, size, thickness, isTarget, glowColor)
     EnsureCompactXParts(slot)
     local half = size / 2
     local n = #COMPACT_X_POINTS
@@ -347,87 +304,42 @@ local function DrawCompactX(slot, color, size, thickness, isTarget, classicColor
         PlaceCompactSegment(slot, slot.compactSeg[i],
             p1[1] * half, p1[2] * half, p2[1] * half, p2[2] * half, thickness, color)
     end
-    if isTarget and classicColor then
+    if isTarget and glowColor then
         local glowSize = size * 2.2
         slot.compactGlow:ClearAllPoints()
         slot.compactGlow:SetSize(glowSize, glowSize)
         slot.compactGlow:SetPoint("CENTER", slot, "CENTER", 0, 0)
-        slot.compactGlow:SetVertexColor(classicColor[1], classicColor[2], classicColor[3], 0.8)
+        slot.compactGlow:SetVertexColor(glowColor[1], glowColor[2], glowColor[3], 0.8)
         slot.compactGlow:Show()
     else
         slot.compactGlow:Hide()
     end
 end
 
--- Repaints a slot for a given node type ("mine"/"herb"/"lumber"), or nil for the
--- disabled "no professions known" placeholder. centered = true (Compact) draws
--- the self-contained thin X above, with the count centered inside it.
--- centered = false (Classic) keeps the original baked rune-icon texture with
--- the count below it.
-local function ConfigureSlot(slot, nodeType, pinSize, centered)
+-- Repaints a slot for a given node type ("mine"/"herb"/"lumber"), or nil for
+-- the disabled "no professions known" placeholder - the thin X above, with
+-- the count centered inside it.
+local function ConfigureSlot(slot, nodeType, pinSize)
     slot.nodeType = nodeType
+    slot:SetSize(pinSize + COMPACT_HIT_PADDING, pinSize + COMPACT_HIT_PADDING)
 
-    -- Compact's hit area sits close to the drawn X (COMPACT_HIT_PADDING);
-    -- Classic keeps its original larger +10 padding, unchanged.
-    local hitPadding = centered and COMPACT_HIT_PADDING or 10
-    slot:SetSize(pinSize + hitPadding, pinSize + hitPadding)
-
-    if centered then
-        if slot.runeXTest then slot.runeXTest:Hide() end
-        if slot.glowTex then slot.glowTex:Hide() end
-        local color = nodeType and (COMPACT_COLORS[nodeType] or COMPACT_COLORS.herb) or COMPACT_DISABLED_COLOR
-        local classicColor = nodeType and COMPACT_CLASSIC_COLORS[nodeType]
-        -- Fixed thin thickness, not scaled up with size - at the shape's
-        -- narrow waist, a thickness that scales with pinSize touches itself
-        -- and merges into a solid blob instead of staying a hollow outline.
-        local thickness = 1.5
-        DrawCompactX(slot, color, pinSize, thickness, nodeType and IsTypeOn(nodeType), classicColor)
-    else
-        if slot.compactSeg then
-            for _, tex in ipairs(slot.compactSeg) do tex:Hide() end
-        end
-        if slot.compactGlow then slot.compactGlow:Hide() end
-
-        local texSize = pinSize * RUNE_TEX_SCALE
-        if slot.runeXTest then
-            slot.runeXTest:SetSize(texSize, texSize)
-            if slot.glowTex then
-                local glowColor = COMPACT_COLORS[nodeType] or COMPACT_COLORS.mine
-                slot.glowTex:ClearAllPoints()
-                slot.glowTex:SetSize(texSize * 1.6, texSize * 1.6)
-                slot.glowTex:SetPoint("CENTER", slot.runeXTest, "CENTER", 0, 0)
-                slot.glowTex:SetVertexColor(glowColor[1], glowColor[2], glowColor[3], 0.8)
-                slot.glowTex:Show()
-            end
-            -- Active-state: swap to the pre-baked yellow-interior icon when this
-            -- profession's route is the one currently running, back to the
-            -- transparent-interior icon otherwise.
-            if nodeType and IsTypeOn(nodeType) then
-                slot.runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Active_Test")
-            else
-                slot.runeXTest:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RuneX_Test")
-            end
-            slot.runeXTest:Show()
-        end
-    end
+    local color = nodeType and (COMPACT_COLORS[nodeType] or COMPACT_COLORS.herb) or COMPACT_DISABLED_COLOR
+    local glowColor = nodeType and GLOW_COLORS[nodeType]
+    -- Fixed thin thickness, not scaled up with size - at the shape's narrow
+    -- waist, a thickness that scales with pinSize touches itself and merges
+    -- into a solid blob instead of staying a hollow outline.
+    local thickness = 1.5
+    DrawCompactX(slot, color, pinSize, thickness, nodeType and IsTypeOn(nodeType), glowColor)
 
     slot.countText:ClearAllPoints()
-    if centered then
-        slot.countText:SetJustifyH("CENTER")
-        -- Nudged slightly right - it was reading consistently left of center.
-        slot.countText:SetPoint("CENTER", slot, "CENTER", 1.5, 0)
-        local font = slot.countText:GetFont()
-        slot.countText:SetFont(font, math.max(9, math.floor(pinSize * 0.42)), "OUTLINE")
-        -- The 1.5px drop shadow set below (for the Classic below-icon label)
-        -- visibly drags the digit off its true centered anchor at this small
-        -- size - zeroed here so it actually sits centered in the X.
-        slot.countText:SetShadowOffset(0, 0)
-    else
-        slot.countText:SetPoint("TOP", slot, "BOTTOM", 0, -2)
-        local font = slot.countText:GetFont()
-        slot.countText:SetFont(font, 16)
-        slot.countText:SetShadowOffset(1.5, -1.5)
-    end
+    slot.countText:SetJustifyH("CENTER")
+    -- Nudged slightly right - it was reading consistently left of center.
+    slot.countText:SetPoint("CENTER", slot, "CENTER", 1.5, 0)
+    local font = slot.countText:GetFont()
+    slot.countText:SetFont(font, math.max(9, math.floor(pinSize * 0.42)), "OUTLINE")
+    -- Zeroed - the 1.5px shadow set on creation visibly drags the digit off
+    -- its true centered anchor at this small size.
+    slot.countText:SetShadowOffset(0, 0)
 
     if nodeType then
         slot.countText:SetText(tostring(GetZoneNodeCount(nodeType)))
@@ -535,40 +447,27 @@ local function CreateDungeonContainer()
     return frame
 end
 
--- The Classic "Gather" button: a boxed button with the shared background image.
-local function CreateClassicGatherButton(parent)
-    local btn = Brand.MakeButton(parent, "Gather", GATHER_BTN_WIDTH, GATHER_BTN_HEIGHT, function()
-        if addonTable.RunTracker and addonTable.RunTracker.StartManualSession then
-            addonTable.RunTracker:StartManualSession()
-        end
-    end)
-    Brand.ApplyBackgroundImage(btn)
-    do
-        local font, size, flags = btn.label:GetFont()
-        btn.label:SetFont(font, size + 2, flags)
-    end
-    return btn
-end
-
--- The Compact "Gather" text link: plain orange text, no box, no background
--- image. Uses Brand.Title() - the same font and shadow as the Gather Tally
--- window's header - instead of a plain fontstring, confirmed 2026-09-02
--- ("use the same title font on the floating helper button, gather tally" -
--- the floating helper is what changes to match Gather Tally, not the other
--- way around).
+-- The "Gather" text link: plain text in the one accent color, no box, no
+-- background image. Uses Brand.Title() - the same font and shadow as the
+-- Gather Tally window's header - instead of a plain fontstring, confirmed
+-- 2026-09-02 ("use the same title font on the floating helper button,
+-- gather tally" - the floating helper is what changes to match Gather
+-- Tally, not the other way around).
 local function CreateCompactGatherButton(parent)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(60, COMPACT_GATHER_HEIGHT)
 
     local label = Brand.Title(btn, "Gather", 15, "CENTER", btn, "CENTER", 0, 0)
-    label:SetTextColor(GATHER_COLOR[1], GATHER_COLOR[2], GATHER_COLOR[3])
+    label:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
     btn.label = label
 
+    -- White on hover, same convention as every other text link in the addon
+    -- (Close, sidebar tabs, etc.).
     btn:SetScript("OnEnter", function()
-        label:SetTextColor(GATHER_COLOR_HOVER[1], GATHER_COLOR_HOVER[2], GATHER_COLOR_HOVER[3], 1)
+        label:SetTextColor(1, 1, 1, 1)
     end)
     btn:SetScript("OnLeave", function()
-        label:SetTextColor(GATHER_COLOR[1], GATHER_COLOR[2], GATHER_COLOR[3], 1)
+        label:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
     end)
     btn:SetScript("OnClick", function()
         if addonTable.RunTracker and addonTable.RunTracker.StartManualSession then
@@ -580,7 +479,7 @@ local function CreateCompactGatherButton(parent)
 end
 
 local function CreateGatherButton(parent)
-    local btn = IsCompactLayout() and CreateCompactGatherButton(parent) or CreateClassicGatherButton(parent)
+    local btn = CreateCompactGatherButton(parent)
     btn:HookScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("|cff00ccffXal's Xpedited Routes|r")
@@ -597,46 +496,11 @@ local function CreateGatherButton(parent)
     return btn
 end
 
--- Rebuilds the Gather button from scratch when the layout setting changes (the
--- two versions are different enough - box vs. text link - that repainting one
--- frame type isn't practical).
-local function RebuildGatherButton()
-    if gatherBtn then
-        gatherBtn:Hide()
-        gatherBtn:SetParent(nil)
-        gatherBtn = nil
-    end
-    gatherBtn = CreateGatherButton(container)
-end
-
--- Positions the Classic layout: lumber centered above the mine/herb pair
--- (triangle), a boxed Gather button spanning underneath both.
-local function LayoutClassic()
-    local slotsWidth = SLOT_SIZE * 2 + SLOT_GAP
-    local rowHeight = SLOT_SIZE + COUNT_LABEL_SPACE + SLOT_GAP
-    local halfOffset = SLOT_SIZE / 2 + SLOT_GAP / 2
-
-    slotLumber:ClearAllPoints()
-    slotLumber:SetPoint("TOP", container, "TOP", 0, 0)
-
-    slotMine:ClearAllPoints()
-    slotMine:SetPoint("TOP", container, "TOP", -halfOffset, -rowHeight)
-
-    slotHerb:ClearAllPoints()
-    slotHerb:SetPoint("TOP", container, "TOP", halfOffset, -rowHeight)
-
-    gatherBtn:ClearAllPoints()
-    gatherBtn:SetPoint("TOP", container, "TOP", 0, -(rowHeight * 2))
-
-    container:SetSize(slotsWidth, (rowHeight * 2) + GATHER_BTN_HEIGHT)
-end
-
--- Positions the Compact layout: Gather text link on top, then the KNOWN
--- profession X's stacked directly under it with no gaps - a profession this
--- character doesn't have just isn't in the stack at all, rather than leaving
--- its old fixed slot empty. Confirmed 2026-09-01 ("it should automatically
--- populate up if there's nothing in the other space") - this replaces the
--- fixed-slot-per-type principle Classic still uses.
+-- Positions Gather text link on top, then the KNOWN profession X's stacked
+-- directly under it with no gaps - a profession this character doesn't have
+-- just isn't in the stack at all, rather than leaving its old fixed slot
+-- empty. Confirmed 2026-09-01 ("it should automatically populate up if
+-- there's nothing in the other space").
 local function LayoutCompact(visibleSlots)
     local iconRowHeight = COMPACT_SLOT_SIZE + COMPACT_ICON_GAP
 
@@ -672,28 +536,21 @@ local function UpdateLayout()
         hasMining, hasHerb, hasLumber = true, true, true
     end
 
-    local compact = IsCompactLayout()
-    local pinSize = compact and COMPACT_PIN_SIZE or BUTTON_PIN_SIZE
-
     local visibleSlots = {}
     if hasMining then
-        ConfigureSlot(slotMine, "mine", pinSize, compact); slotMine:Show()
+        ConfigureSlot(slotMine, "mine", COMPACT_PIN_SIZE); slotMine:Show()
         table.insert(visibleSlots, slotMine)
     else slotMine:Hide() end
     if hasHerb then
-        ConfigureSlot(slotHerb, "herb", pinSize, compact); slotHerb:Show()
+        ConfigureSlot(slotHerb, "herb", COMPACT_PIN_SIZE); slotHerb:Show()
         table.insert(visibleSlots, slotHerb)
     else slotHerb:Hide() end
     if hasLumber then
-        ConfigureSlot(slotLumber, "lumber", pinSize, compact); slotLumber:Show()
+        ConfigureSlot(slotLumber, "lumber", COMPACT_PIN_SIZE); slotLumber:Show()
         table.insert(visibleSlots, slotLumber)
     else slotLumber:Hide() end
 
-    if compact then
-        LayoutCompact(visibleSlots)
-    else
-        LayoutClassic()
-    end
+    LayoutCompact(visibleSlots)
 
     local dungeonVisible = dungeonContainer and DungeonNavAvailable()
         and XalsXRDB and XalsXRDB.dungeonButtonEnabled
@@ -712,7 +569,7 @@ function QuickButton:Init()
     if XalsXRDB and XalsXRDB.showHelperButton == false then return end
 
     container = CreateFrame("Frame", "XalsXRHelperButton", UIParent)
-    container:SetSize(SLOT_SIZE, SLOT_SIZE)
+    container:SetSize(COMPACT_SLOT_SIZE, COMPACT_SLOT_SIZE)
     container:SetMovable(true)
     container:EnableMouse(true)
     container:RegisterForDrag("LeftButton")
@@ -793,18 +650,6 @@ function QuickButton:Toggle()
 end
 
 function QuickButton:Refresh()
-    UpdateLayout()
-end
-
--- Called by the Settings layout picker (Compact/Classic) - the two Gather
--- button styles are different enough to need a full rebuild, not a repaint.
-function QuickButton:ApplyLayout()
-    if not container then return end
-    RebuildGatherButton()
-    if gatherBtn then
-        gatherBtn:HookScript("OnEnter", HandleHoverEnter)
-        gatherBtn:HookScript("OnLeave", HandleHoverLeave)
-    end
     UpdateLayout()
 end
 
