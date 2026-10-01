@@ -101,10 +101,12 @@ end
 -- so this replaces that approach with an explicit allowlist instead - a fur
 -- will never come from an ore node, full stop, regardless of any targeting/
 -- timing ambiguity a GUID check depends on.
--- VERIFY BEFORE RELEASE / EXTEND AS NEEDED: only covers materials confirmed
--- in-game or via Wowhead so far (current Midnight tier). Add a new
--- material's item ID here the first time it's confirmed to actually be a
--- gather drop - same maintenance model as Helpers.lua's KNOWN_GATHER_SPELLS.
+-- RETAIL ONLY - see IsClassicMaterial() below for Classic, which uses item
+-- subclass detection instead of a maintained ID list. VERIFY BEFORE RELEASE
+-- / EXTEND AS NEEDED: only covers materials confirmed in-game or via
+-- Wowhead so far (current Midnight tier). Add a new material's item ID here
+-- the first time it's confirmed to actually be a gather drop - same
+-- maintenance model as Helpers.lua's KNOWN_GATHER_SPELLS.
 local KNOWN_MATERIAL_ITEMS = {
     mine = {
         [237359] = true, -- Refulgent Copper Ore
@@ -128,6 +130,29 @@ local KNOWN_MATERIAL_ITEMS = {
     },
 }
 
+-- Trade Goods class/subclass IDs, confirmed 2026-09-30 against Warcraft Wiki's
+-- item API docs - stable, long-standing Blizzard enum values, not something
+-- that varies by client version.
+local ITEM_CLASS_TRADE_GOODS = 7
+local ITEM_SUBCLASS_METAL_STONE = 7 -- mining ore/stone
+local ITEM_SUBCLASS_HERB = 9
+
+-- Classic-only material check, used INSTEAD of KNOWN_MATERIAL_ITEMS there -
+-- no gather spell exists on Classic (Lumberjacking is Retail-only), so this
+-- only ever needs to cover mine/herb. Unlike retail, Classic's Trade Goods
+-- subclass data still separates "Metal & Stone" from "Herb" from plain
+-- "Trade Goods" properly (retail flattened this, which is why the ID
+-- allowlist above exists at all) - so this works for every ore/herb across
+-- every level tier and expansion without a maintained list, including
+-- material types added to MoP Classic progression realms after this addon
+-- ships.
+local function IsClassicMaterial(gatherType, classID, subClassID)
+    if classID ~= ITEM_CLASS_TRADE_GOODS then return false end
+    if gatherType == "mine" then return subClassID == ITEM_SUBCLASS_METAL_STONE end
+    if gatherType == "herb" then return subClassID == ITEM_SUBCLASS_HERB end
+    return false
+end
+
 -- Pulls the item link and quantity out of a loot chat line and adds it to the
 -- tally. The colored item link is stored verbatim so the window can show it with
 -- its real quality color (and hover for a tooltip) for free. Quantity is read as
@@ -149,17 +174,23 @@ local function AddLoot(msg, gatherType)
         if n then count = n end
     end
 
-    local itemID, _, _, _, icon = GetInstant(link)
+    local itemID, _, _, _, icon, classID, subClassID = GetInstant(link)
 
     -- Reject anything that isn't actually a known material for this gather
     -- type - mob loot (a killed critter, a fish catch) landing in the same
     -- attribution window as a real gather doesn't get counted just because
-    -- of timing. Only rejects when we have a real allowlist for this type
-    -- AND a resolved itemID to check - never blocks something we simply
-    -- couldn't identify.
-    if gatherType and KNOWN_MATERIAL_ITEMS[gatherType] and itemID
-        and not KNOWN_MATERIAL_ITEMS[gatherType][itemID] then
-        return
+    -- of timing. Retail checks the exact-ID allowlist; Classic (Era/MoP)
+    -- checks the item's Trade Goods subclass instead - see IsClassicMaterial
+    -- above for why. Only rejects when we have a resolved itemID to check -
+    -- never blocks something we simply couldn't identify.
+    if gatherType and itemID then
+        if Helpers.IsRetail() then
+            if KNOWN_MATERIAL_ITEMS[gatherType] and not KNOWN_MATERIAL_ITEMS[gatherType][itemID] then
+                return
+            end
+        elseif not IsClassicMaterial(gatherType, classID, subClassID) then
+            return
+        end
     end
 
     local key = itemID or link -- fall back to the link itself if the ID isn't resolvable
