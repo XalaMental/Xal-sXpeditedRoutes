@@ -294,6 +294,12 @@ function Beacon:RunUpdateLoop()
     local distance = nil
     local deltaX, deltaY = nil, nil
     
+    -- Raw normalized-coordinate delta, computed regardless of whether
+    -- HereBeDragons is installed - doubles as the fallback below AND as a
+    -- sanity check on HBD's own answer.
+    local rawDeltaX, rawDeltaY = target.x - px, py - target.y
+    local approxDistance = math.sqrt(rawDeltaX^2 + rawDeltaY^2) * Helpers.FALLBACK_YARDS_PER_UNIT
+
     if Engine.HBD then
         -- Was missing the destination zone ID (GetZoneDistance takes
         -- oZone, oX, oY, dZone, dX, dY - 6 args) - target.x was silently
@@ -306,14 +312,32 @@ function Beacon:RunUpdateLoop()
         -- 2026-08-17 border audit, fixed on request.
         distance, deltaX, deltaY = Engine.HBD:GetZoneDistance(mapID, px, py, mapID, target.x, target.y)
     end
-    
-    -- Fallback if HereBeDragons can't calculate distances - shares the same
-    -- approximation constant Helpers.NodeDistanceYards uses elsewhere in the
-    -- addon, rather than each spot picking its own separate number.
+
+    -- Sanity check confirmed needed 2026-09-30, same root cause as
+    -- PathPlanner.lua's MAX_CLUSTER_COORD_DELTA cap: HBD's per-zone
+    -- calibration can be missing or badly wrong for a given zone (a real
+    -- player report on Classic Era Hardcore showed the arrow pointing
+    -- thousands of yards toward nothing, and distance climbing while
+    -- walking toward the target instead of shrinking - exactly what a bad
+    -- yards-per-unit conversion for that specific zone would produce). If
+    -- HBD's answer and the raw-coordinate approximation disagree by more
+    -- than 3x in either direction, HBD's number for this zone can't be
+    -- trusted - fall back to the approximation instead, which is always at
+    -- least internally consistent (monotonic as you approach the target)
+    -- even if less precise.
+    -- Skipped when approxDistance is tiny (near-arrival) - a 3x ratio check
+    -- is meaningless noise at that range and would reject a genuinely
+    -- correct, small HBD distance for no reason.
+    if distance and approxDistance > 15
+        and (distance > approxDistance * 3 or distance < approxDistance / 3) then
+        distance = nil
+    end
+
+    -- Fallback if HereBeDragons can't calculate distances, or its answer
+    -- failed the sanity check above.
     if not distance or not deltaX or not deltaY then
-        deltaX = target.x - px
-        deltaY = py - target.y
-        distance = math.sqrt(deltaX^2 + deltaY^2) * Helpers.FALLBACK_YARDS_PER_UNIT
+        deltaX, deltaY = rawDeltaX, rawDeltaY
+        distance = approxDistance
     end
     
     -- Arrival check runs regardless of whether the arrow itself is visible -
