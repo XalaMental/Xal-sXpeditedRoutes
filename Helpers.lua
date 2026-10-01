@@ -2,6 +2,16 @@
 local addonName, addonTable = ...
 local Helpers = addonTable.Helpers
 
+-- True only on Retail (WOW_PROJECT_MAINLINE) - false on every Classic flavor
+-- (Era, MoP, etc.). Used to pick between the exact retail item-ID allowlist
+-- (KNOWN_MATERIAL_ITEMS in RunTracker.lua) and Classic's own item-subclass
+-- detection, confirmed 2026-09-30 - Classic's Trade Goods subclass data is
+-- still the original per-type categorization (Herb, Metal & Stone), unlike
+-- retail's flattened subclass, so an ID list isn't needed there.
+function Helpers.IsRetail()
+    return WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+end
+
 -- Safe wrapper to get the spell name (compatible with WoW 11.0+ Midnight and earlier)
 function Helpers.GetSpellName(spellID)
     if not spellID then return "" end
