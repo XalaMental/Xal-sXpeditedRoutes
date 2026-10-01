@@ -20,13 +20,26 @@ PathPlanner.paused = false -- true while outside the route's zone (see CheckZone
 local MAX_TWO_OPT_NODES = 60 -- skip the improvement pass above this size to keep generation snappy
 local MAX_TWO_OPT_PASSES = 8
 
+-- Sanity check confirmed needed 2026-09-30 (same fix applied to Beacon.lua's
+-- live compass distance): HBD's per-zone calibration can be missing or
+-- badly wrong for a given zone, not just close-but-off. Cross-checked
+-- against the raw-coordinate approximation - if HBD's answer disagrees by
+-- more than 3x in either direction, it can't be trusted for this zone, so
+-- fall back to the approximation instead (always at least consistent, even
+-- if less precise). This is the single shared distance function used by
+-- route building (greedy nearest-neighbor, 2-opt) AND clustering - fixing
+-- it here covers all of them, not just the live compass.
 local function DistanceBetween(mapID, ax, ay, bx, by)
+    local dx, dy = bx - ax, by - ay
+    local approxDistance = math.sqrt(dx * dx + dy * dy) * Helpers.FALLBACK_YARDS_PER_UNIT
+
     if Engine.HBD then
         local d = Engine.HBD:GetZoneDistance(mapID, ax, ay, bx, by)
-        if d then return d end
+        if d and (approxDistance <= 15 or (d <= approxDistance * 3 and d >= approxDistance / 3)) then
+            return d
+        end
     end
-    local dx, dy = bx - ax, by - ay
-    return math.sqrt(dx * dx + dy * dy) * Helpers.FALLBACK_YARDS_PER_UNIT
+    return approxDistance
 end
 
 -- Sanity cap on the RAW normalized map-coordinate distance between two
