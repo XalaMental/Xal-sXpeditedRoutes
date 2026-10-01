@@ -1,5 +1,15 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.4.5 - September 30, 2026
+
+---
+
+Had a player on Classic Hardcore flag that things weren't working right - digging in, they were right. I'd missed some major pieces when I pushed Classic support out, and the Gather Tally wasn't counting anything you actually picked up. Should be fixed now. Really appreciate the report - that's exactly the kind of thing that's easy to miss without someone actually playing it.
+
+### 🔧 Fixed
+- **Gather Tally wasn't counting anything on Classic (Era or MoP)** - nodes still recorded fine, but items you picked up never showed up in the tally.
+- **The gathering compass could point the wrong direction, or show a distance that didn't count down right** on certain zones - sometimes pointing far off toward nothing at all.
+
 ## 2.4.0 - September 30, 2026
 
 ---
