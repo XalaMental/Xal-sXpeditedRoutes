@@ -101,8 +101,8 @@ end
 -- so this replaces that approach with an explicit allowlist instead - a fur
 -- will never come from an ore node, full stop, regardless of any targeting/
 -- timing ambiguity a GUID check depends on.
--- RETAIL ONLY - see IsClassicMaterial() below for Classic, which uses item
--- subclass detection instead of a maintained ID list. VERIFY BEFORE RELEASE
+-- RETAIL ONLY, and only a backstop - IsMaterialBySubclass() below is the
+-- main check and covers every expansion's herbs and ore. VERIFY BEFORE RELEASE
 -- / EXTEND AS NEEDED: only covers materials confirmed in-game or via
 -- Wowhead so far (current Midnight tier). Add a new material's item ID here
 -- the first time it's confirmed to actually be a gather drop - same
@@ -124,11 +124,72 @@ local KNOWN_MATERIAL_ITEMS = {
         [236770] = true, -- Sanguithorn
         [236780] = true, -- Nocturnal Lotus (rare bonus proc)
         [236949] = true, -- Mote of Light (bonus proc)
+        -- Dragonflight herb bonus drops, confirmed live 2026-10-07 right after a
+        -- Frigid Hochenblume pick. Neither is filed as an Herb by the game
+        -- (Misc/Other and Tradeskill/Elemental), so the category check
+        -- alone would drop them.
+        [200677] = true, -- Dreambloom Petal
+        [190328] = true, -- Rousing Frost
     },
     lumber = {
         [256963] = true, -- Thalassian Lumber
     },
 }
+
+-- CLASSIC ERA ONLY: Era files every herb and ore under plain Trade Goods
+-- (subclass 0), not Herb/Metal & Stone, so IsMaterialBySubclass() can't see
+-- them there - checked 2026-10-08 against the Era 1.15.9 item database
+-- (Peacebloom, Earthroot, Copper Ore and Tin Ore all subclass 0; on MoP
+-- Classic they're 9 and 7). Every ID and name below was confirmed against that
+-- same database. MoP Classic and Retail don't use this list.
+local ERA_MATERIAL_ITEMS = {
+    mine = {
+        [2770] = true,  -- Copper Ore
+        [2771] = true,  -- Tin Ore
+        [2772] = true,  -- Iron Ore
+        [2775] = true,  -- Silver Ore
+        [2776] = true,  -- Gold Ore
+        [3858] = true,  -- Mithril Ore
+        [7911] = true,  -- Truesilver Ore
+        [10620] = true, -- Thorium Ore
+        [11370] = true, -- Dark Iron Ore
+        [2835] = true,  -- Rough Stone
+        [2836] = true,  -- Coarse Stone
+        [2838] = true,  -- Heavy Stone
+    },
+    herb = {
+        [765] = true,   -- Silverleaf
+        [785] = true,   -- Mageroyal
+        [2447] = true,  -- Peacebloom
+        [2449] = true,  -- Earthroot
+        [2450] = true,  -- Briarthorn
+        [2453] = true,  -- Bruiseweed
+        [3355] = true,  -- Wild Steelbloom
+        [3356] = true,  -- Kingsblood
+        [3357] = true,  -- Liferoot
+        [3358] = true,  -- Khadgar's Whisker
+        [3369] = true,  -- Grave Moss
+        [3818] = true,  -- Fadeleaf
+        [3819] = true,  -- Wintersbite
+        [3820] = true,  -- Stranglekelp
+        [3821] = true,  -- Goldthorn
+        [4625] = true,  -- Firebloom
+        [8831] = true,  -- Purple Lotus
+        [8836] = true,  -- Arthas' Tears
+        [8838] = true,  -- Sungrass
+        [8839] = true,  -- Blindweed
+        [8845] = true,  -- Ghost Mushroom
+        [8846] = true,  -- Gromsblood
+        [13463] = true, -- Dreamfoil
+        [13464] = true, -- Golden Sansam
+        [13465] = true, -- Mountain Silversage
+        [13466] = true, -- Plaguebloom
+        [13467] = true, -- Icecap
+        [13468] = true, -- Black Lotus
+    },
+}
+local IS_CLASSIC_ERA = WOW_PROJECT_ID ~= nil and WOW_PROJECT_CLASSIC ~= nil
+    and WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
 -- Trade Goods class/subclass IDs, confirmed 2026-09-30 against Warcraft Wiki's
 -- item API docs - stable, long-standing Blizzard enum values, not something
@@ -137,16 +198,17 @@ local ITEM_CLASS_TRADE_GOODS = 7
 local ITEM_SUBCLASS_METAL_STONE = 7 -- mining ore/stone
 local ITEM_SUBCLASS_HERB = 9
 
--- Classic-only material check, used INSTEAD of KNOWN_MATERIAL_ITEMS there -
--- no gather spell exists on Classic (Lumberjacking is Retail-only), so this
--- only ever needs to cover mine/herb. Unlike retail, Classic's Trade Goods
--- subclass data still separates "Metal & Stone" from "Herb" from plain
--- "Trade Goods" properly (retail flattened this, which is why the ID
--- allowlist above exists at all) - so this works for every ore/herb across
--- every level tier and expansion without a maintained list, including
--- material types added to MoP Classic progression realms after this addon
--- ships.
-local function IsClassicMaterial(gatherType, classID, subClassID)
+-- Material check by the game's own item category, used on EVERY flavor: the
+-- only check on Classic (Era/MoP), and alongside KNOWN_MATERIAL_ITEMS on
+-- Retail. Only covers mine/herb - Lumberjacking has no such category and is
+-- Retail-only. MoP Classic's Trade Goods subclass data separates "Metal & Stone"
+-- from "Herb" from plain "Trade Goods" properly on MoP Classic, so this works
+-- for every ore/herb there without a maintained list. Classic ERA does not
+-- (see ERA_MATERIAL_ITEMS above).
+-- Retail's subclassing is less trustworthy (that's why the ID allowlist
+-- exists), but as an additional way IN rather than the only one it can only
+-- add coverage, never remove it.
+local function IsMaterialBySubclass(gatherType, classID, subClassID)
     if classID ~= ITEM_CLASS_TRADE_GOODS then return false end
     if gatherType == "mine" then return subClassID == ITEM_SUBCLASS_METAL_STONE end
     if gatherType == "herb" then return subClassID == ITEM_SUBCLASS_HERB end
@@ -179,16 +241,21 @@ local function AddLoot(msg, gatherType)
     -- Reject anything that isn't actually a known material for this gather
     -- type - mob loot (a killed critter, a fish catch) landing in the same
     -- attribution window as a real gather doesn't get counted just because
-    -- of timing. Retail checks the exact-ID allowlist; Classic (Era/MoP)
-    -- checks the item's Trade Goods subclass instead - see IsClassicMaterial
-    -- above for why. Only rejects when we have a resolved itemID to check -
+    -- of timing. Only rejects when we have a resolved itemID to check -
     -- never blocks something we simply couldn't identify.
     if gatherType and itemID then
-        if Helpers.IsRetail() then
-            if KNOWN_MATERIAL_ITEMS[gatherType] and not KNOWN_MATERIAL_ITEMS[gatherType][itemID] then
-                return
-            end
-        elseif not IsClassicMaterial(gatherType, classID, subClassID) then
+        -- An item counts if it's on the exact-ID list (current Midnight tier,
+        -- Retail only) OR the game itself files it as an herb / ore. The
+        -- second check is what lets older-expansion materials (Dragonflight's
+        -- Hochenblume and so on) count on Retail without a list that needs a
+        -- new entry every expansion; the list stays as a backstop for any
+        -- item the game files under a generic Trade Goods subclass.
+        local onList = Helpers.IsRetail() and KNOWN_MATERIAL_ITEMS[gatherType]
+            and KNOWN_MATERIAL_ITEMS[gatherType][itemID]
+        local onEraList = IS_CLASSIC_ERA and ERA_MATERIAL_ITEMS[gatherType]
+            and ERA_MATERIAL_ITEMS[gatherType][itemID]
+        if not onList and not onEraList
+            and not IsMaterialBySubclass(gatherType, classID, subClassID) then
             return
         end
     end
