@@ -300,7 +300,20 @@ function Beacon:RunUpdateLoop()
     local rawDeltaX, rawDeltaY = target.x - px, py - target.y
     local approxDistance = math.sqrt(rawDeltaX^2 + rawDeltaY^2) * Helpers.FALLBACK_YARDS_PER_UNIT
 
-    if Engine.HBD then
+    -- Preferred source (2026-10-23): Blizzard's own map-to-world conversion,
+    -- which no other addon's bundled library can interfere with. Already in
+    -- real yards and built from the same coordinates as the raw delta, so the
+    -- HereBeDragons sanity checks below don't apply to it.
+    local fromBlizzard = false
+    do
+        local zd, zdx, zdy = Helpers.ZoneVector(mapID, px, py, target.x, target.y)
+        if zd then
+            distance, deltaX, deltaY = zd, zdx, zdy
+            fromBlizzard = true
+        end
+    end
+
+    if not fromBlizzard and Engine.HBD then
         -- Was missing the destination zone ID (GetZoneDistance takes
         -- oZone, oX, oY, dZone, dX, dY - 6 args) - target.x was silently
         -- sliding into the dZone slot instead. Always fell through to the
@@ -328,9 +341,27 @@ function Beacon:RunUpdateLoop()
     -- Skipped when approxDistance is tiny (near-arrival) - a 3x ratio check
     -- is meaningless noise at that range and would reject a genuinely
     -- correct, small HBD distance for no reason.
-    if distance and approxDistance > 15
+    if not fromBlizzard and distance and approxDistance > 15
         and (distance > approxDistance * 3 or distance < approxDistance / 3) then
         distance = nil
+    end
+
+    -- Direction check, same idea (2026-10-11): a second Classic player report
+    -- showed the arrow pointing the wrong way, not just a bad distance, with
+    -- any of several unrelated addons loaded (all of which bundle their own
+    -- copy of HereBeDragons, so whichever copy loads can be a stale one with
+    -- bad Classic zone data). A wrong-way vector can still have a believable
+    -- length, so the distance test alone misses it. Compare HBD's heading
+    -- against the raw-coordinate heading: zones aren't square so the two
+    -- never match exactly (a few tens of degrees at worst), but past ~72
+    -- degrees apart HBD's answer is garbage.
+    if not fromBlizzard and distance and deltaX and deltaY and approxDistance > 15 then
+        local hbdLen = math.sqrt(deltaX^2 + deltaY^2)
+        local rawLen = math.sqrt(rawDeltaX^2 + rawDeltaY^2)
+        if hbdLen > 0 and rawLen > 0
+            and (deltaX * rawDeltaX + deltaY * rawDeltaY) / (hbdLen * rawLen) < 0.3 then
+            distance = nil
+        end
     end
 
     -- Fallback if HereBeDragons can't calculate distances, or its answer
