@@ -10,8 +10,8 @@ section that applies to the part you're interested in.
 Applies to all `.lua`, `.toc`, `.xml` files, and every custom asset inside the
 `Textures/` folder (addon icon, compass arrow art, glow texture, and any
 other custom artwork bundled with this addon) — everything in this
-repository **except** the third-party libraries in `libs/` (see section 2
-below).
+repository **except** the bundled fonts (section 2) and the third-party
+libraries in `libs/` (section 3).
 
 Copyright (c) 2026 XalaMental. All rights reserved.
 
@@ -21,7 +21,17 @@ the author. If you'd like to use, adapt, or build on any of it, ask first.
 
 ---
 
-## 2. Bundled Third-Party Libraries
+## 2. Bundled Fonts
+
+`Fonts/Cinzel-Bold.ttf` (Cinzel Bold), `Fonts/Inter-Regular.ttf` (Inter
+Regular), and `Fonts/Inter-SemiBold.ttf` (Inter SemiBold) are licensed under
+the SIL Open Font License, not the terms above - see `Fonts/Cinzel-LICENSE.txt`
+and `Fonts/Inter-LICENSE.txt` for the full text. They're redistributed here
+exactly as their own licenses permit.
+
+---
+
+## 3. Bundled Third-Party Libraries
 
 This addon bundles the following libraries, embedded under their own
 original terms (not the terms above, since this project didn't write them):
@@ -51,6 +61,9 @@ library's own file for anything it declares itself.
 |---|---|---|
 | Addon code (`.lua`, `.toc`, `.xml`) | All Rights Reserved | No — ask the author first |
 | Custom art (`Textures/`) | All Rights Reserved | No — ask the author first |
+| `Fonts/Cinzel-Bold.ttf` | SIL Open Font License | Yes — under the OFL's terms |
+| `Fonts/Inter-Regular.ttf` | SIL Open Font License | Yes — under the OFL's terms |
+| `Fonts/Inter-SemiBold.ttf` | SIL Open Font License | Yes — under the OFL's terms |
 | `libs/LibStub/` | Public Domain | Yes — no restrictions |
 | `libs/CallbackHandler/` | BSD (2-clause) | Yes — under BSD's terms |
 | `libs/LibDataBroker/` | Unrestricted (standard convention, unstated in-file) | Yes |
