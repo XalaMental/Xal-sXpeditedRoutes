@@ -256,7 +256,57 @@ function Helpers.IsNodeRecentlyGathered(node, freshnessMinutes)
     return (time() - node.lastGathered) < (freshnessMinutes * 60)
 end
 
+-- Distance and heading between two points on the SAME map, computed from
+-- Blizzard's own map-to-world conversion instead of HereBeDragons (added
+-- 2026-10-23). Another addon bundling a stale HereBeDragons copy was giving
+-- Classic players a wrong-way arrow and a wrong distance, and nothing in this
+-- addon can control which copy loads. The zone's real size in yards is
+-- measured by converting a few map points to world coordinates (the same map
+-- is flat and north-up, so size is all that's needed - no axis conventions to
+-- get wrong). Returns distance, deltaX (east positive), deltaY (north
+-- positive), or nil when the client can't supply it, in which case callers
+-- fall back to HereBeDragons and then to the raw-coordinate approximation.
+local zoneSizeCache = {}
+
+local function MeasureZoneYards(mapID)
+    if not (C_Map and C_Map.GetWorldPosFromMapPos and CreateVector2D) then return nil end
+    local function worldPoint(x, y)
+        local _, pos = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(x, y))
+        if not pos then return nil, nil end
+        return pos:GetXY()
+    end
+    local ok, w, h = pcall(function()
+        local x1, y1 = worldPoint(0.4, 0.5)
+        local x2, y2 = worldPoint(0.6, 0.5)
+        local x3, y3 = worldPoint(0.5, 0.4)
+        local x4, y4 = worldPoint(0.5, 0.6)
+        if not (x1 and x2 and x3 and x4) then return nil end
+        return math.sqrt((x2 - x1)^2 + (y2 - y1)^2) / 0.2,
+               math.sqrt((x4 - x3)^2 + (y4 - y3)^2) / 0.2
+    end)
+    -- A real zone is somewhere in the hundreds-to-thousands of yards across;
+    -- anything outside this range is a bad conversion, not a zone.
+    if ok and w and h and w > 300 and w < 30000 and h > 300 and h < 30000 then
+        return { w = w, h = h }
+    end
+    return nil
+end
+
+function Helpers.ZoneVector(mapID, ax, ay, bx, by)
+    if not (mapID and ax and ay and bx and by) then return nil end
+    local size = zoneSizeCache[mapID]
+    if size == nil then
+        size = MeasureZoneYards(mapID) or false
+        zoneSizeCache[mapID] = size
+    end
+    if not size then return nil end
+    local dx, dy = (bx - ax) * size.w, (ay - by) * size.h
+    return math.sqrt(dx * dx + dy * dy), dx, dy
+end
+
 function Helpers.NodeDistanceYards(Core, mapID, x1, y1, x2, y2)
+    local zd = Helpers.ZoneVector(mapID, x1, y1, x2, y2)
+    if zd then return zd end
     if Core.HBD then
         local dist = Core.HBD:GetZoneDistance(mapID, x1, y1, x2, y2)
         if dist then return dist end
@@ -286,6 +336,14 @@ local KNOWN_GATHER_SPELLS = {
     [32606] = "mine", [471013] = "mine", -- 471013: Midnight mining. 372610 ruled out (mount-related)
     [471009] = "herb", -- 471009: Midnight herbalism gather spell
     [1239682] = "lumber", -- Woodchopping - confirmed live 2026-08-17 via a UNIT_SPELLCAST_SUCCEEDED watcher, printed right before the Thalassian Lumber loot message, twice
+    [366252] = "herb", -- Herb Gathering, Dragonflight - confirmed live 2026-10-07 from a live spell trace: seen right before the Hochenblume loot (item 191460, Herb subclass)
+    -- The War Within mining, from GatherMate2's own list of gather spell IDs
+    -- (plain facts, not code). Resolves to the name "Khaz Algar Mining" on
+    -- this client (seen in a live spell trace 2026-10-07) but not yet confirmed
+    -- by actually mining. GatherMate2 also lists 195122, but on this client
+    -- that ID is named "Typhoon" (a druid spell) - it would have saved a fake
+    -- mining node every time a druid cast it, so it is deliberately NOT here.
+    [423341] = "mine",
 
     -- Classic mining rank ladder: Apprentice -> Zen Master
     [2575] = "mine",  -- Apprentice
@@ -308,17 +366,64 @@ local KNOWN_GATHER_SPELLS = {
     [110413] = "herb", -- Zen Master (MoP)
 }
 
--- Spell ID is the only thing checked here - deliberately not falling back to
--- matching on the spell's name. A name-substring match sounds harmless but
--- isn't: something as generic as "gather" appearing anywhere in an unrelated
--- spell/buff/proc name would misfire as a gather action every time it
--- triggered, which in practice meant chat getting spammed with "already
--- recorded" every time some unrelated ability fired near a node you'd already
--- picked up. The known spell IDs above are stable and precise; if a real
--- gathering spell turns out to be missing, add its exact ID rather than a
--- name pattern.
+-- Known IDs resolve instantly. For any OTHER spell ID, the spell's exact
+-- localized name is compared against the names of the known gather spells
+-- above - the same technique GatherMate2 uses (resolve a known ID to its
+-- localized name once, then match casts by name), added 2026-10-07 after a
+-- player leveling through Dragonflight found Dragon Isles herbs weren't
+-- recorded: every expansion's herb gather is a DIFFERENT spell ID, so an ID
+-- list alone only ever covers the current expansion. Exact name equality
+-- against names taken from known gather spells is deliberately NOT the old
+-- substring match that was removed earlier (something as generic as "gather"
+-- appearing anywhere in an unrelated spell/buff/proc name misfired as a
+-- gather and spammed "already recorded") - a name only counts if it is
+-- exactly the name of a spell already known to be a gather cast. Names that
+-- would map to two different gather types are dropped as ambiguous.
+-- Names are resolved incrementally, not once: spell data isn't always
+-- available the instant the first spell is cast after login, and an earlier
+-- version that built this table a single time (and only rebuilt it when
+-- completely empty) never matched the Dragonflight herb cast in a real test
+-- on 2026-10-07 - it very likely locked in a partly-filled table at the
+-- first cast. Now every known ID whose name hasn't resolved yet is retried,
+-- at most once every few seconds, until it does.
+local gatherNames = {}     -- localized spell name -> "mine"/"herb"/"lumber", or false if ambiguous
+local resolvedGatherIDs = {} -- known IDs whose name has been added to gatherNames
+local lastNameRetry = nil
+local NAME_RETRY_SECONDS = 5
+
+local function ResolveGatherNames()
+    for id, kind in pairs(KNOWN_GATHER_SPELLS) do
+        if not resolvedGatherIDs[id] then
+            local name = Helpers.GetSpellName(id)
+            if name and name ~= "" then
+                resolvedGatherIDs[id] = true
+                local existing = gatherNames[name]
+                if existing == nil then
+                    gatherNames[name] = kind
+                elseif existing ~= kind then
+                    gatherNames[name] = false
+                end
+            end
+        end
+    end
+end
+
 function Helpers.DetectGatherType(spellID)
-    return KNOWN_GATHER_SPELLS[spellID]
+    local exact = KNOWN_GATHER_SPELLS[spellID]
+    if exact then return exact end
+    if not spellID then return nil end
+
+    local now = GetTime()
+    if not lastNameRetry or now - lastNameRetry >= NAME_RETRY_SECONDS then
+        lastNameRetry = now
+        ResolveGatherNames()
+    end
+
+    local name = Helpers.GetSpellName(spellID)
+    if name and name ~= "" then
+        return gatherNames[name] or nil
+    end
+    return nil
 end
 
 -- Searches `nodeList` for an entry within `thresholdYards` of (x, y), returning
