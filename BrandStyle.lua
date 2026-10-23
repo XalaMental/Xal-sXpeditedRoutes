@@ -72,21 +72,22 @@ function Brand.FS(parent, text, fontPath, size, flags, r, g, b)
 end
 
 -- ── Fonts ─────────────────────────────────────────────────────
--- Simply Sans Bold (titles) and Fira Sans Medium (body text) - bundled here
--- the same way Compendium/Quest Compass already bundle them, sourced from
--- the shared Assets\Fonts library (see reference_shared_fonts_folder memory)
--- rather than guessed at or copied ad-hoc. Replaces Morpheus, which every
--- other addon in the suite had already moved off of.
-Brand.TITLE_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\CustomFont.ttf"
-Brand.BODY_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\FiraSans-Medium.ttf"
+-- Cinzel Bold (titles) and Inter Regular (body text), both SIL OFL and
+-- bundled in Fonts/. Current family-wide pairing, confirmed 2026-09-19 and
+-- applied to this addon 2026-10-07 - replaces the Simply Sans Bold / Fira
+-- Sans Medium pairing it shipped with before. Inter SemiBold is bundled too
+-- for a heavier body weight where one's wanted.
+Brand.TITLE_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\Cinzel-Bold.ttf"
+Brand.BODY_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\Inter-Regular.ttf"
+Brand.BODY_SEMIBOLD_FONT_PATH = "Interface\\AddOns\\XalsXpeditedRoutes\\Fonts\\Inter-SemiBold.ttf"
 
--- ── Title()  ─ the branded title treatment (Simply Sans Bold), with its
+-- ── Title()  ─ the branded title treatment (Cinzel Bold), with its
 -- drop-shadow layer, in one call. Returns the visible (front) fontstring.
 function Brand.Title(parent, text, size, anchorPoint, relTo, relPoint, x, y)
     -- Shadow offset/color bumped 2026-09-20 (family-wide) - the original
     -- (+2,-2) near-black read as barely-there once seen live at real size.
     local shadow = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE", 0, 0, 0)
-    PixelUtil.SetPoint(shadow, anchorPoint, relTo, relPoint, x + 4, y - 4)
+    PixelUtil.SetPoint(shadow, anchorPoint, relTo, relPoint, x + 2, y - 2)
     shadow:SetJustifyH("CENTER")
 
     local title = Brand.FS(parent, text, Brand.TITLE_FONT_PATH, size, "OUTLINE",
@@ -96,7 +97,7 @@ function Brand.Title(parent, text, size, anchorPoint, relTo, relPoint, x, y)
     return title
 end
 
--- ── BodyFS()  ─ a Fira Sans Medium fontstring for readable body text (item
+-- ── BodyFS()  ─ an Inter fontstring for readable body text (item
 -- names, list labels, etc.) - the fixed body-text counterpart to Title()
 -- above, same idea as Compendium's BrandStyle.lua splash treatment (a fixed
 -- branded look, not the separately player-customizable font picker Core.lua
@@ -162,6 +163,81 @@ function Brand.MakeButton(parent, text, w, h, onClick)
     end
 
     return btn
+end
+
+-- ── MakeCheckbox()  ─ hand-drawn checkbox, the family standard (ported from
+-- Warchest's BrandStyle.lua 2026-10-07). Blizzard's native
+-- UICheckButtonTemplate was found rendering with its bottom edge missing
+-- entirely, so this uses the same pixel-snapped 4-texture border technique
+-- as Brand.DrawBorder instead. Usage differs from a native CheckButton:
+-- set `cb.OnToggle = function(self) ... end` instead of
+-- `cb:SetScript("OnClick", ...)`, since OnClick is used internally to flip
+-- the checked state before your handler runs - GetChecked() inside OnToggle
+-- already reflects the NEW state, matching native behavior. No built-in
+-- label - build a separate FontString and anchor it to the right.
+function Brand.MakeCheckbox(parent, size)
+    size = size or 22
+    local cb = CreateFrame("Button", nil, parent)
+    PixelUtil.SetSize(cb, size, size)
+
+    local bg = cb:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
+
+    local thick = Brand.LINE_THICKNESS
+    local r, g, b = Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3]
+
+    local borderTop = cb:CreateTexture(nil, "ARTWORK")
+    PixelUtil.SetPoint(borderTop, "TOPLEFT", cb, "TOPLEFT", 0, 0)
+    PixelUtil.SetPoint(borderTop, "TOPRIGHT", cb, "TOPRIGHT", 0, 0)
+    PixelUtil.SetHeight(borderTop, thick)
+    borderTop:SetColorTexture(r, g, b, 1)
+
+    local borderBottom = cb:CreateTexture(nil, "ARTWORK")
+    PixelUtil.SetPoint(borderBottom, "BOTTOMLEFT", cb, "BOTTOMLEFT", 0, 0)
+    PixelUtil.SetPoint(borderBottom, "BOTTOMRIGHT", cb, "BOTTOMRIGHT", 0, 0)
+    PixelUtil.SetHeight(borderBottom, thick)
+    borderBottom:SetColorTexture(r, g, b, 1)
+
+    local borderLeft = cb:CreateTexture(nil, "ARTWORK")
+    PixelUtil.SetPoint(borderLeft, "TOPLEFT", cb, "TOPLEFT", 0, 0)
+    PixelUtil.SetPoint(borderLeft, "BOTTOMLEFT", cb, "BOTTOMLEFT", 0, 0)
+    PixelUtil.SetWidth(borderLeft, thick)
+    borderLeft:SetColorTexture(r, g, b, 1)
+
+    local borderRight = cb:CreateTexture(nil, "ARTWORK")
+    PixelUtil.SetPoint(borderRight, "TOPRIGHT", cb, "TOPRIGHT", 0, 0)
+    PixelUtil.SetPoint(borderRight, "BOTTOMRIGHT", cb, "BOTTOMRIGHT", 0, 0)
+    PixelUtil.SetWidth(borderRight, thick)
+    borderRight:SetColorTexture(r, g, b, 1)
+
+    -- Texture, not a FontString "X" - a font glyph's CENTER anchor centers
+    -- against the font's full line-height box, not the glyph's actual ink.
+    -- Blizzard's own checkmark texture centers exactly where told.
+    local check = cb:CreateTexture(nil, "OVERLAY")
+    check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    check:SetVertexColor(r, g, b, 1)
+    PixelUtil.SetSize(check, size - 4, size - 4)
+    check:SetPoint("CENTER", cb, "CENTER", 0, 0)
+    check:Hide()
+
+    cb.checked = false
+    function cb:SetChecked(state)
+        self.checked = state and true or false
+        if self.checked then check:Show() else check:Hide() end
+    end
+    function cb:GetChecked()
+        return self.checked
+    end
+
+    cb:SetScript("OnEnter", function() bg:SetColorTexture(0.18, 0.18, 0.18, 0.75) end)
+    cb:SetScript("OnLeave", function() bg:SetColorTexture(0.1, 0.1, 0.1, 0.6) end)
+    cb:SetScript("OnClick", function(self)
+        self:SetChecked(not self.checked)
+        if self.OnToggle then self.OnToggle(self) end
+    end)
+
+    return cb
 end
 
 -- ── DrawBorder()  ─ single clean accent-color line around a frame.
