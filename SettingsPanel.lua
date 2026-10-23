@@ -107,14 +107,6 @@ StaticPopupDialogs["XALXR_RESET_FLOATING_DEFAULTS"] = {
     preferredIndex = 3,
 }
 
-local function CreateHeader(parentPanel, anchorTo, text, yOffset)
-    local header = parentPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yOffset or -20)
-    header:SetText(text)
-    header:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
-    return header
-end
-
 -- Thin positioning wrapper around Brand.MakeButton (the ONE confirmed
 -- button standard for this addon, 2026-08-09) - kept as its own function
 -- only because every call site anchors via (anchorTo, xOffset, yOffset)
@@ -161,21 +153,141 @@ local function CreateDefaultsButton(parentPanel, popupName)
     return btn
 end
 
--- Readability font-size bump, confirmed 2026-08-09 as the addon-wide
--- standard after testing on the Map Markers panel alone first - two tiers,
--- dim description text and brighter label/checkbox/slider text, scaled up
--- proportionately from Blizzard's default ~10px template size. Every panel
--- in this file uses these two constants so the whole settings UI reads
--- consistently, not just the one panel it was piloted on.
+-- Font sizes, same two tiers used across every panel in this file: dim
+-- description text and brighter label text.
 local PANEL_DESC_FONT_SIZE = 13
 local PANEL_LABEL_FONT_SIZE = 14
-local function BumpFont(fs, size)
-    local font, _, flags = fs:GetFont()
-    fs:SetFont(font, size, flags)
+local RIGHT_MARGIN = 16
+local DESC_GRAY = 0.62
+
+--------------------------------------------------------------------------------
+-- Shared page-building helpers - the family settings layout (matches Xal's
+-- Warchest's SettingsPanel.lua, the current reference): a section header,
+-- then a hand-drawn checkbox with a short label, then a dim description,
+-- with a divider between groups. Each helper returns the last element it
+-- built so the next one can anchor to it.
+--------------------------------------------------------------------------------
+local function PageTitle(panel, text)
+    local fs = Brand.FS(panel, text, Brand.TITLE_FONT_PATH, 22, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    fs:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+local function AddNote(panel, anchorTo, yGap, text)
+    local fs = Brand.FS(panel, text, Brand.BODY_FONT_PATH, PANEL_DESC_FONT_SIZE, nil,
+        DESC_GRAY, DESC_GRAY, DESC_GRAY)
+    fs:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
+    fs:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
+    fs:SetJustifyH("LEFT")
+    fs:SetWordWrap(true)
+    return fs
+end
+
+local function AddSection(panel, anchorTo, text, yGap)
+    local fs = Brand.FS(panel, text, Brand.TITLE_FONT_PATH, 15, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    fs:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap or -14)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+local function AddDivider(panel, anchorTo, yGap)
+    local div = Brand.DrawDivider(panel, 0, 0, 1)
+    div:ClearAllPoints()
+    div:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap or -14)
+    div:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
+    return div
+end
+
+-- A checkbox with a short label beside it and a dim description under it.
+-- onToggle runs with the NEW state already applied (self:GetChecked()).
+-- Returns the description (anchor for whatever comes next) and the checkbox.
+local function AddToggle(panel, anchorTo, yGap, label, description, onToggle)
+    local cb = Brand.MakeCheckbox(panel, 20)
+    cb:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
+    cb.OnToggle = onToggle
+
+    local text = Brand.FS(panel, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
+    text:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
+    text:SetJustifyH("LEFT")
+    text:SetWordWrap(true)
+
+    local desc = AddNote(panel, cb, -4, description)
+    return desc, cb
+end
+
+-- A label above a native slider (Blizzard's OptionsSliderTemplate is the one
+-- widget still used native). formatFn turns the snapped value into the text
+-- shown above the track. slider:Sync(value) sets the value AND the text, for
+-- the panel's Refresh function. Needs a real global frame name - the
+-- template's Low/High/Text sub-regions are only reachable by name.
+local function AddSlider(panel, anchorTo, yGap, name, label, min, max, step, formatFn, onChange)
+    local lbl = Brand.FS(panel, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    lbl:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
+    lbl:SetJustifyH("LEFT")
+
+    local slider = CreateFrame("Slider", name, panel, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 4, -22)
+    slider:SetWidth(220)
+    slider:SetMinMaxValues(min, max)
+    slider:SetValueStep(step)
+    slider:SetObeyStepOnDrag(true)
+
+    _G[name .. "Low"]:SetText("")
+    _G[name .. "High"]:SetText("")
+    local valueText = _G[name .. "Text"]
+    valueText:SetFont(Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, "")
+    -- Blizzard's template hardcodes this text gold - doesn't read Brand.*.
+    valueText:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+
+    slider:SetScript("OnValueChanged", function(_, value)
+        value = math.floor(value / step + 0.5) * step
+        valueText:SetText(formatFn(value))
+        onChange(value)
+    end)
+
+    function slider:Sync(value)
+        self:SetValue(value)
+        valueText:SetText(formatFn(value))
+    end
+
+    return slider, lbl
+end
+
+-- A grid of pick-one buttons (marker style, arrow style). onPick(key) runs on
+-- click and every button's selected look is updated to match. Returns the
+-- buttons by key and a spacer frame to anchor the next element to.
+local function AddPickerGrid(panel, anchorTo, yGap, keys, labels, cols, btnW, btnH, onPick)
+    local gapX, gapY = 8, 6
+    local rows = math.ceil(#keys / cols)
+    local grid = CreateFrame("Frame", nil, panel)
+    grid:SetSize(1, rows * (btnH + gapY))
+    grid:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
+
+    local buttons = {}
+    for i, key in ipairs(keys) do
+        local col = (i - 1) % cols
+        local row = math.floor((i - 1) / cols)
+        local btn = Brand.MakeButton(grid, labels[key], btnW, btnH, function()
+            onPick(key)
+            for otherKey, otherBtn in pairs(buttons) do
+                otherBtn:SetSelected(otherKey == key)
+            end
+        end)
+        PixelUtil.SetPoint(btn, "TOPLEFT", grid, "TOPLEFT", col * (btnW + gapX), -row * (btnH + gapY))
+        buttons[key] = btn
+    end
+    return buttons, grid
 end
 
 --------------------------------------------------------------------------------
--- General (root) panel: visibility toggles, helper button, auto-advance distance
+-- General (root) panel: Lumberjacking, minimap button, auto-advance distance,
+-- keybinds, Gather Tally window
 --------------------------------------------------------------------------------
 local function BuildRootPanel()
     rootPanel = CreateFrame("Frame")
@@ -186,129 +298,83 @@ local function BuildRootPanel()
     logo:SetSize(48, 48)
     logo:SetPoint("TOPLEFT", 16, -14)
 
-    local title = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    local title = Brand.FS(rootPanel, "Xal's Xpedited Routes", Brand.TITLE_FONT_PATH, 22, nil,
+        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
     title:SetPoint("LEFT", logo, "RIGHT", 10, 0)
-    title:SetText("Xal's Xpedited Routes")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    title:SetJustifyH("LEFT")
 
-    local credit = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(credit, PANEL_DESC_FONT_SIZE)
-    credit:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -10)
-    credit:SetText("See the sub-sections in the list on the left for Map Markers and Database.")
-    credit:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    credit:SetJustifyH("LEFT")
+    local credit = AddNote(rootPanel, logo, -10,
+        "See the sub-sections in the list on the left for Map Markers and Database.")
+    local professionNote = AddNote(rootPanel, credit, -10,
+        "Markers and routes automatically skip node types this character doesn't have the profession to gather - e.g. a pure-Herbalism character won't see Mining nodes another character on your account recorded.")
 
-    local professionNote = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(professionNote, PANEL_DESC_FONT_SIZE)
-    professionNote:SetPoint("TOPLEFT", credit, "BOTTOMLEFT", -2, -18)
-    professionNote:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    professionNote:SetJustifyH("LEFT")
-    professionNote:SetText("Markers and routes automatically skip node types this character doesn't have the profession to gather - e.g. a pure-Herbalism character won't see Mining nodes another character on your account recorded.")
+    local div1 = AddDivider(rootPanel, professionNote, -14)
 
     -- Lumberjacking gets its own on/off toggle, unlike Mining/Herbalism -
     -- those come from actively choosing to level a profession, while
     -- Lumberjacking comes from Player Housing content, so a character could
     -- have the ability without ever wanting to gather wood on purpose.
     -- Defaults on. Confirmed 2026-08-17.
-    local lumberCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
-    lumberCheck:SetPoint("TOPLEFT", professionNote, "BOTTOMLEFT", 2, -10)
-    lumberCheck.Text:SetText("Enable Lumberjacking gathering")
-    BumpFont(lumberCheck.Text, PANEL_LABEL_FONT_SIZE)
-    lumberCheck.Text:SetWordWrap(true)
-    lumberCheck.Text:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    lumberCheck:SetScript("OnClick", function(self)
-        XalsXRDB.lumberEnabled = self:GetChecked() and true or false
-        if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
-        if addonTable.QuickButton.Refresh then addonTable.QuickButton:Refresh() end
-    end)
+    local lumberHeader = AddSection(rootPanel, div1, "Lumberjacking")
+    local lumberDesc, lumberCheck = AddToggle(rootPanel, lumberHeader, -10,
+        "Enable Lumberjacking gathering",
+        "Retail only. Turn this off if you'd rather not see lumber nodes, lumber map pins, or the lumber icon on the floating button.",
+        function(self)
+            XalsXRDB.lumberEnabled = self:GetChecked() and true or false
+            if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
+            if addonTable.QuickButton.Refresh then addonTable.QuickButton:Refresh() end
+        end)
     rootPanel.lumberCheck = lumberCheck
 
-    -- "Show the floating helper button" and its Reset Button Position button
-    -- moved out to the dedicated Floating Button panel, 2026-08-09 - along
-    -- with the new scale slider and that panel's own Defaults reset.
-    local minimapCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
-    minimapCheck:SetPoint("TOPLEFT", lumberCheck, "BOTTOMLEFT", 0, -10)
-    -- The click-behavior explanation was dropped 2026-08-09 - it's redundant
-    -- with the minimap button's own in-game tooltip, and just ate space/
-    -- forced a wrap here for no reason.
-    minimapCheck.Text:SetText("Show the minimap button")
-    BumpFont(minimapCheck.Text, PANEL_LABEL_FONT_SIZE)
-    minimapCheck.Text:SetWordWrap(true)
-    minimapCheck.Text:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    minimapCheck:SetScript("OnClick", function(self)
-        if addonTable.MinimapButton and addonTable.MinimapButton.SetShown then
-            addonTable.MinimapButton:SetShown(self:GetChecked() and true or false)
-        end
-    end)
+    local div2 = AddDivider(rootPanel, lumberDesc, -14)
+
+    local minimapHeader = AddSection(rootPanel, div2, "Minimap button")
+    local minimapDesc, minimapCheck = AddToggle(rootPanel, minimapHeader, -10,
+        "Show the minimap button",
+        "Left-click opens these settings, right-click opens the Gather Tally.",
+        function(self)
+            if addonTable.MinimapButton and addonTable.MinimapButton.SetShown then
+                addonTable.MinimapButton:SetShown(self:GetChecked() and true or false)
+            end
+        end)
     rootPanel.minimapCheck = minimapCheck
 
-    local slider = CreateFrame("Slider", "XalsXRAdvanceSlider", rootPanel, "OptionsSliderTemplate")
-    slider:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 4, -20)
-    slider:SetWidth(220)
-    slider:SetMinMaxValues(10, 150)
-    slider:SetValueStep(5)
-    slider:SetObeyStepOnDrag(true)
-    _G[slider:GetName() .. "Low"]:SetText("10 yd")
-    BumpFont(_G[slider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[slider:GetName() .. "High"]:SetText("150 yd")
-    BumpFont(_G[slider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance")
-    BumpFont(_G[slider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    slider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value + 0.5)
-        XalsXRDB.autoAdvanceDistance = value
-        _G[self:GetName() .. "Text"]:SetText("Auto-advance distance: " .. value .. " yd")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    end)
+    local div3 = AddDivider(rootPanel, minimapDesc, -14)
+
+    local advanceHeader = AddSection(rootPanel, div3, "Auto-advance")
+    local slider = AddSlider(rootPanel, advanceHeader, -10, "XalsXRAdvanceSlider",
+        "Auto-advance distance", 10, 150, 5,
+        function(v) return v .. " yd" end,
+        function(v) XalsXRDB.autoAdvanceDistance = v end)
     rootPanel.slider = slider
+    local sliderHelp = AddNote(rootPanel, slider, -16,
+        "How close you need to be to a node before the compass automatically advances to the next one.")
 
-    local sliderHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(sliderHelp, PANEL_DESC_FONT_SIZE)
-    sliderHelp:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", -6, -16)
-    sliderHelp:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    sliderHelp:SetJustifyH("LEFT")
-    sliderHelp:SetText("How close you need to be to a node before the compass automatically advances to the next one.")
+    local div4 = AddDivider(rootPanel, sliderHelp, -14)
 
-    local keybindHeader = CreateHeader(rootPanel, sliderHelp, "Keybinds", -22)
+    local keybindHeader = AddSection(rootPanel, div4, "Keybinds")
+    local keybindHelp = AddNote(rootPanel, keybindHeader, -10,
+        "Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
 
-    local keybindHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(keybindHelp, PANEL_DESC_FONT_SIZE)
-    keybindHelp:SetPoint("TOPLEFT", keybindHeader, "BOTTOMLEFT", 2, -10)
-    keybindHelp:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    keybindHelp:SetJustifyH("LEFT")
-    keybindHelp:SetText("Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
+    local div5 = AddDivider(rootPanel, keybindHelp, -14)
 
-    local haulHeader = CreateHeader(rootPanel, keybindHelp, "Gather Tally", -22)
-
-    local haulCheck = CreateFrame("CheckButton", nil, rootPanel, "UICheckButtonTemplate")
-    haulCheck:SetPoint("TOPLEFT", haulHeader, "BOTTOMLEFT", 2, -8)
-    haulCheck.Text:SetText("Show the live Gather Tally window during a route")
-    BumpFont(haulCheck.Text, PANEL_LABEL_FONT_SIZE)
-    haulCheck.Text:SetWordWrap(true)
-    haulCheck.Text:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    haulCheck:SetScript("OnClick", function(self)
-        XalsXRDB.showHaulSummary = self:GetChecked() and true or false
-        if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
-            addonTable.RunTracker:OnSettingChanged()
-        end
-    end)
+    local haulHeader = AddSection(rootPanel, div5, "Gather Tally")
+    local _, haulCheck = AddToggle(rootPanel, haulHeader, -10,
+        "Show the live Gather Tally window during a route",
+        "A small movable window that tallies what you gather. It stays open after a route ends so you can read it - close it with its X. Open it anytime with the Gather button or /xxr haul. More options under the Gather Tally section.",
+        function(self)
+            XalsXRDB.showHaulSummary = self:GetChecked() and true or false
+            if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
+                addonTable.RunTracker:OnSettingChanged()
+            end
+        end)
     rootPanel.haulCheck = haulCheck
-
-    local haulHelp = rootPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(haulHelp, PANEL_DESC_FONT_SIZE)
-    haulHelp:SetPoint("TOPLEFT", haulCheck, "BOTTOMLEFT", -2, -16)
-    haulHelp:SetPoint("RIGHT", rootPanel, "RIGHT", -16, 0)
-    haulHelp:SetJustifyH("LEFT")
-    haulHelp:SetText("A small movable window that tallies what you gather. It stays open after a route ends so you can read it - close it with its X. Open it anytime with the Gather button or /xxr haul. More options under the Gather Tally section.")
 
     local RefreshRootPanel = function()
         haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         minimapCheck:SetChecked(not (XalsXRDB and XalsXRDB.minimap and XalsXRDB.minimap.hide == true))
         lumberCheck:SetChecked(not (XalsXRDB and XalsXRDB.lumberEnabled == false))
-        local dist = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50
-        slider:SetValue(dist)
-        _G[slider:GetName() .. "Text"]:SetText("Auto-advance distance: " .. dist .. " yd")
-        BumpFont(_G[slider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        slider:Sync((XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50)
     end
     rootPanel:SetScript("OnShow", RefreshRootPanel)
     rootPanel.Refresh = RefreshRootPanel
@@ -325,87 +391,62 @@ local function BuildFloatingButtonPanel()
     floatingPanel = CreateFrame("Frame")
     floatingPanel.name = "Floating Button"
 
-    local title = floatingPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Floating Button")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(floatingPanel, "Floating Button")
+    local intro = AddNote(floatingPanel, title, -10,
+        "The movable button near your character that shows your gathering professions, the Gather button, and (if enabled) the dungeon-waypoint shortcut.")
 
-    local intro = floatingPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(intro, PANEL_DESC_FONT_SIZE)
-    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
-    intro:SetPoint("RIGHT", floatingPanel, "RIGHT", -16, 0)
-    intro:SetJustifyH("LEFT")
-    intro:SetText("The movable button near your character that shows your gathering professions, the Gather button, and (if enabled) the dungeon-waypoint shortcut.")
+    CreateDefaultsButton(floatingPanel, "XALXR_RESET_FLOATING_DEFAULTS")
 
-    local defaultsBtn = CreateDefaultsButton(floatingPanel, "XALXR_RESET_FLOATING_DEFAULTS")
+    local div1 = AddDivider(floatingPanel, intro, -14)
 
-    local helperButtonCheck = CreateFrame("CheckButton", nil, floatingPanel, "UICheckButtonTemplate")
-    helperButtonCheck:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 2, -14)
-    helperButtonCheck.Text:SetText("Show the floating helper button (click to route/unroute)")
-    BumpFont(helperButtonCheck.Text, PANEL_LABEL_FONT_SIZE)
-    helperButtonCheck.Text:SetWordWrap(true)
-    helperButtonCheck.Text:SetPoint("RIGHT", floatingPanel, "RIGHT", -16, 0)
-    helperButtonCheck:SetScript("OnClick", function(self)
-        if self:GetChecked() then
-            QuickButton:Show()
-        else
-            QuickButton:Hide()
-        end
-    end)
+    local helperHeader = AddSection(floatingPanel, div1, "Floating helper")
+    local helperDesc, helperButtonCheck = AddToggle(floatingPanel, helperHeader, -10,
+        "Show the floating helper button",
+        "Click it to start or stop a route, drag it anywhere to move it.",
+        function(self)
+            if self:GetChecked() then
+                QuickButton:Show()
+            else
+                QuickButton:Hide()
+            end
+        end)
     floatingPanel.helperButtonCheck = helperButtonCheck
 
-    local resetButtonPosBtn = CreateButton(floatingPanel, helperButtonCheck, 2, -10, "Reset Button Position", 200, function()
+    local resetButtonPosBtn = CreateButton(floatingPanel, helperDesc, 0, -10, "Reset Button Position", 200, function()
         QuickButton:ResetPosition()
     end)
 
-    local scaleSlider = CreateFrame("Slider", "XalsXRHelperScaleSlider", floatingPanel, "OptionsSliderTemplate")
-    scaleSlider:SetPoint("TOPLEFT", resetButtonPosBtn, "BOTTOMLEFT", 4, -24)
-    scaleSlider:SetWidth(220)
-    scaleSlider:SetMinMaxValues(50, 150)
-    scaleSlider:SetValueStep(5)
-    scaleSlider:SetObeyStepOnDrag(true)
-    _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
-    BumpFont(_G[scaleSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[scaleSlider:GetName() .. "High"]:SetText("150%")
-    BumpFont(_G[scaleSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[scaleSlider:GetName() .. "Text"]:SetText("Scale")
-    BumpFont(_G[scaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    scaleSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 5 + 0.5) * 5
-        XalsXRDB.helperButtonScale = value / 100
-        _G[self:GetName() .. "Text"]:SetText("Scale: " .. value .. "%")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        if QuickButton.ApplyScale then QuickButton:ApplyScale() end
-    end)
-    floatingPanel.scaleSlider = scaleSlider
+    local div2 = AddDivider(floatingPanel, resetButtonPosBtn, -14)
 
-    local scaleHelp = floatingPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(scaleHelp, PANEL_DESC_FONT_SIZE)
-    scaleHelp:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", -6, -16)
-    scaleHelp:SetPoint("RIGHT", floatingPanel, "RIGHT", -16, 0)
-    scaleHelp:SetJustifyH("LEFT")
-    scaleHelp:SetText("Resize the whole floating button. 100% is the default size.")
+    local sizeHeader = AddSection(floatingPanel, div2, "Size")
+    local scaleSlider = AddSlider(floatingPanel, sizeHeader, -10, "XalsXRHelperScaleSlider",
+        "Scale", 50, 150, 5,
+        function(v) return v .. "%" end,
+        function(v)
+            XalsXRDB.helperButtonScale = v / 100
+            if QuickButton.ApplyScale then QuickButton:ApplyScale() end
+        end)
+    floatingPanel.scaleSlider = scaleSlider
+    local scaleHelp = AddNote(floatingPanel, scaleSlider, -16,
+        "Resize the whole floating button. 100% is the default size.")
+
+    local div3 = AddDivider(floatingPanel, scaleHelp, -14)
 
     -- Off by default (explicit request 2026-08-16) - the button stays fully
     -- visible at all times unless this is turned on.
-    local fadeCheck = CreateFrame("CheckButton", nil, floatingPanel, "UICheckButtonTemplate")
-    fadeCheck:SetPoint("TOPLEFT", scaleHelp, "BOTTOMLEFT", 2, -14)
-    fadeCheck.Text:SetText("Fade the button when you're not near it")
-    BumpFont(fadeCheck.Text, PANEL_LABEL_FONT_SIZE)
-    fadeCheck.Text:SetWordWrap(true)
-    fadeCheck.Text:SetPoint("RIGHT", floatingPanel, "RIGHT", -16, 0)
-    fadeCheck:SetScript("OnClick", function(self)
-        XalsXRDB.helperButtonFadeWhenIdle = self:GetChecked() and true or false
-        if QuickButton.ApplyFadeSetting then QuickButton:ApplyFadeSetting() end
-    end)
+    local fadeHeader = AddSection(floatingPanel, div3, "Fade when idle")
+    local _, fadeCheck = AddToggle(floatingPanel, fadeHeader, -10,
+        "Fade the button when you're not near it",
+        "Off by default. The button stays fully visible unless this is on.",
+        function(self)
+            XalsXRDB.helperButtonFadeWhenIdle = self:GetChecked() and true or false
+            if QuickButton.ApplyFadeSetting then QuickButton:ApplyFadeSetting() end
+        end)
     floatingPanel.fadeCheck = fadeCheck
 
     local RefreshFloatingPanel = function()
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
-        local scalePct = math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5)
-        scaleSlider:SetValue(scalePct)
-        _G[scaleSlider:GetName() .. "Text"]:SetText("Scale: " .. scalePct .. "%")
-        BumpFont(_G[scaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        scaleSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5))
         fadeCheck:SetChecked(XalsXRDB and XalsXRDB.helperButtonFadeWhenIdle == true)
     end
     floatingPanel:SetScript("OnShow", RefreshFloatingPanel)
@@ -421,129 +462,69 @@ local function BuildWaypointPanel()
     waypointPanel = CreateFrame("Frame")
     waypointPanel.name = "Waypoint"
 
-    local title = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Waypoint")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(waypointPanel, "Waypoint")
+    local intro = AddNote(waypointPanel, title, -10,
+        "The floating directional arrow that points at your next node.")
 
-    local intro = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(intro, PANEL_DESC_FONT_SIZE)
-    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    intro:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    intro:SetJustifyH("LEFT")
-    intro:SetText("The floating directional arrow that points at your next node.")
+    local div1 = AddDivider(waypointPanel, intro, -14)
 
-    local arrowHeader = CreateHeader(waypointPanel, intro, "Arrow Style", -18)
+    local arrowHeader = AddSection(waypointPanel, div1, "Arrow style")
+    local arrowStyleButtons, arrowGrid = AddPickerGrid(waypointPanel, arrowHeader, -10,
+        Beacon.ARROW_STYLES, Beacon.ARROW_STYLE_LABELS, 2, 170, 24,
+        function(key)
+            XalsXRDB.compassArrowStyle = key
+            Beacon:ApplyArrowStyle()
+        end)
 
-    local arrowStyleButtons = {}
-    local arrowBtnWidth = 170
-    local arrowBtnHeight = 24
-    local arrowCols = 2
-    for i, key in ipairs(Beacon.ARROW_STYLES) do
-        local col = (i - 1) % arrowCols
-        local row = math.floor((i - 1) / arrowCols)
-        local btn = CreateButton(waypointPanel, arrowHeader,
-            col * (arrowBtnWidth + 8), -10 - row * (arrowBtnHeight + 6),
-            Beacon.ARROW_STYLE_LABELS[key], arrowBtnWidth, function()
-                XalsXRDB.compassArrowStyle = key
-                Beacon:ApplyArrowStyle()
-                for styleKey, styleBtn in pairs(arrowStyleButtons) do
-                    styleBtn:SetSelected(styleKey == key)
-                end
-            end)
-        arrowStyleButtons[key] = btn
-    end
-    local arrowRows = math.ceil(#Beacon.ARROW_STYLES / arrowCols)
+    local div2 = AddDivider(waypointPanel, arrowGrid, -14)
 
-    local progressColorCheck = CreateFrame("CheckButton", nil, waypointPanel, "UICheckButtonTemplate")
-    progressColorCheck:SetPoint("TOPLEFT", arrowHeader, "BOTTOMLEFT", 2, -10 - arrowRows * (arrowBtnHeight + 6) - 6)
-    progressColorCheck.Text:SetText("Color the arrow green when closing in, red when moving away")
-    BumpFont(progressColorCheck.Text, PANEL_LABEL_FONT_SIZE)
-    progressColorCheck.Text:SetWordWrap(true)
-    progressColorCheck.Text:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    progressColorCheck:SetScript("OnClick", function(self)
-        XalsXRDB.arrowProgressColor = self:GetChecked() and true or false
-    end)
+    local progressHeader = AddSection(waypointPanel, div2, "Progress color")
+    local progressDesc, progressColorCheck = AddToggle(waypointPanel, progressHeader, -10,
+        "Color the arrow by progress",
+        "Green while you're closing in, red when you're moving away. Works best with plain/light-colored arrow art - tinting already-colorful art can look muddy.",
+        function(self)
+            XalsXRDB.arrowProgressColor = self:GetChecked() and true or false
+        end)
     waypointPanel.progressColorCheck = progressColorCheck
 
-    local progressColorHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(progressColorHelp, PANEL_DESC_FONT_SIZE)
-    progressColorHelp:SetPoint("TOPLEFT", progressColorCheck, "BOTTOMLEFT", -2, -16)
-    progressColorHelp:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    progressColorHelp:SetJustifyH("LEFT")
-    progressColorHelp:SetText("Works best with plain/light-colored arrow art - tinting already-colorful art can look muddy.")
-
-    local scaleHeader = CreateHeader(waypointPanel, progressColorHelp, "Scale", -22)
+    local div3 = AddDivider(waypointPanel, progressDesc, -14)
 
     -- Uniform scale only - no separate width/height. Non-uniform scaling would
     -- distort the art (stretched, not just resized) and adds a real class of
     -- bugs (aspect ratio drift, inconsistent hitboxes) for very little benefit
     -- over just picking a bigger or smaller arrow overall.
-    local scaleSlider = CreateFrame("Slider", "XalsXRArrowScaleSlider", waypointPanel, "OptionsSliderTemplate")
-    scaleSlider:SetPoint("TOPLEFT", scaleHeader, "BOTTOMLEFT", 6, -20)
-    scaleSlider:SetWidth(220)
-    scaleSlider:SetMinMaxValues(50, 150)
-    scaleSlider:SetValueStep(5)
-    scaleSlider:SetObeyStepOnDrag(true)
-    _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
-    BumpFont(_G[scaleSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[scaleSlider:GetName() .. "High"]:SetText("150%")
-    BumpFont(_G[scaleSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale")
-    BumpFont(_G[scaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    scaleSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 5 + 0.5) * 5
-        XalsXRDB.arrowScale = value / 100
-        _G[self:GetName() .. "Text"]:SetText("Arrow scale: " .. value .. "%")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        Beacon:ApplyArrowStyle()
-    end)
+    local sizeHeader = AddSection(waypointPanel, div3, "Arrow size")
+    local scaleSlider = AddSlider(waypointPanel, sizeHeader, -10, "XalsXRArrowScaleSlider",
+        "Arrow scale", 50, 150, 5,
+        function(v) return v .. "%" end,
+        function(v)
+            XalsXRDB.arrowScale = v / 100
+            Beacon:ApplyArrowStyle()
+        end)
     waypointPanel.scaleSlider = scaleSlider
+    local scaleHelp = AddNote(waypointPanel, scaleSlider, -16,
+        "Resizes the arrow uniformly - same shape, just bigger or smaller.")
 
-    local scaleHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(scaleHelp, PANEL_DESC_FONT_SIZE)
-    scaleHelp:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", -6, -16)
-    scaleHelp:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    scaleHelp:SetJustifyH("LEFT")
-    scaleHelp:SetText("Resizes the arrow uniformly - same shape, just bigger or smaller.")
-
-    local textScaleSlider = CreateFrame("Slider", "XalsXRArrowTextScaleSlider", waypointPanel, "OptionsSliderTemplate")
-    textScaleSlider:SetPoint("TOPLEFT", scaleHelp, "BOTTOMLEFT", 6, -30)
-    textScaleSlider:SetWidth(220)
-    textScaleSlider:SetMinMaxValues(100, 250)
-    textScaleSlider:SetValueStep(10)
-    textScaleSlider:SetObeyStepOnDrag(true)
-    _G[textScaleSlider:GetName() .. "Low"]:SetText("100%")
-    BumpFont(_G[textScaleSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[textScaleSlider:GetName() .. "High"]:SetText("250%")
-    BumpFont(_G[textScaleSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[textScaleSlider:GetName() .. "Text"]:SetText("Text size")
-    BumpFont(_G[textScaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    textScaleSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 10 + 0.5) * 10
-        XalsXRDB.arrowTextScale = value / 100
-        _G[self:GetName() .. "Text"]:SetText("Text size: " .. value .. "%")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        Beacon:ApplyTextScale()
-    end)
+    local textScaleSlider = AddSlider(waypointPanel, scaleHelp, -16, "XalsXRArrowTextScaleSlider",
+        "Text size", 100, 250, 10,
+        function(v) return v .. "%" end,
+        function(v)
+            XalsXRDB.arrowTextScale = v / 100
+            Beacon:ApplyTextScale()
+        end)
     waypointPanel.textScaleSlider = textScaleSlider
+    local textScaleHelp = AddNote(waypointPanel, textScaleSlider, -16,
+        "Enlarges the distance and node-name text under the arrow - handy if the default is hard to read.")
 
-    local textScaleHelp = waypointPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(textScaleHelp, PANEL_DESC_FONT_SIZE)
-    textScaleHelp:SetPoint("TOPLEFT", textScaleSlider, "BOTTOMLEFT", -6, -16)
-    textScaleHelp:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    textScaleHelp:SetJustifyH("LEFT")
-    textScaleHelp:SetText("Enlarges the distance and node-name text under the arrow - handy if the default is hard to read.")
+    local div4 = AddDivider(waypointPanel, textScaleHelp, -14)
 
-    local trailLineCheck = CreateFrame("CheckButton", nil, waypointPanel, "UICheckButtonTemplate")
-    trailLineCheck:SetPoint("TOPLEFT", textScaleHelp, "BOTTOMLEFT", 2, -14)
-    trailLineCheck.Text:SetText("Show a trail line on the minimap to your next stop")
-    BumpFont(trailLineCheck.Text, PANEL_LABEL_FONT_SIZE)
-    trailLineCheck.Text:SetWordWrap(true)
-    trailLineCheck.Text:SetPoint("RIGHT", waypointPanel, "RIGHT", -16, 0)
-    trailLineCheck:SetScript("OnClick", function(self)
-        XalsXRDB.showTrailLine = self:GetChecked() and true or false
-    end)
+    local trailHeader = AddSection(waypointPanel, div4, "Minimap trail line")
+    local _, trailLineCheck = AddToggle(waypointPanel, trailHeader, -10,
+        "Show a trail line to your next stop",
+        "A thin line on your minimap that points straight from you to your next stop, on top of the usual arrow.",
+        function(self)
+            XalsXRDB.showTrailLine = self:GetChecked() and true or false
+        end)
     waypointPanel.trailLineCheck = trailLineCheck
 
     local RefreshWaypointPanel = function()
@@ -552,14 +533,8 @@ local function BuildWaypointPanel()
             styleBtn:SetSelected(styleKey == currentArrowStyle)
         end
         progressColorCheck:SetChecked(not (XalsXRDB and XalsXRDB.arrowProgressColor == false))
-        local scalePct = math.floor(((XalsXRDB and XalsXRDB.arrowScale) or 1) * 100 + 0.5)
-        scaleSlider:SetValue(scalePct)
-        _G[scaleSlider:GetName() .. "Text"]:SetText("Arrow scale: " .. scalePct .. "%")
-        BumpFont(_G[scaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        local textScalePct = math.floor(((XalsXRDB and XalsXRDB.arrowTextScale) or 1) * 100 + 0.5)
-        textScaleSlider:SetValue(textScalePct)
-        _G[textScaleSlider:GetName() .. "Text"]:SetText("Text size: " .. textScalePct .. "%")
-        BumpFont(_G[textScaleSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        scaleSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.arrowScale) or 1) * 100 + 0.5))
+        textScaleSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.arrowTextScale) or 1) * 100 + 0.5))
         trailLineCheck:SetChecked(not (XalsXRDB and XalsXRDB.showTrailLine == false))
     end
     waypointPanel:SetScript("OnShow", RefreshWaypointPanel)
@@ -570,220 +545,95 @@ end
 
 --------------------------------------------------------------------------------
 -- Map Markers panel: marker style picker, size, opacity, proximity hide
+--------------------------------------------------------------------------------
 local function BuildMarkersPanel()
     markersPanel = CreateFrame("Frame")
     markersPanel.name = "Map Markers"
 
-    local title = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Map Markers")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(markersPanel, "Map Markers")
+    local intro = AddNote(markersPanel, title, -10,
+        "How gathering nodes are drawn on the minimap and world map. Green = Herbalism, red = Mining. Your active route target gets a small dot at its center.")
 
-    local pinStyleHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(pinStyleHelp, PANEL_DESC_FONT_SIZE)
-    pinStyleHelp:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
-    -- Right edge anchored to the panel (not a fixed pixel width) so it
-    -- wraps within whatever width the panel actually has - a hardcoded
-    -- 460 overflowed off the right edge once reparented into the
-    -- standalone window's narrower content area (~458px vs. the wider
-    -- native Blizzard settings panel this was originally sized for).
-    -- 16px matches the title's left inset, kept symmetric on the right.
-    pinStyleHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    pinStyleHelp:SetJustifyH("LEFT")
-    pinStyleHelp:SetText("How gathering nodes are drawn on the minimap and world map. Green = Herbalism, red = Mining. Your active route target gets a small dot at its center.")
-    BumpFont(pinStyleHelp, PANEL_DESC_FONT_SIZE)
+    local div1 = AddDivider(markersPanel, intro, -14)
 
-    local pinCols = 2
-    local pinBtnWidth = 165
-    local pinBtnHeight = 22
-    local pinBtnGapX = 8
-    local pinBtnGapY = 6
+    local styleHeader = AddSection(markersPanel, div1, "Marker style")
+    local styleButtons, styleGrid = AddPickerGrid(markersPanel, styleHeader, -10,
+        Markers.PIN_STYLES, Markers.PIN_STYLE_LABELS, 2, 165, 22,
+        function(key)
+            XalsXRDB.pinStyle = key
+            Markers:UpdatePins()
+        end)
+    pinStyleButtons = styleButtons
 
-    pinStyleButtons = {}
-    for i, key in ipairs(Markers.PIN_STYLES) do
-        local col = (i - 1) % pinCols
-        local row = math.floor((i - 1) / pinCols)
-        local btn = CreateButton(markersPanel, pinStyleHelp, col * (pinBtnWidth + pinBtnGapX),
-            -14 - row * (pinBtnHeight + pinBtnGapY), Markers.PIN_STYLE_LABELS[key], pinBtnWidth, function()
-                XalsXRDB.pinStyle = key
-                Markers:UpdatePins()
-                for styleKey, styleBtn in pairs(pinStyleButtons) do
-                    styleBtn:SetSelected(styleKey == key)
-                end
-            end)
-        pinStyleButtons[key] = btn
-    end
+    local div2 = AddDivider(markersPanel, styleGrid, -14)
 
-    local pinStyleRows = math.ceil(#Markers.PIN_STYLES / pinCols)
-    local pinStyleBottom = CreateFrame("Frame", nil, markersPanel)
-    pinStyleBottom:SetSize(1, 1)
-    pinStyleBottom:SetPoint("TOPLEFT", pinStyleHelp, "BOTTOMLEFT", 0, -14 - pinStyleRows * (pinBtnHeight + pinBtnGapY))
-
-    local pinSizeSlider = CreateFrame("Slider", "XalsXRPinSizeSlider", markersPanel, "OptionsSliderTemplate")
-    pinSizeSlider:SetPoint("TOPLEFT", pinStyleBottom, "BOTTOMLEFT", 6, -30)
-    pinSizeSlider:SetWidth(220)
-    pinSizeSlider:SetMinMaxValues(8, 28)
-    pinSizeSlider:SetValueStep(2)
-    pinSizeSlider:SetObeyStepOnDrag(true)
-    _G[pinSizeSlider:GetName() .. "Low"]:SetText("8px")
-    BumpFont(_G[pinSizeSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[pinSizeSlider:GetName() .. "High"]:SetText("28px")
-    BumpFont(_G[pinSizeSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[pinSizeSlider:GetName() .. "Text"]:SetText("Marker size")
-    BumpFont(_G[pinSizeSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinSizeSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinSizeSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinSizeSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    pinSizeSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 2 + 0.5) * 2
-        XalsXRDB.pinSize = value
-        _G[self:GetName() .. "Text"]:SetText("Marker size: " .. value .. "px")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        Markers:UpdatePins()
-    end)
+    local appearanceHeader = AddSection(markersPanel, div2, "Appearance")
+    local pinSizeSlider = AddSlider(markersPanel, appearanceHeader, -10, "XalsXRPinSizeSlider",
+        "Marker size", 8, 28, 2,
+        function(v) return v .. "px" end,
+        function(v)
+            XalsXRDB.pinSize = v
+            Markers:UpdatePins()
+        end)
     markersPanel.pinSizeSlider = pinSizeSlider
+    local pinSizeHelp = AddNote(markersPanel, pinSizeSlider, -16,
+        "Size of a normal marker. The active route target is always drawn about 40% larger than this.")
 
-    local pinSizeHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(pinSizeHelp, PANEL_DESC_FONT_SIZE)
-    pinSizeHelp:SetPoint("TOPLEFT", pinSizeSlider, "BOTTOMLEFT", -6, -16)
-    pinSizeHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    pinSizeHelp:SetJustifyH("LEFT")
-    pinSizeHelp:SetText("Size of a normal marker. The active route target is always drawn about 40% larger than this.")
-    BumpFont(pinSizeHelp, PANEL_DESC_FONT_SIZE)
-
-    local pinAlphaSlider = CreateFrame("Slider", "XalsXRPinAlphaSlider", markersPanel, "OptionsSliderTemplate")
-    pinAlphaSlider:SetPoint("TOPLEFT", pinSizeHelp, "BOTTOMLEFT", 6, -30)
-    pinAlphaSlider:SetWidth(220)
-    pinAlphaSlider:SetMinMaxValues(30, 100)
-    pinAlphaSlider:SetValueStep(5)
-    pinAlphaSlider:SetObeyStepOnDrag(true)
-    _G[pinAlphaSlider:GetName() .. "Low"]:SetText("30%")
-    BumpFont(_G[pinAlphaSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[pinAlphaSlider:GetName() .. "High"]:SetText("100%")
-    BumpFont(_G[pinAlphaSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[pinAlphaSlider:GetName() .. "Text"]:SetText("Marker opacity")
-    BumpFont(_G[pinAlphaSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinAlphaSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinAlphaSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[pinAlphaSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    pinAlphaSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 5 + 0.5) * 5
-        XalsXRDB.pinAlpha = value / 100
-        _G[self:GetName() .. "Text"]:SetText("Marker opacity: " .. value .. "%")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        Markers:UpdatePins()
-    end)
+    local pinAlphaSlider = AddSlider(markersPanel, pinSizeHelp, -16, "XalsXRPinAlphaSlider",
+        "Marker opacity", 30, 100, 5,
+        function(v) return v .. "%" end,
+        function(v)
+            XalsXRDB.pinAlpha = v / 100
+            Markers:UpdatePins()
+        end)
     markersPanel.pinAlphaSlider = pinAlphaSlider
+    local pinAlphaHelp = AddNote(markersPanel, pinAlphaSlider, -16,
+        "Overall transparency of every marker, applied globally.")
 
-    local pinAlphaHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(pinAlphaHelp, PANEL_DESC_FONT_SIZE)
-    pinAlphaHelp:SetPoint("TOPLEFT", pinAlphaSlider, "BOTTOMLEFT", -6, -16)
-    pinAlphaHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    pinAlphaHelp:SetJustifyH("LEFT")
-    pinAlphaHelp:SetText("Overall transparency of every marker, applied globally.")
-    BumpFont(pinAlphaHelp, PANEL_DESC_FONT_SIZE)
-
-    -- Glow toggle
-    local glowCheck = CreateFrame("CheckButton", nil, markersPanel, "UICheckButtonTemplate")
-    glowCheck:SetPoint("TOPLEFT", pinAlphaHelp, "BOTTOMLEFT", 2, -14)
-    glowCheck.Text:SetText("Show a colored glow behind markers (green/red)")
-    BumpFont(glowCheck.Text, PANEL_LABEL_FONT_SIZE)
-    glowCheck.Text:SetWordWrap(true)
-    glowCheck.Text:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    glowCheck:SetScript("OnClick", function(self)
-        XalsXRDB.showGlow = self:GetChecked() and true or false
-        Markers:UpdatePins()
-    end)
+    local glowDesc, glowCheck = AddToggle(markersPanel, pinAlphaHelp, -16,
+        "Show a colored glow behind markers",
+        "A soft glow behind each marker (green for Herbalism, red for Mining) so it stands out against busy terrain.",
+        function(self)
+            XalsXRDB.showGlow = self:GetChecked() and true or false
+            Markers:UpdatePins()
+        end)
     markersPanel.glowCheck = glowCheck
 
+    local div3 = AddDivider(markersPanel, glowDesc, -14)
+
     -- Proximity hide - always on, distance is the only adjustable part
-    local proximityHeader = CreateHeader(markersPanel, glowCheck, "Hide Markers When Close", -22)
-
-    local proximityHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(proximityHelp, PANEL_DESC_FONT_SIZE)
-    proximityHelp:SetPoint("TOPLEFT", proximityHeader, "BOTTOMLEFT", 0, -6)
-    proximityHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    proximityHelp:SetJustifyH("LEFT")
-    proximityHelp:SetText("Once you're this close to a node, its marker disappears entirely - the actual node model in the world is what matters at that range. Always on. Applies to the minimap only.")
-    BumpFont(proximityHelp, PANEL_DESC_FONT_SIZE)
-
-    local proximitySlider = CreateFrame("Slider", "XalsXRProximitySlider", markersPanel, "OptionsSliderTemplate")
-    proximitySlider:SetPoint("TOPLEFT", proximityHelp, "BOTTOMLEFT", 6, -30)
-    proximitySlider:SetWidth(220)
-    proximitySlider:SetMinMaxValues(20, 500)
-    proximitySlider:SetValueStep(10)
-    proximitySlider:SetObeyStepOnDrag(true)
-    _G[proximitySlider:GetName() .. "Low"]:SetText("20 yd")
-    BumpFont(_G[proximitySlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[proximitySlider:GetName() .. "High"]:SetText("500 yd")
-    BumpFont(_G[proximitySlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[proximitySlider:GetName() .. "Text"]:SetText("Hide distance")
-    BumpFont(_G[proximitySlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[proximitySlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[proximitySlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    BumpFont(_G[proximitySlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    proximitySlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 10 + 0.5) * 10
-        XalsXRDB.proximityDistanceYards = value
-        _G[self:GetName() .. "Text"]:SetText("Hide distance: " .. value .. " yd")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    end)
+    local proximityHeader = AddSection(markersPanel, div3, "Hide markers when close")
+    local proximitySlider = AddSlider(markersPanel, proximityHeader, -10, "XalsXRProximitySlider",
+        "Hide distance", 20, 500, 10,
+        function(v) return v .. " yd" end,
+        function(v) XalsXRDB.proximityDistanceYards = v end)
     markersPanel.proximitySlider = proximitySlider
+    local proximityHelp = AddNote(markersPanel, proximitySlider, -16,
+        "Once you're this close to a node, its marker disappears entirely - the actual node model in the world is what matters at that range. Always on. Applies to the minimap only.")
+
+    local div4 = AddDivider(markersPanel, proximityHelp, -14)
 
     -- Node grouping - nearby nodes become one route stop instead of a separate
     -- stop for each one. On by default; only the distance is adjustable.
-    local groupingHeader = CreateHeader(markersPanel, proximitySlider, "Node Grouping Distance", -22)
-
-    local groupingHelp = markersPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(groupingHelp, PANEL_DESC_FONT_SIZE)
-    groupingHelp:SetPoint("TOPLEFT", groupingHeader, "BOTTOMLEFT", 0, -6)
-    groupingHelp:SetPoint("RIGHT", markersPanel, "RIGHT", -16, 0)
-    groupingHelp:SetJustifyH("LEFT")
-    groupingHelp:SetText("Nearby nodes within this distance are treated as one stop on your route instead of a separate stop for each one, so routes flow instead of zig-zagging through a dense patch. Keep this a bit above your Hide Distance above.")
-    BumpFont(groupingHelp, PANEL_DESC_FONT_SIZE)
-
-    local groupingSlider = CreateFrame("Slider", "XalsXRGroupingSlider", markersPanel, "OptionsSliderTemplate")
-    groupingSlider:SetPoint("TOPLEFT", groupingHelp, "BOTTOMLEFT", 6, -30)
-    groupingSlider:SetWidth(220)
-    groupingSlider:SetMinMaxValues(50, 500)
-    groupingSlider:SetValueStep(10)
-    groupingSlider:SetObeyStepOnDrag(true)
-    _G[groupingSlider:GetName() .. "Low"]:SetText("50 yd")
-    BumpFont(_G[groupingSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[groupingSlider:GetName() .. "High"]:SetText("500 yd")
-    BumpFont(_G[groupingSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[groupingSlider:GetName() .. "Text"]:SetText("Grouping distance")
-    BumpFont(_G[groupingSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    groupingSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 10 + 0.5) * 10
-        XalsXRDB.groupingDistanceYards = value
-        _G[self:GetName() .. "Text"]:SetText("Grouping distance: " .. value .. " yd")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    end)
+    local groupingHeader = AddSection(markersPanel, div4, "Node grouping")
+    local groupingSlider = AddSlider(markersPanel, groupingHeader, -10, "XalsXRGroupingSlider",
+        "Grouping distance", 50, 500, 10,
+        function(v) return v .. " yd" end,
+        function(v) XalsXRDB.groupingDistanceYards = v end)
     markersPanel.groupingSlider = groupingSlider
+    AddNote(markersPanel, groupingSlider, -16,
+        "Nearby nodes within this distance are treated as one stop on your route instead of a separate stop for each one, so routes flow instead of zig-zagging through a dense patch. Keep this a bit above your Hide Distance above.")
 
     local RefreshMarkersPanel = function()
         local currentStyle = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
         for styleKey, styleBtn in pairs(pinStyleButtons) do
             styleBtn:SetSelected(styleKey == currentStyle)
         end
-        local pinSize = (XalsXRDB and XalsXRDB.pinSize) or 14
-        pinSizeSlider:SetValue(pinSize)
-        _G[pinSizeSlider:GetName() .. "Text"]:SetText("Marker size: " .. pinSize .. "px")
-        BumpFont(_G[pinSizeSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        local pinAlphaPct = math.floor(((XalsXRDB and XalsXRDB.pinAlpha) or 1) * 100 + 0.5)
-        pinAlphaSlider:SetValue(pinAlphaPct)
-        _G[pinAlphaSlider:GetName() .. "Text"]:SetText("Marker opacity: " .. pinAlphaPct .. "%")
-        BumpFont(_G[pinAlphaSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        pinSizeSlider:Sync((XalsXRDB and XalsXRDB.pinSize) or 14)
+        pinAlphaSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.pinAlpha) or 1) * 100 + 0.5))
         glowCheck:SetChecked(not (XalsXRDB and XalsXRDB.showGlow == false))
-        local dist = (XalsXRDB and XalsXRDB.proximityDistanceYards) or 200
-        proximitySlider:SetValue(dist)
-        _G[proximitySlider:GetName() .. "Text"]:SetText("Hide distance: " .. dist .. " yd")
-        BumpFont(_G[proximitySlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        local groupDist = (XalsXRDB and XalsXRDB.groupingDistanceYards) or 240
-        groupingSlider:SetValue(groupDist)
-        _G[groupingSlider:GetName() .. "Text"]:SetText("Grouping distance: " .. groupDist .. " yd")
-        BumpFont(_G[groupingSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        proximitySlider:Sync((XalsXRDB and XalsXRDB.proximityDistanceYards) or 200)
+        groupingSlider:Sync((XalsXRDB and XalsXRDB.groupingDistanceYards) or 240)
     end
     markersPanel:SetScript("OnShow", RefreshMarkersPanel)
     markersPanel.Refresh = RefreshMarkersPanel
@@ -798,70 +648,39 @@ local function BuildDataPanel()
     dataPanel = CreateFrame("Frame")
     dataPanel.name = "Database"
 
-    local title = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Database")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(dataPanel, "Database")
 
-    statsText = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    statsText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
-    statsText:SetText(GetStatsString())
+    statsText = Brand.FS(dataPanel, GetStatsString(), Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
+        0.85, 0.85, 0.85)
+    statsText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
+    statsText:SetJustifyH("LEFT")
 
-    local dupSlider = CreateFrame("Slider", "XalsXRDupSlider", dataPanel, "OptionsSliderTemplate")
-    dupSlider:SetPoint("TOPLEFT", statsText, "BOTTOMLEFT", 6, -24)
-    dupSlider:SetWidth(220)
-    dupSlider:SetMinMaxValues(5, 50)
-    dupSlider:SetValueStep(5)
-    dupSlider:SetObeyStepOnDrag(true)
-    _G[dupSlider:GetName() .. "Low"]:SetText("5 yd")
-    BumpFont(_G[dupSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[dupSlider:GetName() .. "High"]:SetText("50 yd")
-    BumpFont(_G[dupSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[dupSlider:GetName() .. "Text"]:SetText("Duplicate detection distance")
-    BumpFont(_G[dupSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    dupSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 5 + 0.5) * 5
-        XalsXRDB.duplicateDistanceYards = value
-        _G[self:GetName() .. "Text"]:SetText("Duplicate detection distance: " .. value .. " yd")
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    end)
+    local div1 = AddDivider(dataPanel, statsText, -14)
+
+    local dupHeader = AddSection(dataPanel, div1, "Duplicates")
+    local dupSlider = AddSlider(dataPanel, dupHeader, -10, "XalsXRDupSlider",
+        "Duplicate detection distance", 5, 50, 5,
+        function(v) return v .. " yd" end,
+        function(v) XalsXRDB.duplicateDistanceYards = v end)
     dataPanel.dupSlider = dupSlider
+    local dupHelp = AddNote(dataPanel, dupSlider, -16,
+        "How close two saved nodes need to be to count as the same one. If \"already recorded\" fires with no marker nearby, try lowering this.")
 
-    local dupHelp = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(dupHelp, PANEL_DESC_FONT_SIZE)
-    dupHelp:SetPoint("TOPLEFT", dupSlider, "BOTTOMLEFT", -6, -16)
-    dupHelp:SetPoint("RIGHT", dataPanel, "RIGHT", -16, 0)
-    dupHelp:SetJustifyH("LEFT")
-    dupHelp:SetText("How close two saved nodes need to be to count as the same one. If \"already recorded\" fires with no marker nearby, try lowering this.")
+    local div2 = AddDivider(dataPanel, dupHelp, -14)
 
-    local freshnessSlider = CreateFrame("Slider", "XalsXRFreshnessSlider", dataPanel, "OptionsSliderTemplate")
-    freshnessSlider:SetPoint("TOPLEFT", dupHelp, "BOTTOMLEFT", 6, -30)
-    freshnessSlider:SetWidth(220)
-    freshnessSlider:SetMinMaxValues(0, 60)
-    freshnessSlider:SetValueStep(5)
-    freshnessSlider:SetObeyStepOnDrag(true)
-    _G[freshnessSlider:GetName() .. "Low"]:SetText("Off")
-    BumpFont(_G[freshnessSlider:GetName() .. "Low"], PANEL_LABEL_FONT_SIZE)
-    _G[freshnessSlider:GetName() .. "High"]:SetText("60 min")
-    BumpFont(_G[freshnessSlider:GetName() .. "High"], PANEL_LABEL_FONT_SIZE)
-    _G[freshnessSlider:GetName() .. "Text"]:SetText("Node freshness")
-    BumpFont(_G[freshnessSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    freshnessSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value / 5 + 0.5) * 5
-        XalsXRDB.freshnessMinutes = value
-        _G[self:GetName() .. "Text"]:SetText(value == 0 and "Node freshness: Off" or ("Node freshness: " .. value .. " min"))
-        BumpFont(_G[self:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-    end)
+    local freshnessHeader = AddSection(dataPanel, div2, "Node freshness")
+    local freshnessSlider = AddSlider(dataPanel, freshnessHeader, -10, "XalsXRFreshnessSlider",
+        "Freshness window", 0, 60, 5,
+        function(v) return v == 0 and "Off" or (v .. " min") end,
+        function(v) XalsXRDB.freshnessMinutes = v end)
     dataPanel.freshnessSlider = freshnessSlider
+    local freshnessHelp = AddNote(dataPanel, freshnessSlider, -16,
+        "Skips nodes you gathered more recently than this when building a route, since they probably haven't respawned yet. Off routes to every saved node regardless of when it was last picked.")
 
-    local freshnessHelp = dataPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(freshnessHelp, PANEL_DESC_FONT_SIZE)
-    freshnessHelp:SetPoint("TOPLEFT", freshnessSlider, "BOTTOMLEFT", -6, -16)
-    freshnessHelp:SetPoint("RIGHT", dataPanel, "RIGHT", -16, 0)
-    freshnessHelp:SetJustifyH("LEFT")
-    freshnessHelp:SetText("Skips nodes you gathered more recently than this when building a route, since they probably haven't respawned yet. Off routes to every saved node regardless of when it was last picked.")
+    local div3 = AddDivider(dataPanel, freshnessHelp, -14)
 
-    local cleanupBtn = CreateButton(dataPanel, freshnessHelp, 0, -12, "Cleanup Duplicates", 170, function()
+    local cleanupHeader = AddSection(dataPanel, div3, "Cleanup")
+    local cleanupBtn = CreateButton(dataPanel, cleanupHeader, 0, -10, "Cleanup Duplicates", 170, function()
         local removed = NodeLogger.RemoveDuplicates()
         print("|cff00ccffXal's XR:|r Cleanup complete. Removed |cffff9900" .. removed .. "|r duplicates.")
         Markers:UpdatePins()
@@ -870,7 +689,7 @@ local function BuildDataPanel()
     -- Stacked vertically (CreateButton's own default: new button's TOP
     -- anchors to the given anchor's BOTTOM), not side by side. Confirmed
     -- 2026-08-09.
-    local resetZoneBtn = CreateButton(dataPanel, cleanupBtn, 0, -8, "Reset Current Zone", 170, function()
+    CreateButton(dataPanel, cleanupBtn, 0, -8, "Reset Current Zone", 170, function()
         local currentMapID = C_Map.GetBestMapForUnit("player")
         if currentMapID and XalsXRDB[currentMapID] then
             XalsXRDB[currentMapID] = nil
@@ -898,14 +717,8 @@ local function BuildDataPanel()
 
     local RefreshDataPanel = function()
         RefreshStats()
-        local dupYards = (XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15
-        dupSlider:SetValue(dupYards)
-        _G[dupSlider:GetName() .. "Text"]:SetText("Duplicate detection distance: " .. dupYards .. " yd")
-        BumpFont(_G[dupSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
-        local freshnessMinutes = (XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES
-        freshnessSlider:SetValue(freshnessMinutes)
-        _G[freshnessSlider:GetName() .. "Text"]:SetText(freshnessMinutes == 0 and "Node freshness: Off" or ("Node freshness: " .. freshnessMinutes .. " min"))
-        BumpFont(_G[freshnessSlider:GetName() .. "Text"], PANEL_LABEL_FONT_SIZE)
+        dupSlider:Sync((XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15)
+        freshnessSlider:Sync((XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES)
     end
     dataPanel:SetScript("OnShow", RefreshDataPanel)
     dataPanel.Refresh = RefreshDataPanel
@@ -921,44 +734,27 @@ local function BuildIntegrationsPanel()
     integrationsPanel = CreateFrame("Frame")
     integrationsPanel.name = "Integrations"
 
-    local title = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Integrations")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(integrationsPanel, "Integrations")
+    local intro = AddNote(integrationsPanel, title, -10,
+        "Optional hand-offs to other addons, if you have them installed. Nothing here is required for this addon's own features to work.")
 
-    local intro = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(intro, PANEL_DESC_FONT_SIZE)
-    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    intro:SetPoint("RIGHT", integrationsPanel, "RIGHT", -16, 0)
-    intro:SetJustifyH("LEFT")
-    intro:SetText("Optional hand-offs to other addons, if you have them installed. Nothing here is required for this addon's own features to work.")
+    local div1 = AddDivider(integrationsPanel, intro, -14)
 
-    local tomtomHeader = CreateHeader(integrationsPanel, intro, "TomTom", -22)
-
-    local tomtomCheck = CreateFrame("CheckButton", nil, integrationsPanel, "UICheckButtonTemplate")
-    tomtomCheck:SetPoint("TOPLEFT", tomtomHeader, "BOTTOMLEFT", 2, -6)
-    tomtomCheck.Text:SetText("Sync TomTom's crazy arrow to your current route stop")
-    BumpFont(tomtomCheck.Text, PANEL_LABEL_FONT_SIZE)
-    tomtomCheck.Text:SetWordWrap(true)
-    tomtomCheck.Text:SetPoint("RIGHT", integrationsPanel, "RIGHT", -16, 0)
-    tomtomCheck:SetScript("OnClick", function(self)
-        XalsXRDB.tomtomSyncEnabled = self:GetChecked() and true or false
-        if XalsXRDB.tomtomSyncEnabled then
-            if addonTable.TomTomBridge.ShowIntegrationTip then
-                addonTable.TomTomBridge:ShowIntegrationTip()
+    local tomtomHeader = AddSection(integrationsPanel, div1, "TomTom")
+    local _, tomtomCheck = AddToggle(integrationsPanel, tomtomHeader, -10,
+        "Sync TomTom's arrow to your route",
+        "Off by default. Does nothing if TomTom isn't installed. When on, keeps TomTom's own arrow pointed at whatever stop this addon's route currently considers next.",
+        function(self)
+            XalsXRDB.tomtomSyncEnabled = self:GetChecked() and true or false
+            if XalsXRDB.tomtomSyncEnabled then
+                if addonTable.TomTomBridge.ShowIntegrationTip then
+                    addonTable.TomTomBridge:ShowIntegrationTip()
+                end
+            elseif addonTable.TomTomBridge.ClearWaypoints then
+                addonTable.TomTomBridge:ClearWaypoints()
             end
-        elseif addonTable.TomTomBridge.ClearWaypoints then
-            addonTable.TomTomBridge:ClearWaypoints()
-        end
-    end)
+        end)
     integrationsPanel.tomtomCheck = tomtomCheck
-
-    local tomtomHelp = integrationsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(tomtomHelp, PANEL_DESC_FONT_SIZE)
-    tomtomHelp:SetPoint("TOPLEFT", tomtomCheck, "BOTTOMLEFT", -2, -16)
-    tomtomHelp:SetPoint("RIGHT", integrationsPanel, "RIGHT", -16, 0)
-    tomtomHelp:SetJustifyH("LEFT")
-    tomtomHelp:SetText("Off by default. Does nothing if TomTom isn't installed. When on, keeps TomTom's own arrow pointed at whatever stop this addon's route currently considers next.")
 
     local RefreshIntegrationsPanel = function()
         tomtomCheck:SetChecked(XalsXRDB and XalsXRDB.tomtomSyncEnabled == true)
@@ -970,83 +766,54 @@ local function BuildIntegrationsPanel()
 end
 
 --------------------------------------------------------------------------------
--- Gather Tally panel: icons on/off (text mode), text size, and the two timers.
+-- Gather Tally panel: the two timers and the dungeon-waypoint button.
 --------------------------------------------------------------------------------
 local function BuildGatherTallyPanel()
     gatherPanel = CreateFrame("Frame")
     gatherPanel.name = "Gather Tally"
 
-    local title = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Gather Tally")
-    title:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    local title = PageTitle(gatherPanel, "Gather Tally")
+    local intro = AddNote(gatherPanel, title, -10,
+        "The live window that tallies what you gather. Open it with the Gather button on the floating helper, or /xxr haul.")
 
-    local intro = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(intro, PANEL_DESC_FONT_SIZE)
-    intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    intro:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    intro:SetJustifyH("LEFT")
-    intro:SetText("The live window that tallies what you gather. Open it with the Gather button on the floating helper, or /xxr haul.")
+    local div1 = AddDivider(gatherPanel, intro, -14)
 
-    local timerHeader = CreateHeader(gatherPanel, intro, "Timers", -18)
-
-    local gatherTimerCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
-    gatherTimerCheck:SetPoint("TOPLEFT", timerHeader, "BOTTOMLEFT", 2, -8)
-    gatherTimerCheck.Text:SetText("Gather timer - time your Gather-button sessions")
-    BumpFont(gatherTimerCheck.Text, PANEL_LABEL_FONT_SIZE)
-    gatherTimerCheck.Text:SetWordWrap(true)
-    gatherTimerCheck.Text:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    gatherTimerCheck:SetScript("OnClick", function(self)
-        XalsXRDB.haulGatherTimer = self:GetChecked() and true or false
-        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
-    end)
+    local timerHeader = AddSection(gatherPanel, div1, "Timers")
+    local gatherTimerDesc, gatherTimerCheck = AddToggle(gatherPanel, timerHeader, -10,
+        "Gather timer",
+        "Times the sessions you open with the Gather button. Off by default.",
+        function(self)
+            XalsXRDB.haulGatherTimer = self:GetChecked() and true or false
+            if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+        end)
     gatherPanel.gatherTimerCheck = gatherTimerCheck
 
-    local routeTimerCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
-    routeTimerCheck:SetPoint("TOPLEFT", gatherTimerCheck, "BOTTOMLEFT", 0, -20)
-    routeTimerCheck.Text:SetText("Route timer - time how long a route has run")
-    BumpFont(routeTimerCheck.Text, PANEL_LABEL_FONT_SIZE)
-    routeTimerCheck.Text:SetWordWrap(true)
-    routeTimerCheck.Text:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    routeTimerCheck:SetScript("OnClick", function(self)
-        XalsXRDB.haulRouteTimer = self:GetChecked() and true or false
-        if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
-    end)
+    local routeTimerDesc, routeTimerCheck = AddToggle(gatherPanel, gatherTimerDesc, -14,
+        "Route timer",
+        "Times how long a route has run. Off by default.",
+        function(self)
+            XalsXRDB.haulRouteTimer = self:GetChecked() and true or false
+            if addonTable.RunTracker and addonTable.RunTracker.Render then addonTable.RunTracker:Render() end
+        end)
     gatherPanel.routeTimerCheck = routeTimerCheck
 
-    local timerHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(timerHelp, PANEL_DESC_FONT_SIZE)
-    timerHelp:SetPoint("TOPLEFT", routeTimerCheck, "BOTTOMLEFT", -2, -16)
-    timerHelp:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    timerHelp:SetJustifyH("LEFT")
-    timerHelp:SetText("Both off by default. When on, the tally shows elapsed time - the gather timer for sessions you open with the Gather button, the route timer while you're running a route.")
+    local div2 = AddDivider(gatherPanel, routeTimerDesc, -14)
 
-    local dungeonHeader = CreateHeader(gatherPanel, timerHelp, "Dungeon Nav (Xperimental)", -18)
-
-    local dungeonEnableCheck = CreateFrame("CheckButton", nil, gatherPanel, "UICheckButtonTemplate")
-    dungeonEnableCheck:SetPoint("TOPLEFT", dungeonHeader, "BOTTOMLEFT", 2, -8)
-    dungeonEnableCheck.Text:SetText("Show a dungeon-waypoint button on the helper (retail only)")
-    BumpFont(dungeonEnableCheck.Text, PANEL_LABEL_FONT_SIZE)
-    dungeonEnableCheck.Text:SetWordWrap(true)
-    dungeonEnableCheck.Text:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    dungeonEnableCheck:SetScript("OnClick", function(self)
-        XalsXRDB.dungeonButtonEnabled = self:GetChecked() and true or false
-        if QuickButton and QuickButton.Refresh then QuickButton:Refresh() end
-    end)
-    gatherPanel.dungeonEnableCheck = dungeonEnableCheck
-
+    local dungeonHeader = AddSection(gatherPanel, div2, "Dungeon Nav (Xperimental)")
     -- The old "put it on the left" side toggle was removed 2026-08-09 - the
     -- dungeon button no longer sits beside the Gather button at all, it's
     -- its own independent draggable piece now (2026-09-01), so
     -- dungeonButtonSide stopped doing anything visible.
-    local dungeonHelp = gatherPanel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    BumpFont(dungeonHelp, PANEL_DESC_FONT_SIZE)
-    dungeonHelp:SetPoint("TOPLEFT", dungeonEnableCheck, "BOTTOMLEFT", -2, -16)
-    dungeonHelp:SetPoint("RIGHT", gatherPanel, "RIGHT", -16, 0)
-    dungeonHelp:SetJustifyH("LEFT")
-    dungeonHelp:SetText("A small, separately draggable map icon - not attached to the Gather button. Click it to pick a Season 2 dungeon and drop a waypoint at its entrance. Also available as /xxr dungeon.")
+    local dungeonDesc, dungeonEnableCheck = AddToggle(gatherPanel, dungeonHeader, -10,
+        "Show a dungeon-waypoint button",
+        "Retail only. A small, separately draggable map icon - not attached to the Gather button. Click it to pick a Season 2 dungeon and drop a waypoint at its entrance. Also available as /xxr dungeon.",
+        function(self)
+            XalsXRDB.dungeonButtonEnabled = self:GetChecked() and true or false
+            if QuickButton and QuickButton.Refresh then QuickButton:Refresh() end
+        end)
+    gatherPanel.dungeonEnableCheck = dungeonEnableCheck
 
-    local resetDungeonPosBtn = CreateButton(gatherPanel, dungeonHelp, 2, -10, "Reset Dungeon Button Position", 220, function()
+    CreateButton(gatherPanel, dungeonDesc, 0, -10, "Reset Dungeon Button Position", 220, function()
         QuickButton:ResetDungeonPosition()
     end)
 
@@ -1078,8 +845,68 @@ end
 -- needs to undo the reparenting itself.
 --------------------------------------------------------------------------------
 local standaloneFrame, standaloneContent
+local standaloneScroll, standaloneThumb
 local standaloneTabs = {}
 local standalonePanels
+
+-- The pages use the family section layout (header, toggle, description,
+-- divider), which runs longer than a fixed-height window can hold for the
+-- biggest pages - so the content area scrolls with the mouse wheel. The
+-- scroll child's height is measured from the page's real laid-out content
+-- each time a tab opens; if that measurement ever fails it falls back to the
+-- visible height (no scrolling), never a blank page.
+--
+-- The same scroll is used in BOTH places the pages can open - this window and
+-- the native Esc -> Options entry (see WrapForNativeScroll below) - so the
+-- thumb/measure helpers take the scroll pieces as arguments.
+local function ScrollUpdateThumb(scroll, content, thumb)
+    if not (scroll and thumb) then return end
+    local viewH = scroll:GetHeight()
+    local contentH = content:GetHeight()
+    if not viewH or viewH <= 0 or contentH <= viewH + 1 then
+        thumb:Hide()
+        return
+    end
+    local range = contentH - viewH
+    local thumbH = math.max(24, viewH * viewH / contentH)
+    local pos = scroll:GetVerticalScroll() / range
+    thumb:SetHeight(thumbH)
+    thumb:ClearAllPoints()
+    thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -(viewH - thumbH) * pos)
+    thumb:Show()
+end
+
+-- Sizes `content` (the scroll child) to the page's real laid-out height.
+local function ScrollMeasure(scroll, content, thumb, panel)
+    if not (scroll and panel and panel:IsShown()) then return end
+    local viewH = scroll:GetHeight()
+    local top = panel:GetTop()
+    if not viewH or viewH <= 0 or not top then return end
+
+    local lowest
+    local function consider(obj)
+        local bottom = obj.GetBottom and obj:GetBottom()
+        if bottom and (not lowest or bottom < lowest) then lowest = bottom end
+    end
+    for _, child in ipairs({ panel:GetChildren() }) do
+        if child:IsShown() then consider(child) end
+    end
+    for _, region in ipairs({ panel:GetRegions() }) do
+        if region:IsShown() then consider(region) end
+    end
+    if not lowest then return end
+
+    content:SetHeight(math.max(viewH, top - lowest + 16))
+    ScrollUpdateThumb(scroll, content, thumb)
+end
+
+local function UpdateScrollThumb()
+    ScrollUpdateThumb(standaloneScroll, standaloneContent, standaloneThumb)
+end
+
+local function SizeStandaloneContent(panel)
+    ScrollMeasure(standaloneScroll, standaloneContent, standaloneThumb, panel)
+end
 
 -- Family-wide standard confirmed 2026-09-20: a standalone window's sidebar
 -- tabs use Brand.HEADER_COLOR when selected and a muted blue-gray when not,
@@ -1110,17 +937,23 @@ local function ShowStandaloneTab(index)
     panel:SetParent(standaloneContent)
     panel:ClearAllPoints()
     panel:SetAllPoints(standaloneContent)
+    -- Back to the visible height and the top of the page before measuring -
+    -- a previous tab's taller content height would otherwise carry over.
+    standaloneContent:SetHeight(standaloneScroll:GetHeight() > 0 and standaloneScroll:GetHeight() or 1)
+    standaloneScroll:SetVerticalScroll(0)
     panel:Show()
     if panel.Refresh then panel.Refresh() end
+    UpdateScrollThumb()
+    -- Layout isn't resolved until the next frame, so measure then.
+    C_Timer.After(0, function() SizeStandaloneContent(panel) end)
 end
 
 local function BuildStandaloneWindow()
     if standaloneFrame then return standaloneFrame end
     if not rootPanel then SettingsPanel:Init() end
 
-    -- Tall enough to fit the biggest existing panel (Map Markers, since the
-    -- 1.3.2 grouping-distance slider pushed it past Gather Tally) without
-    -- needing scroll mechanics - deliberately generous rather than tight.
+    -- Fixed window size; pages taller than the content area scroll (see
+    -- SizeStandaloneContent).
     local FW, FH = 640, 820
     local f = CreateFrame("Frame", "XalsXRStandaloneOptions", UIParent, "BackdropTemplate")
     tinsert(UISpecialFrames, "XalsXRStandaloneOptions") -- lets the Escape key close it, like any other UI panel
@@ -1198,9 +1031,31 @@ local function BuildStandaloneWindow()
     vDivider:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 10, 0)
     vDivider:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMRIGHT", 10, 0)
 
-    standaloneContent = CreateFrame("Frame", nil, f)
-    standaloneContent:SetPoint("TOPLEFT", vDivider, "TOPRIGHT", 12, 0)
-    standaloneContent:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
+    -- Scrollable content area (see SizeStandaloneContent) - the scroll frame
+    -- fills the space the content frame used to, and the content frame is
+    -- its scroll child, fixed to the visible width so every page's RIGHT
+    -- margin anchors resolve exactly as they did before.
+    local contentViewW = FW - Brand.SAFE_MARGIN - 132 - 10 - Brand.LINE_THICKNESS - 12 - Brand.SAFE_MARGIN
+    standaloneScroll = CreateFrame("ScrollFrame", nil, f)
+    standaloneScroll:SetPoint("TOPLEFT", vDivider, "TOPRIGHT", 12, 0)
+    standaloneScroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
+    standaloneScroll:EnableMouseWheel(true)
+    standaloneScroll:SetScript("OnMouseWheel", function(self, delta)
+        local range = self:GetVerticalScrollRange()
+        self:SetVerticalScroll(math.max(0, math.min(range, self:GetVerticalScroll() - delta * 40)))
+        UpdateScrollThumb()
+    end)
+
+    standaloneContent = CreateFrame("Frame", nil, standaloneScroll)
+    standaloneContent:SetSize(contentViewW, FH - 92)
+    standaloneScroll:SetScrollChild(standaloneContent)
+
+    -- Thin scroll indicator along the scroll area's right edge, only shown
+    -- when the page is actually taller than the window.
+    standaloneThumb = f:CreateTexture(nil, "OVERLAY")
+    standaloneThumb:SetWidth(3)
+    standaloneThumb:SetColorTexture(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 0.9)
+    standaloneThumb:Hide()
 
     standalonePanels = {
         { label = "General", panel = rootPanel },
@@ -1307,6 +1162,58 @@ local function RecolorLabelsOrange(panel)
     walk(panel)
 end
 
+-- Native Esc -> Options entry: Blizzard shows the registered frame in a
+-- fixed-size canvas, so a page taller than that would be clipped with no way
+-- to reach the rest. Each page is registered through a thin wrapper that holds
+-- its own scroll area (mouse wheel + a thumb that only appears when the page
+-- overflows - same behavior as the standalone window). The real panel is
+-- re-parented into the wrapper's scroll child every time the wrapper is shown,
+-- since the standalone window borrows the same panel frames.
+local function WrapForNativeScroll(panel)
+    local wrapper = CreateFrame("Frame")
+    wrapper.name = panel.name
+    panel:Hide() -- stays hidden until its wrapper (or the standalone window) shows it
+
+    local scroll = CreateFrame("ScrollFrame", nil, wrapper)
+    scroll:SetPoint("TOPLEFT", wrapper, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", wrapper, "BOTTOMRIGHT", -8, 0)
+    scroll:EnableMouseWheel(true)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(1, 1)
+    scroll:SetScrollChild(content)
+
+    local thumb = wrapper:CreateTexture(nil, "OVERLAY")
+    thumb:SetWidth(3)
+    thumb:SetColorTexture(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 0.9)
+    thumb:Hide()
+
+    scroll:SetScript("OnSizeChanged", function(_, width)
+        if width and width > 0 then content:SetWidth(width) end
+    end)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local range = self:GetVerticalScrollRange()
+        self:SetVerticalScroll(math.max(0, math.min(range, self:GetVerticalScroll() - delta * 40)))
+        ScrollUpdateThumb(scroll, content, thumb)
+    end)
+
+    wrapper:SetScript("OnShow", function()
+        panel:SetParent(content)
+        panel:ClearAllPoints()
+        panel:SetAllPoints(content)
+        local viewH = scroll:GetHeight()
+        content:SetHeight(viewH and viewH > 0 and viewH or 1)
+        scroll:SetVerticalScroll(0)
+        panel:Show()
+        if panel.Refresh then panel.Refresh() end
+        ScrollUpdateThumb(scroll, content, thumb)
+        -- Layout isn't resolved until the next frame, so measure then.
+        C_Timer.After(0, function() ScrollMeasure(scroll, content, thumb, panel) end)
+    end)
+
+    return wrapper
+end
+
 function SettingsPanel:Init()
     if rootPanel then return end
     BuildRootPanel()
@@ -1321,36 +1228,45 @@ function SettingsPanel:Init()
         RecolorLabelsOrange(panel)
     end
 
+    -- Each page registers through a scrolling wrapper (see WrapForNativeScroll).
+    local rootWrap = WrapForNativeScroll(rootPanel)
+    local floatingWrap = WrapForNativeScroll(floatingPanel)
+    local waypointWrap = WrapForNativeScroll(waypointPanel)
+    local markersWrap = WrapForNativeScroll(markersPanel)
+    local gatherWrap = WrapForNativeScroll(gatherPanel)
+    local dataWrap = WrapForNativeScroll(dataPanel)
+    local integrationsWrap = WrapForNativeScroll(integrationsPanel)
+
     if Settings and Settings.RegisterCanvasLayoutCategory then
         -- Modern Settings API (retail 10.0+), with real sub-sections in the category tree
-        local rootCategory = Settings.RegisterCanvasLayoutCategory(rootPanel, rootPanel.name)
-        rootCategory.ID = rootPanel.name
+        local rootCategory = Settings.RegisterCanvasLayoutCategory(rootWrap, rootWrap.name)
+        rootCategory.ID = rootWrap.name
         Settings.RegisterAddOnCategory(rootCategory)
         SettingsPanel.category = rootCategory
 
         if Settings.RegisterCanvasLayoutSubcategory then
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, floatingPanel, floatingPanel.name)
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, waypointPanel, waypointPanel.name)
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, markersPanel, markersPanel.name)
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, gatherPanel, gatherPanel.name)
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataPanel, dataPanel.name)
-            Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsPanel, integrationsPanel.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, floatingWrap, floatingWrap.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, waypointWrap, waypointWrap.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, markersWrap, markersWrap.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, gatherWrap, gatherWrap.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataWrap, dataWrap.name)
+            Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsWrap, integrationsWrap.name)
         end
     elseif InterfaceOptions_AddCategory then
         -- Legacy fallback for older clients: nest sub-panels under the root by name
-        InterfaceOptions_AddCategory(rootPanel)
-        floatingPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(floatingPanel)
-        waypointPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(waypointPanel)
-        markersPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(markersPanel)
-        gatherPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(gatherPanel)
-        dataPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(dataPanel)
-        integrationsPanel.parent = rootPanel.name
-        InterfaceOptions_AddCategory(integrationsPanel)
+        InterfaceOptions_AddCategory(rootWrap)
+        floatingWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(floatingWrap)
+        waypointWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(waypointWrap)
+        markersWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(markersWrap)
+        gatherWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(gatherWrap)
+        dataWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(dataWrap)
+        integrationsWrap.parent = rootWrap.name
+        InterfaceOptions_AddCategory(integrationsWrap)
     end
 
     -- Backstop: OnShow does not reliably fire for these panels when switching
