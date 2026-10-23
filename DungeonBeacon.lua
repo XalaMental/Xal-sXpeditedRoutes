@@ -137,9 +137,38 @@ function DungeonBeacon:RunUpdateLoop()
     if not px or not py then return end
 
     local distance, deltaX, deltaY = nil, nil, nil
-    if Engine.HBD then
+    local fromBlizzard = false
+    -- Same-map targets use Blizzard's own conversion (see Helpers.ZoneVector).
+    if target.uiMapID == mapID then
+        distance, deltaX, deltaY = Helpers.ZoneVector(mapID, px, py, target.x, target.y)
+        fromBlizzard = distance ~= nil
+    end
+    if not fromBlizzard and Engine.HBD then
         distance, deltaX, deltaY = Engine.HBD:GetZoneDistance(mapID, px, py, target.uiMapID, target.x, target.y)
     end
+
+    -- Same sanity checks as Beacon.lua's compass (2026-10-11): HBD can be a
+    -- stale copy bundled by another addon, giving a wrong distance or a wrong
+    -- heading. Raw map coordinates only compare against the target when it's
+    -- on the player's current map, so the check only runs then. Rejected
+    -- answers fall back to the raw-coordinate distance and heading.
+    if not fromBlizzard and target.uiMapID == mapID then
+        local rawDeltaX, rawDeltaY = target.x - px, py - target.y
+        local rawLen = math.sqrt(rawDeltaX^2 + rawDeltaY^2)
+        local approxDistance = rawLen * Helpers.FALLBACK_YARDS_PER_UNIT
+        if approxDistance > 15 then
+            local bad = not distance
+            if distance and deltaX and deltaY then
+                local hbdLen = math.sqrt(deltaX^2 + deltaY^2)
+                bad = distance > approxDistance * 3 or distance < approxDistance / 3
+                    or (hbdLen > 0 and (deltaX * rawDeltaX + deltaY * rawDeltaY) / (hbdLen * rawLen) < 0.3)
+            end
+            if bad then
+                distance, deltaX, deltaY = approxDistance, rawDeltaX, rawDeltaY
+            end
+        end
+    end
+
     if not distance then
         -- Different continents/instance boundary HereBeDragons can't
         -- bridge - nothing sane to show; leave the arrow up but blank
