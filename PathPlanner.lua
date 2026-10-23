@@ -33,6 +33,11 @@ local function DistanceBetween(mapID, ax, ay, bx, by)
     local dx, dy = bx - ax, by - ay
     local approxDistance = math.sqrt(dx * dx + dy * dy) * Helpers.FALLBACK_YARDS_PER_UNIT
 
+    -- Blizzard's own conversion first (2026-10-23, see Helpers.ZoneVector) -
+    -- immune to a stale HereBeDragons copy bundled by another addon.
+    local zd = Helpers.ZoneVector(mapID, ax, ay, bx, by)
+    if zd then return zd end
+
     if Engine.HBD then
         local d = Engine.HBD:GetZoneDistance(mapID, ax, ay, bx, by)
         if d and (approxDistance <= 15 or (d <= approxDistance * 3 and d >= approxDistance / 3)) then
