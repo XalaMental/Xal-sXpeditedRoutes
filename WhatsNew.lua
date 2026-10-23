@@ -112,7 +112,7 @@ local function BuildFrame(installedVersion)
     -- "installedVersion" is the REAL live version (from CheckAndShow), not a
     -- hand-typed field - it always matches whatever actually got tagged.
     local verLine = Brand.FS(f, "Version " .. installedVersion .. (data.date and ("  ·  " .. data.date) or ""),
-        "Fonts\\ARIALN.TTF", 15, "", Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
+        Brand.BODY_FONT_PATH, 12, "", 0.5, 0.5, 0.5)
     verLine:SetPoint("TOP", f, "TOP", 0, -58)
     verLine:SetJustifyH("CENTER")
 
@@ -127,7 +127,7 @@ local function BuildFrame(installedVersion)
 
     local y = 92
     if data.intro and data.intro ~= "" then
-        local intro = Brand.FS(f, data.intro, "Fonts\\ARIALN.TTF", 16, "", 0.9, 0.9, 0.9)
+        local intro = Brand.FS(f, data.intro, Brand.BODY_FONT_PATH, 13, "", 0.85, 0.85, 0.85)
         intro:SetPoint("TOPLEFT", f, "TOPLEFT", 30, -y)
         intro:SetWidth(FW - 60)
         intro:SetJustifyH("LEFT")
@@ -136,9 +136,9 @@ local function BuildFrame(installedVersion)
     end
 
     for _, section in ipairs(data.sections or {}) do
-        -- Genuinely bold - Brand.TITLE_FONT_PATH (Simply Sans Bold) with the
+        -- Genuinely bold - Brand.TITLE_FONT_PATH (Cinzel Bold) with the
         -- same drop-shadow treatment as the "What's New" title itself, not
-        -- ARIALN.TTF (a regular-weight font; the "OUTLINE" flag draws a
+        -- a regular-weight font with an "OUTLINE" flag (that draws a
         -- stroke, it doesn't make a font bold). Called out directly
         -- 2026-08-17 - the previous version LOOKED like styled text, not an
         -- actual bold heading.
@@ -149,8 +149,8 @@ local function BuildFrame(installedVersion)
         y = y + 12
 
         for _, item in ipairs(section.items or {}) do
-            local bullet = Brand.FS(f, "-  " .. item, "Fonts\\ARIALN.TTF", 15, "",
-                Brand.GOLD[1], Brand.GOLD[2], Brand.GOLD[3])
+            local bullet = Brand.FS(f, "-  " .. item, Brand.BODY_FONT_PATH, 13, "",
+                0.85, 0.85, 0.85)
             bullet:SetPoint("TOPLEFT", f, "TOPLEFT", 36, -y)
             bullet:SetWidth(FW - 76)
             bullet:SetJustifyH("LEFT")
