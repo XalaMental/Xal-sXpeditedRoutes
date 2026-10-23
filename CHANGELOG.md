@@ -1,5 +1,20 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.5.0 - October 23, 2026
+
+---
+
+Routes got a big refresh this time. The whole addon now shares the look of the rest of my addons - new fonts, new settings pages, and a settings window that scrolls so nothing gets cut off. The Gather Tally and the compass got most of the attention on the working side. The tally now counts herbs and ore from older expansions on Retail, which it had been missing, and it works on Classic Era, where the game files herbs and ore differently than everywhere else. Then a Classic player told me the compass was pointing the wrong way with certain other addons installed, so the compass and the dungeon arrow now work out distance and direction from the game's own map data instead of relying on a shared library that another addon can break. Thank you to everyone who keeps reporting these - I can't test every version of the game myself, and your reports are how it keeps getting better.
+
+### 🆕 New
+- **New fonts and settings layout** - titles use Cinzel Bold and text uses Inter, and every settings page has titled sections with divider lines and the new checkboxes and sliders.
+- **Scrolling settings pages** - tall settings pages now scroll with the mouse wheel instead of getting cut off, in both the floating settings window and the Esc menu's options list.
+
+### 🔧 Fixed
+- **Gather Tally missed herbs from older expansions on Retail** - Dragonflight herbs and their bonus drops now count.
+- **Gather Tally didn't count anything on Classic Era** - herbs and ore are now recognized there.
+- **The compass and dungeon arrow could point the wrong way or show the wrong distance when other addons were installed** - they now use the game's own map data.
+
 ## 2.4.5 - September 30, 2026
 
 ---
