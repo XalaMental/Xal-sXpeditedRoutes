@@ -18,6 +18,7 @@ local Helpers = addonTable.Helpers
 local Brand = addonTable.BrandStyle
 
 local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel, gatherPanel, floatingPanel
+local nodeHighlightPanel -- WoW: Forever only; nil everywhere else
 local statsText = nil
 local pinStyleButtons = {}
 
@@ -38,7 +39,9 @@ local function GetStatsString()
                 and mapID ~= "minimap" and mapID ~= "helperButtonScale" and mapID ~= "groupingDistanceYards"
                 and mapID ~= "showTrailLine" and mapID ~= "boundaryNodes" and mapID ~= "helperButtonFadeWhenIdle"
                 and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled"
-                and mapID ~= "dungeonButtonPosition" and type(nodes) == "table" then
+                and mapID ~= "dungeonButtonPosition" and mapID ~= "nodeHighlightEnabled"
+                and mapID ~= "nodeHighlightRange" and mapID ~= "nodeHighlightSaved"
+                and mapID ~= "nodeHighlightStyle" and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -71,7 +74,9 @@ StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
                 and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
                 and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
                 and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled"
-                and key ~= "dungeonButtonPosition" then
+                and key ~= "dungeonButtonPosition" and key ~= "nodeHighlightEnabled"
+                and key ~= "nodeHighlightRange" and key ~= "nodeHighlightSaved"
+                and key ~= "nodeHighlightStyle" then
                 XalsXRDB[key] = nil
             end
         end
@@ -286,8 +291,8 @@ local function AddPickerGrid(panel, anchorTo, yGap, keys, labels, cols, btnW, bt
 end
 
 --------------------------------------------------------------------------------
--- General (root) panel: Lumberjacking, minimap button, auto-advance distance,
--- keybinds, Gather Tally window
+-- General (root) panel: Lumberjacking (Retail only), minimap button,
+-- auto-advance distance, keybinds
 --------------------------------------------------------------------------------
 local function BuildRootPanel()
     rootPanel = CreateFrame("Frame")
@@ -315,20 +320,26 @@ local function BuildRootPanel()
     -- Lumberjacking comes from Player Housing content, so a character could
     -- have the ability without ever wanting to gather wood on purpose.
     -- Defaults on. Confirmed 2026-08-17.
-    local lumberHeader = AddSection(rootPanel, div1, "Lumberjacking")
-    local lumberDesc, lumberCheck = AddToggle(rootPanel, lumberHeader, -10,
-        "Enable Lumberjacking gathering",
-        "Retail only. Turn this off if you'd rather not see lumber nodes, lumber map pins, or the lumber icon on the floating button.",
-        function(self)
-            XalsXRDB.lumberEnabled = self:GetChecked() and true or false
-            if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
-            if addonTable.QuickButton.Refresh then addonTable.QuickButton:Refresh() end
-        end)
-    rootPanel.lumberCheck = lumberCheck
+    -- Lumberjacking only exists on Retail, so its section is only built there
+    -- (the page is shorter everywhere else).
+    local lumberCheck
+    local afterLumber = div1
+    if Helpers.IsRetail() then
+        local lumberHeader = AddSection(rootPanel, div1, "Lumberjacking")
+        local lumberDesc
+        lumberDesc, lumberCheck = AddToggle(rootPanel, lumberHeader, -10,
+            "Enable Lumberjacking gathering",
+            "Turn this off if you'd rather not see lumber nodes, lumber map pins, or the lumber icon on the floating button.",
+            function(self)
+                XalsXRDB.lumberEnabled = self:GetChecked() and true or false
+                if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
+                if addonTable.QuickButton.Refresh then addonTable.QuickButton:Refresh() end
+            end)
+        rootPanel.lumberCheck = lumberCheck
+        afterLumber = AddDivider(rootPanel, lumberDesc, -14)
+    end
 
-    local div2 = AddDivider(rootPanel, lumberDesc, -14)
-
-    local minimapHeader = AddSection(rootPanel, div2, "Minimap button")
+    local minimapHeader = AddSection(rootPanel, afterLumber, "Minimap button")
     local minimapDesc, minimapCheck = AddToggle(rootPanel, minimapHeader, -10,
         "Show the minimap button",
         "Left-click opens these settings, right-click opens the Gather Tally.",
@@ -356,24 +367,11 @@ local function BuildRootPanel()
     local keybindHelp = AddNote(rootPanel, keybindHeader, -10,
         "Set these in the game's own Options -> Key Bindings menu, under the \"Xal's Xpedited Routes\" section: Start/Update Route, Stop Route, and Skip Current Node. Not bound to anything by default.")
 
-    local div5 = AddDivider(rootPanel, keybindHelp, -14)
-
-    local haulHeader = AddSection(rootPanel, div5, "Gather Tally")
-    local _, haulCheck = AddToggle(rootPanel, haulHeader, -10,
-        "Show the live Gather Tally window during a route",
-        "A small movable window that tallies what you gather. It stays open after a route ends so you can read it - close it with its X. Open it anytime with the Gather button or /xxr haul. More options under the Gather Tally section.",
-        function(self)
-            XalsXRDB.showHaulSummary = self:GetChecked() and true or false
-            if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
-                addonTable.RunTracker:OnSettingChanged()
-            end
-        end)
-    rootPanel.haulCheck = haulCheck
-
     local RefreshRootPanel = function()
-        haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         minimapCheck:SetChecked(not (XalsXRDB and XalsXRDB.minimap and XalsXRDB.minimap.hide == true))
-        lumberCheck:SetChecked(not (XalsXRDB and XalsXRDB.lumberEnabled == false))
+        if lumberCheck then
+            lumberCheck:SetChecked(not (XalsXRDB and XalsXRDB.lumberEnabled == false))
+        end
         slider:Sync((XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50)
     end
     rootPanel:SetScript("OnShow", RefreshRootPanel)
@@ -778,7 +776,23 @@ local function BuildGatherTallyPanel()
 
     local div1 = AddDivider(gatherPanel, intro, -14)
 
-    local timerHeader = AddSection(gatherPanel, div1, "Timers")
+    -- The on/off switch for the live window lives here only (it used to also
+    -- sit on the General page).
+    local windowHeader = AddSection(gatherPanel, div1, "Window")
+    local haulDesc, haulCheck = AddToggle(gatherPanel, windowHeader, -10,
+        "Show the live Gather Tally window during a route",
+        "A small movable window that tallies what you gather. It stays open after a route ends so you can read it - close it with its X.",
+        function(self)
+            XalsXRDB.showHaulSummary = self:GetChecked() and true or false
+            if addonTable.RunTracker and addonTable.RunTracker.OnSettingChanged then
+                addonTable.RunTracker:OnSettingChanged()
+            end
+        end)
+    gatherPanel.haulCheck = haulCheck
+
+    local divWindow = AddDivider(gatherPanel, haulDesc, -14)
+
+    local timerHeader = AddSection(gatherPanel, divWindow, "Timers")
     local gatherTimerDesc, gatherTimerCheck = AddToggle(gatherPanel, timerHeader, -10,
         "Gather timer",
         "Times the sessions you open with the Gather button. Off by default.",
@@ -818,6 +832,7 @@ local function BuildGatherTallyPanel()
     end)
 
     local RefreshGatherPanel = function()
+        haulCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHaulSummary == false))
         gatherTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulGatherTimer == true)
         routeTimerCheck:SetChecked(XalsXRDB and XalsXRDB.haulRouteTimer == true)
         dungeonEnableCheck:SetChecked(XalsXRDB and XalsXRDB.dungeonButtonEnabled == true)
@@ -826,6 +841,70 @@ local function BuildGatherTallyPanel()
     gatherPanel.Refresh = RefreshGatherPanel
 
     return gatherPanel
+end
+
+--------------------------------------------------------------------------------
+-- Node Highlight panel (WoW: Forever only): the on/off switch, the look, and
+-- how far away a node can be and still glow. Returns nil on every other
+-- client, where the page doesn't exist.
+--------------------------------------------------------------------------------
+local function BuildNodeHighlightPanel()
+    local NodeHighlight = addonTable.NodeHighlight
+    if not (NodeHighlight and NodeHighlight.supported) then return nil end
+
+    nodeHighlightPanel = CreateFrame("Frame")
+    nodeHighlightPanel.name = "Node Highlight"
+
+    local title = PageTitle(nodeHighlightPanel, "Node Highlight")
+    local intro = AddNote(nodeHighlightPanel, title, -10,
+        "Makes the herb or ore the game has picked for your Interact key glow as you approach. Only one node glows at a time - the one in front of you.")
+
+    local div1 = AddDivider(nodeHighlightPanel, intro, -14)
+
+    local highlightHeader = AddSection(nodeHighlightPanel, div1, "Highlight")
+    local highlightDesc, highlightCheck = AddToggle(nodeHighlightPanel, highlightHeader, -10,
+        "Highlight herbs and ore",
+        "On by default. This changes the game's interact-target settings; they are put back when you turn this off and when you log out.",
+        function(self)
+            NodeHighlight:SetEnabled(self:GetChecked() and true or false)
+        end)
+
+    local div2 = AddDivider(nodeHighlightPanel, highlightDesc, -14)
+
+    local lookHeader = AddSection(nodeHighlightPanel, div2, "Look")
+    local lookButtons, lookGrid = AddPickerGrid(nodeHighlightPanel, lookHeader, -10,
+        NodeHighlight.STYLES, NodeHighlight.STYLE_LABELS, 3, 136, 24,
+        function(key)
+            if XalsXRDB then XalsXRDB.nodeHighlightStyle = key end
+        end)
+    local lookNote = AddNote(nodeHighlightPanel, lookGrid, -8,
+        "Herbs glow green and ore glows orange in every look.")
+
+    local div3 = AddDivider(nodeHighlightPanel, lookNote, -14)
+
+    local rangeHeader = AddSection(nodeHighlightPanel, div3, "Range")
+    local rangeSlider = AddSlider(nodeHighlightPanel, rangeHeader, -10, "XalsXRHighlightRangeSlider",
+        "Highlight range", NodeHighlight.MIN_RANGE, NodeHighlight.MAX_RANGE, 1,
+        function(v) return v .. " yd" end,
+        function(v)
+            if XalsXRDB then XalsXRDB.nodeHighlightRange = v end
+            NodeHighlight:Apply()
+        end)
+    AddNote(nodeHighlightPanel, rangeSlider, -16,
+        "How far away a node can be and still glow. The game stops picking nodes at about 15 yards, so that's the most this can reach. Nodes outside your reach glow dimmer.")
+
+    local RefreshNodeHighlightPanel = function()
+        highlightCheck:SetChecked(XalsXRDB and XalsXRDB.nodeHighlightEnabled == true)
+        rangeSlider:Sync(NodeHighlight:GetRange())
+        local currentStyle = (XalsXRDB and XalsXRDB.nodeHighlightStyle) or "fire"
+        for styleKey, styleBtn in pairs(lookButtons) do
+            styleBtn:SetSelected(styleKey == currentStyle)
+        end
+    end
+    nodeHighlightPanel:SetScript("OnShow", RefreshNodeHighlightPanel)
+    nodeHighlightPanel.Refresh = RefreshNodeHighlightPanel
+
+    return nodeHighlightPanel
 end
 
 --------------------------------------------------------------------------------
@@ -917,10 +996,13 @@ end
 -- override, rather than changing MakeButton itself. HookScript on OnLeave
 -- restores the right color after a hover, since MakeButton's own OnLeave
 -- would otherwise put it back to its own white/orange.
-local SIDEBAR_UNSELECTED_COLOR = { 0.196, 0.196, 0.392 } -- #323264
+-- Lightened 2026-11-06 (was #323264 / the dark HEADER_COLOR red, both hard to
+-- read on Forever): option B from the settings mockup.
+local SIDEBAR_UNSELECTED_COLOR = { 0.588, 0.588, 0.824 } -- #9696d2
+local SIDEBAR_SELECTED_COLOR = { 0.8, 0.188, 0.212 } -- #cc3036
 local function SetSidebarTabSelected(tab, selected)
     tab:SetSelected(selected)
-    local color = selected and Brand.HEADER_COLOR or SIDEBAR_UNSELECTED_COLOR
+    local color = selected and SIDEBAR_SELECTED_COLOR or SIDEBAR_UNSELECTED_COLOR
     tab.label:SetTextColor(color[1], color[2], color[3], 1)
     tab.sidebarSelected = selected
 end
@@ -1066,6 +1148,10 @@ local function BuildStandaloneWindow()
         { label = "Database", panel = dataPanel },
         { label = "Integrations", panel = integrationsPanel },
     }
+    -- Node Highlight (Forever only) sits right after Gather Tally.
+    if nodeHighlightPanel then
+        table.insert(standalonePanels, 6, { label = "Node Highlight", panel = nodeHighlightPanel })
+    end
 
     -- 8px inset on BOTH sides (116-wide tab in a 132-wide sidebar) - the
     -- first version anchored tabs flush to the sidebar's left edge (0
@@ -1079,7 +1165,7 @@ local function BuildStandaloneWindow()
         -- MakeButton's own OnLeave (already wired via SetScript inside
         -- MakeButton) would otherwise reset the label to white/orange.
         tab:HookScript("OnLeave", function(self)
-            local color = self.sidebarSelected and Brand.HEADER_COLOR or SIDEBAR_UNSELECTED_COLOR
+            local color = self.sidebarSelected and SIDEBAR_SELECTED_COLOR or SIDEBAR_UNSELECTED_COLOR
             self.label:SetTextColor(color[1], color[2], color[3], 1)
         end)
         tab:ClearAllPoints()
@@ -1223,8 +1309,12 @@ function SettingsPanel:Init()
     BuildGatherTallyPanel()
     BuildDataPanel()
     BuildIntegrationsPanel()
+    BuildNodeHighlightPanel() -- Forever only; leaves nodeHighlightPanel nil elsewhere
 
-    for _, panel in ipairs({ rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }) do
+    local allPanels = { rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }
+    if nodeHighlightPanel then table.insert(allPanels, 6, nodeHighlightPanel) end
+
+    for _, panel in ipairs(allPanels) do
         RecolorLabelsOrange(panel)
     end
 
@@ -1236,6 +1326,7 @@ function SettingsPanel:Init()
     local gatherWrap = WrapForNativeScroll(gatherPanel)
     local dataWrap = WrapForNativeScroll(dataPanel)
     local integrationsWrap = WrapForNativeScroll(integrationsPanel)
+    local nodeHighlightWrap = nodeHighlightPanel and WrapForNativeScroll(nodeHighlightPanel)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         -- Modern Settings API (retail 10.0+), with real sub-sections in the category tree
@@ -1249,6 +1340,9 @@ function SettingsPanel:Init()
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, waypointWrap, waypointWrap.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, markersWrap, markersWrap.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, gatherWrap, gatherWrap.name)
+            if nodeHighlightWrap then
+                Settings.RegisterCanvasLayoutSubcategory(rootCategory, nodeHighlightWrap, nodeHighlightWrap.name)
+            end
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataWrap, dataWrap.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsWrap, integrationsWrap.name)
         end
@@ -1263,6 +1357,10 @@ function SettingsPanel:Init()
         InterfaceOptions_AddCategory(markersWrap)
         gatherWrap.parent = rootWrap.name
         InterfaceOptions_AddCategory(gatherWrap)
+        if nodeHighlightWrap then
+            nodeHighlightWrap.parent = rootWrap.name
+            InterfaceOptions_AddCategory(nodeHighlightWrap)
+        end
         dataWrap.parent = rootWrap.name
         InterfaceOptions_AddCategory(dataWrap)
         integrationsWrap.parent = rootWrap.name
@@ -1276,7 +1374,7 @@ function SettingsPanel:Init()
     -- not that anything inside it was wrong). Polling actual frame visibility
     -- directly sidesteps that entirely, since it doesn't depend on any
     -- particular script event firing at all.
-    local panels = { rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }
+    local panels = allPanels
     local wasVisible = {}
     local pollTimer = 0
     local poller = CreateFrame("Frame")
