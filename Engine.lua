@@ -159,6 +159,18 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.dungeonButtonEnabled == nil then
                 XalsXRDB.dungeonButtonEnabled = false
             end
+            -- Node highlight (WoW: Forever only) - on by default (Jason's call,
+            -- 2026-11-06). It changes the game's interact-target settings, which
+            -- are saved first and restored when it's turned off and at logout.
+            if XalsXRDB.nodeHighlightEnabled == nil then
+                XalsXRDB.nodeHighlightEnabled = true
+            end
+            if XalsXRDB.nodeHighlightRange == nil then
+                XalsXRDB.nodeHighlightRange = 15
+            end
+            if XalsXRDB.nodeHighlightStyle == nil then
+                XalsXRDB.nodeHighlightStyle = "fire"
+            end
 
             -- ONE-TIME cleanup of orphaned keys from an abandoned earlier prototype
             -- (never referenced anywhere in the current codebase - found sitting in
@@ -206,6 +218,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if addonTable.DungeonBeacon.Init then addonTable.DungeonBeacon:Init() end
             if addonTable.Markers.Init then addonTable.Markers:Init() end
             if addonTable.SettingsPanel.Init then addonTable.SettingsPanel:Init() end
+            if addonTable.NodeHighlight.Init then addonTable.NodeHighlight:Init() end
             if addonTable.QuickButton.Init then addonTable.QuickButton:Init() end
             if addonTable.RunTracker.Init then addonTable.RunTracker:Init() end
             if addonTable.MinimapButton and addonTable.MinimapButton.Register then addonTable.MinimapButton:Register() end
