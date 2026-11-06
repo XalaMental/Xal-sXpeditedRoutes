@@ -19,3 +19,4 @@ addonTable.RunTracker = {}
 addonTable.DungeonNav = {}
 addonTable.WhatsNew = {}
 addonTable.MinimapButton = {}
+addonTable.NodeHighlight = {}
