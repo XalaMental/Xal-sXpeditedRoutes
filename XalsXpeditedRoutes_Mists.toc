@@ -40,4 +40,5 @@ SettingsPanel.lua
 RunTracker.lua
 DungeonNav.lua
 MinimapButton.lua
+NodeHighlight.lua
 ChatCommands.lua
