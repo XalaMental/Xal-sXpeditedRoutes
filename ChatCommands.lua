@@ -48,6 +48,7 @@ local EXCLUDED_KEYS = {
     boundaryNodes = true, helperButtonFadeWhenIdle = true, optionsWindowPoint = true,
     dungeonCompassPosition = true, lumberEnabled = true,
     dungeonButtonPosition = true,
+    nodeHighlightEnabled = true, nodeHighlightRange = true, nodeHighlightSaved = true, nodeHighlightStyle = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
