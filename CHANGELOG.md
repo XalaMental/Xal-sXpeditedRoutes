@@ -1,5 +1,16 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.6.1 - November 6, 2026
+
+---
+
+A quick fix right after the last one. Once I got the Node Highlight into the game I found a beam of light showing up in every look instead of only in Beam, which made them all look the same. That's fixed, so Fire, Pulse, Sparkle, Spotlight and Rune Circle each look like themselves now. I also rebuilt Spotlight so it's a soft column of light pouring onto the ground instead of an oval outline, and Sparkle is now a bunch of separate twinkling sparkles instead of one big bright blob. Thanks for being part of the Xal family.
+
+### 🔧 Fixed
+- **Every Node Highlight look showed a beam of light** - the beam now only shows in the Beam look.
+- **Spotlight look rebuilt** - it's now a soft column of light pouring down onto the ground, and the Pulse look's inner glow is softer.
+- **Sparkle look was one big bright blob** - it now shows separate twinkling sparkles around the node.
+
 ## 2.6.0 - November 6, 2026
 
 ---
