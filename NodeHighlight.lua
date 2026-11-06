@@ -294,7 +294,7 @@ local function Animate(self, elapsed)
     -- Start every layer off; the chosen look switches on only what it uses.
     Off(self.band); Off(self.ring); Off(self.flare); Off(self.flame); Off(self.flameBack)
     Off(self.spotShaft); Off(self.rune); Off(self.domeFill)
-    self.beam:SetAlpha(0)
+    self.beam:Hide() -- only the Beam look shows it (hiding it outright; zero alpha didn't hide it on Forever)
     for _, mote in ipairs(self.motes) do Off(mote) end
     for _, ember in ipairs(self.embers) do Off(ember) end
     for _, sparkle in ipairs(self.sparkles) do Off(sparkle.star); Off(sparkle.halo) end
@@ -320,6 +320,7 @@ local function Animate(self, elapsed)
         self.beam:ClearAllPoints()
         self.beam:SetPoint("BOTTOM", self, "CENTER", 0, footY)
         self.beam:SetAlpha(alpha * Lerp(0.5, 1, ready) * (0.8 + 0.2 * breath))
+        self.beam:Show()
 
         local bandSize = size * (0.94 + 0.08 * breath)
         self.band:SetSize(bandSize, bandSize)
@@ -405,14 +406,14 @@ local function Animate(self, elapsed)
         self.band:SetSize(auraSize, auraSize)
         self.band:ClearAllPoints()
         self.band:SetPoint("CENTER", self, "CENTER", 0, footY + size * 0.28)
-        Tint(self.band, r, g, b, alpha * Lerp(0.18, 0.38, ready) * (0.8 + 0.2 * breath))
+        Tint(self.band, r, g, b, alpha * Lerp(0.05, 0.12, ready) * (0.8 + 0.2 * breath))
 
-        local bigSize = size * (0.34 + 0.16 * twinkle + 0.3 * (1 - arrive))
+        local bigSize = size * (0.2 + 0.07 * twinkle + 0.2 * (1 - arrive))
         self.flare:SetSize(bigSize, bigSize)
         self.flare:ClearAllPoints()
         self.flare:SetPoint("CENTER", self, "CENTER", 0, footY + size * 0.42)
         self.flare:SetRotation(self.spin * 0.35)
-        Tint(self.flare, wr, wg, wb, alpha * Lerp(0.5, 1, ready) * (0.6 + 0.4 * twinkle))
+        Tint(self.flare, wr, wg, wb, alpha * Lerp(0.4, 0.85, ready) * (0.6 + 0.4 * twinkle))
 
         local pace = Lerp(0.55, 1, ready) -- slower while out of reach
         for _, sparkle in ipairs(self.sparkles) do
@@ -438,16 +439,18 @@ local function Animate(self, elapsed)
 
                 sparkle.halo:ClearAllPoints()
                 sparkle.halo:SetPoint("CENTER", self, "CENTER", px, py)
-                sparkle.halo:SetSize(starSize * 2.3, starSize * 2.3)
-                Tint(sparkle.halo, r, g, b, alpha * envelope * 0.85)
+                -- A small, dim halo so each sparkle stays a distinct star; big
+                -- bright halos overlap into one white blob.
+                sparkle.halo:SetSize(starSize * 1.4, starSize * 1.4)
+                Tint(sparkle.halo, r, g, b, alpha * envelope * 0.3)
             end
         end
 
     elseif style == "spotlight" then
         -- A wide soft shaft of light from above landing in a bright pool on
         -- the ground, with a little dust drifting up through it.
-        local shaftWidth = size * 0.62 * (0.97 + 0.05 * breath)
-        local shaftHeight = size * 2.1 * arrive
+        local shaftWidth = size * 0.75 * (0.97 + 0.05 * breath)
+        local shaftHeight = size * 2.0 * arrive
         self.spotShaft:SetSize(shaftWidth, max(shaftHeight, 1))
         self.spotShaft:ClearAllPoints()
         self.spotShaft:SetPoint("BOTTOM", self, "CENTER", 0, footY - size * 0.02)
@@ -561,7 +564,7 @@ local function BuildGlow()
         glow.waves[i] = { texture = Layer(glow, "ring", "BORDER", 0), dome = dome }
     end
     -- Soft dome of light for the pulse look: the halo image showing only its top half.
-    glow.domeFill = Layer(glow, "halo", "BACKGROUND", 1)
+    glow.domeFill = Layer(glow, "glow", "BACKGROUND", 1)
     glow.domeFill:SetTexCoord(0, 1, 0, 0.5)
     glow.flare = Layer(glow, "flare", "OVERLAY", 1)
     -- The column of light is a plain white strip that fades out toward the top
@@ -569,7 +572,7 @@ local function BuildGlow()
     glow.beam = glow:CreateTexture(nil, "ARTWORK", nil, -1)
     glow.beam:SetColorTexture(1, 1, 1, 1)
     glow.beam:SetBlendMode("ADD")
-    glow.beam:SetAlpha(0)
+    glow.beam:Hide()
     glow.motes = {}
     for i = 1, MOTE_COUNT do glow.motes[i] = Layer(glow, "glow", "OVERLAY", 0) end
 
@@ -589,7 +592,10 @@ local function BuildGlow()
 
     -- Spotlight look: the shaft of light from above (the soft halo image
     -- stretched tall, so it fades out at the top and sides).
-    glow.spotShaft = Layer(glow, "halo", "ARTWORK", -3)
+    -- The soft round glow's top half (bright at the bottom edge, fading up and
+    -- out), so it reads as light pouring down onto the ground, not an outline.
+    glow.spotShaft = Layer(glow, "glow", "ARTWORK", -3)
+    glow.spotShaft:SetTexCoord(0, 1, 0, 0.5)
 
     -- Rune circle look: our own rune art, once it exists; the plain ring
     -- until then.
