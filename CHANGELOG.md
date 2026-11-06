@@ -1,5 +1,17 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.6.0 - November 6, 2026
+
+---
+
+This is the start of merging my addons into Forever, after a short break because I was sick, and I'm glad to be back at it. Routes is the first one set up for Forever, so it won't show up as out of date there. I also saw how a couple of the new Forever addons make herbs and ore glow as you walk up to them, and I decided Routes should do that too. So there's a new Node Highlight: the herb or ore the game has picked for your Interact key lights up with fire by default - green for herbs, orange for ore - or with a beam, a pulsing dome, sparkles, a spotlight or a rune circle if you'd rather. It's on by default and reaches as far as the game allows, about 15 yards, and your own interact settings go back when you turn it off or log out. The settings got a cleanup too: Node Highlight has its own page, the Gather Tally switch moved to the Gather Tally page so it's in one place, and the sidebar text is lighter so it's easier to read. Thanks for being part of the Xal family - go find some herbs.
+
+### 🆕 New
+- **Node highlight (WoW: Forever)** - the herb or ore in front of you glows as you approach, as fire by default, or as a beam of light, ripples, sparkles, a spotlight or a rune circle. It's on by default. The new Node Highlight settings page lets you turn it off, pick the look, and set how far away it glows (up to 15 yards, the farthest the game will pick a node).
+- **Easier-to-read settings sidebar** - the sidebar text in the settings window is lighter.
+- **Gather Tally switch moved** - the on/off switch for the live Gather Tally window now sits on the Gather Tally page instead of General.
+- **WoW: Forever support** - Routes now lists Forever as a supported version.
+
 ## 2.5.0 - October 23, 2026
 
 ---
