@@ -375,6 +375,12 @@ function Beacon:RunUpdateLoop()
     -- route progression can't depend on the visual arrow being shown, since
     -- e.g. TomTom may be handling navigation instead while this stays hidden.
     local advanceDistance = (XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50
+    -- A route built from live nodes only counts a stop as reached once you're within
+    -- the node highlight's reach; at the normal distance every live node near you
+    -- would be skipped at once and the route would end before you got anywhere.
+    if PathPlanner.pathTypeFilter and PathPlanner.pathTypeFilter.live then
+        advanceDistance = math.min(advanceDistance, 15)
+    end
     if distance <= advanceDistance then
         PathPlanner:StepForward()
         return
