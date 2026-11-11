@@ -27,27 +27,26 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
-    date = "August 17, 2026",
+    date = "November 11, 2026",
     intro = "",
     sections = {
-        { heading = "TomTom Integration", items = {
-            "Sync now defaults on if TomTom's installed, since most players already navigate with it - our own arrow is still there as the fallback either way.",
-            "And if you're already part of the family here, nothing changes for you automatically - but if you'd like the new default too, just hit the button below and you're set.",
+        { heading = "Live nodes (WoW: Forever)", items = {
+            "A new live scan checks your minimap and makes the saved nodes that are really there pulse yellow, and fades the ones it found empty. Turn it on under the new Live Nodes page and set a scan key right there.",
+            "After a scan Routes can build you a route through the live nodes, nearest first - and if you already have a route going, new live nodes are added to the end of it instead of replacing it.",
+            "New players on Forever start with about 22,000 built-in Classic herb and ore nodes, added the first time you log in.",
+        } },
+        { heading = "Node Highlight", items = {
+            "Quest objects now glow gold and chests glow blue, and there are three new looks: Storm Cloud, Target Lock, and Halo and Rays.",
+        } },
+        { heading = "Skins and a new look", items = {
+            "Pick a skin under General - Crimson (the original), Ember, Bronze ledger, Midnight, Indigo slate, or Parchment. It changes right away.",
+            "The settings window has new map-style artwork, tab icons, and slide switches.",
+        } },
+        { heading = "Sharing", items = {
+            "You can now share the nodes you find with other players running Routes. It's off by default - Database, Sharing.",
         } },
     },
-    -- One-time upgrade notice - remove this whole block once this has
-    -- shipped and aged out. Same splash for every player, new installs
-    -- included; harmless either way, so no conditional needed.
-    actionButton = {
-        label = "Open TomTom Settings",
-        onClick = function()
-            if addonTable.SettingsPanel and addonTable.SettingsPanel.OpenIntegrations then
-                addonTable.SettingsPanel:OpenIntegrations()
-            end
-        end,
-    },
 }
-
 -- ── Version check ────────────────────────────────────────────
 -- C_AddOns.GetAddOnMetadata is the current namespaced API (available on
 -- Retail, MoP Classic, and Classic Era alike since Dragonflight); the bare
@@ -93,7 +92,7 @@ local function BuildFrame(installedVersion)
     -- border/titles instead of bronze-gold - same treatment as the
     -- standalone Settings window, confirmed 2026-09-02 ("I think it looks
     -- better than the green background").
-    local WINDOW_BG = { 0.03, 0.028, 0.06 } -- #08070f
+    local WINDOW_BG = Brand.WINDOW_BG -- a skin color (the original look is #08070f)
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
@@ -112,7 +111,7 @@ local function BuildFrame(installedVersion)
     -- "installedVersion" is the REAL live version (from CheckAndShow), not a
     -- hand-typed field - it always matches whatever actually got tagged.
     local verLine = Brand.FS(f, "Version " .. installedVersion .. (data.date and ("  ·  " .. data.date) or ""),
-        Brand.BODY_FONT_PATH, 12, "", 0.5, 0.5, 0.5)
+        Brand.BODY_FONT_PATH, 12, "", Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     verLine:SetPoint("TOP", f, "TOP", 0, -58)
     verLine:SetJustifyH("CENTER")
 
@@ -127,7 +126,8 @@ local function BuildFrame(installedVersion)
 
     local y = 92
     if data.intro and data.intro ~= "" then
-        local intro = Brand.FS(f, data.intro, Brand.BODY_FONT_PATH, 13, "", 0.85, 0.85, 0.85)
+        local intro = Brand.FS(f, data.intro, Brand.BODY_FONT_PATH, 13, "",
+            Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
         intro:SetPoint("TOPLEFT", f, "TOPLEFT", 30, -y)
         intro:SetWidth(FW - 60)
         intro:SetJustifyH("LEFT")
@@ -150,7 +150,7 @@ local function BuildFrame(installedVersion)
 
         for _, item in ipairs(section.items or {}) do
             local bullet = Brand.FS(f, "-  " .. item, Brand.BODY_FONT_PATH, 13, "",
-                0.85, 0.85, 0.85)
+                Brand.BODY_COLOR[1], Brand.BODY_COLOR[2], Brand.BODY_COLOR[3])
             bullet:SetPoint("TOPLEFT", f, "TOPLEFT", 36, -y)
             bullet:SetWidth(FW - 76)
             bullet:SetJustifyH("LEFT")
