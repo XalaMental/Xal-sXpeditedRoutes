@@ -392,6 +392,8 @@ local function Finish(s, aborted, reason)
     -- already going - an existing route is never replaced).
     local PathPlanner = addonTable.PathPlanner
     if PathPlanner and XalsXRDB.liveScanRoute ~= false then
+        -- A second scan reaffirms the route: stops ahead whose node is now gone drop out.
+        PathPlanner:DropGoneStops(s.mapID, s.results)
         local liveNodes = {}
         for _, node in ipairs(Markers:GetLiveNodes()) do
             if node.mapID == s.mapID then liveNodes[#liveNodes + 1] = node end
