@@ -1,5 +1,15 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.7.1 - November 11, 2026
+
+---
+
+A small one right behind 2.7.0. While testing the live scan I realized the automatic scans could fire at the worst possible moment, right in the middle of a gather or a loot click, so they now wait until you're done casting, looting or hovering something. I also got tired of guessing why a scan wouldn't start, so the Live Nodes page now just tells you, and there's an optional scan right after a fight, a landing or a loading screen. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Scans wait for you** - automatic scans hold off while you're casting or gathering, aiming a spell, have a loot window open, or have something under your mouse. Scans you start yourself still run.
+- **Why a scan won't start** - the Live Nodes page shows whether a scan can start right now and, if not, the reason.
+- **Scan after you stop** - one scan after a fight, a landing or dismount, or a loading screen. Off by default.
 ## 2.7.0 - November 11, 2026
 
 ---
