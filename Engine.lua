@@ -101,7 +101,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 XalsXRDB.showGlow = false
             end
             if XalsXRDB.proximityDistanceYards == nil then
-                XalsXRDB.proximityDistanceYards = 200
+                XalsXRDB.proximityDistanceYards = 15
             end
             if XalsXRDB.groupingDistanceYards == nil then
                 XalsXRDB.groupingDistanceYards = 240
@@ -171,6 +171,35 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.nodeHighlightStyle == nil then
                 XalsXRDB.nodeHighlightStyle = "fire"
             end
+            if XalsXRDB.nodeHighlightQuest == nil then
+                XalsXRDB.nodeHighlightQuest = true
+            end
+            if XalsXRDB.nodeHighlightChest == nil then
+                XalsXRDB.nodeHighlightChest = true
+            end
+            -- Live node scan (Forever only, Options -> Live Nodes) and node sharing
+            -- (Options -> Database): everything that DOES something is off by
+            -- default; the display options only matter once a scan has run.
+            if XalsXRDB.liveScanEnabled == nil then XalsXRDB.liveScanEnabled = false end
+            if XalsXRDB.liveScanTimer == nil then XalsXRDB.liveScanTimer = false end
+            if XalsXRDB.liveScanTimerSeconds == nil then XalsXRDB.liveScanTimerSeconds = 20 end
+            if XalsXRDB.liveScanDistance == nil then XalsXRDB.liveScanDistance = false end
+            if XalsXRDB.liveScanDistanceYards == nil then XalsXRDB.liveScanDistanceYards = 30 end
+            if XalsXRDB.liveScanDim == nil then XalsXRDB.liveScanDim = true end
+            if XalsXRDB.liveScanArrow == nil then XalsXRDB.liveScanArrow = true end
+            if XalsXRDB.liveScanRare == nil then XalsXRDB.liveScanRare = true end
+            if XalsXRDB.liveScanRoute == nil then XalsXRDB.liveScanRoute = true end
+            if XalsXRDB.shareEnabled == nil then XalsXRDB.shareEnabled = false end
+            -- Skin (colors for every window; see XalsSkins.lua). Applied right here,
+            -- before any window is built, so everything picks it up.
+            if XalsXRDB.skin == nil then XalsXRDB.skin = "current" end
+            if addonTable.Skins and addonTable.Skins.Apply then
+                XalsXRDB.skin = addonTable.Skins.Apply(addonTable.BrandStyle, XalsXRDB.skin)
+            end
+            -- Object IDs the player has looted from (learned; drives chest detection).
+            if XalsXRDB.nodeHighlightContainers == nil then
+                XalsXRDB.nodeHighlightContainers = {}
+            end
 
             -- ONE-TIME cleanup of orphaned keys from an abandoned earlier prototype
             -- (never referenced anywhere in the current codebase - found sitting in
@@ -219,6 +248,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if addonTable.Markers.Init then addonTable.Markers:Init() end
             if addonTable.SettingsPanel.Init then addonTable.SettingsPanel:Init() end
             if addonTable.NodeHighlight.Init then addonTable.NodeHighlight:Init() end
+            if addonTable.ForeverImport and addonTable.ForeverImport.Init then addonTable.ForeverImport:Init() end
+            if addonTable.Sync and addonTable.Sync.Init then addonTable.Sync:Init() end
+            if addonTable.LiveScan and addonTable.LiveScan.Init then addonTable.LiveScan:Init() end
             if addonTable.QuickButton.Init then addonTable.QuickButton:Init() end
             if addonTable.RunTracker.Init then addonTable.RunTracker:Init() end
             if addonTable.MinimapButton and addonTable.MinimapButton.Register then addonTable.MinimapButton:Register() end
