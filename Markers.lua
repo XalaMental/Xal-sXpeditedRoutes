@@ -29,10 +29,162 @@ local proximityTimer = 0
 Markers.PIN_STYLES = MarkerRenderer.PIN_STYLES
 Markers.PIN_STYLE_LABELS = MarkerRenderer.PIN_STYLE_LABELS
 
+-- Closer than this the node highlight (NodeHighlight.lua, 15 yards at most) takes
+-- over, so a live node stops pulsing on the minimap.
+local LIVE_NEAR_YARDS = 15
+
 local function SetPinAppearance(pin, nodeType, isTarget, styleOverride, alphaOverride)
     local baseSize = (XalsXRDB and XalsXRDB.pinSize) or DEFAULT_PIN_SIZE
-    MarkerRenderer.SetAppearance(pin, nodeType, isTarget, baseSize, styleOverride, alphaOverride)
+    local state = pin.liveState
+    if pin.liveNear then state = nil end
+    MarkerRenderer.SetAppearance(pin, nodeType, isTarget, baseSize, styleOverride, alphaOverride, state)
 end
+
+--------------------------------------------------------------------------------
+-- Live node state (filled by LiveScan.lua)
+--
+-- After a scan, each saved node on the minimap is either "live" (the game's own
+-- tracking dot was found on it), "gone" (checked, nothing there) or unknown.
+-- A result is only trusted for LIVE_TTL seconds - nodes get picked by other
+-- players and respawn - then the marker goes back to normal.
+--------------------------------------------------------------------------------
+local LIVE_TTL = 120
+Markers.LIVE_TTL = LIVE_TTL
+local liveState = {} -- ["mapID:x:y"] = { live = bool, t = GetTime() }
+
+local function NodeKey(mapID, x, y)
+    return string.format("%d:%.4f:%.4f", mapID, x, y)
+end
+Markers.NodeKey = NodeKey
+
+-- "rare" is a live node whose name is a rare herb or ore (and the player kept
+-- the rare pulse on); it counts as live everywhere and just pulses gold.
+local function LiveStateOf(mapID, x, y)
+    local entry = liveState[NodeKey(mapID, x, y)]
+    if entry and GetTime() - entry.t <= LIVE_TTL then
+        if not entry.live then return "gone" end
+        if entry.rare and not (XalsXRDB and XalsXRDB.liveScanRare == false) then return "rare" end
+        return "live"
+    end
+    return nil
+end
+
+-- results: { [nodeKey] = true (live) / false (checked, gone) } for nodes on mapID.
+-- rare: optional { [nodeKey] = true } for live nodes that are rare herbs/ore.
+function Markers:SetLiveResults(mapID, results, rare)
+    local now = GetTime()
+    for key, live in pairs(results) do
+        liveState[key] = { live = live, t = now, mapID = mapID, rare = rare and rare[key] or nil }
+    end
+    self:UpdatePins()
+    -- Put the markers back to normal once these results run out.
+    C_Timer.After(LIVE_TTL + 1, function() Markers:UpdatePins() end)
+end
+
+-- A node was just gathered at (x, y): the nearest live node within a short
+-- distance is gone now, so its pulse stops and it fades like any other node the
+-- scan found empty. (The player stands a few yards from the node when picking
+-- it, so this is the nearest live one, not an exact match.)
+local GATHER_MATCH_YARDS = 20
+function Markers:MarkGathered(mapID, x, y)
+    local bestKey, bestDistance
+    local now = GetTime()
+    for key, entry in pairs(liveState) do
+        if entry.live and entry.mapID == mapID and now - entry.t <= LIVE_TTL then
+            local _, kx, ky = key:match("^(%d+):([%d%.]+):([%d%.]+)$")
+            kx, ky = tonumber(kx), tonumber(ky)
+            if kx and ky then
+                local distance = Helpers.NodeDistanceYards(Engine, mapID, x, y, kx, ky)
+                if distance <= GATHER_MATCH_YARDS and (not bestDistance or distance < bestDistance) then
+                    bestKey, bestDistance = key, distance
+                end
+            end
+        end
+    end
+    if bestKey then
+        local entry = liveState[bestKey]
+        entry.live, entry.rare, entry.t = false, nil, now
+        self:UpdatePins()
+    end
+end
+
+function Markers:ClearLiveState()
+    wipe(liveState)
+    self:UpdatePins()
+end
+
+-- Fresh live nodes: a list of { mapID, x, y, type }.
+function Markers:GetLiveNodes()
+    local list = {}
+    local now = GetTime()
+    for key, entry in pairs(liveState) do
+        if entry.live and now - entry.t <= LIVE_TTL then
+            local mapID, x, y = key:match("^(%d+):([%d%.]+):([%d%.]+)$")
+            if mapID then
+                local nodeType
+                for _, node in ipairs(XalsXRDB[tonumber(mapID)] or {}) do
+                    if NodeKey(tonumber(mapID), node.x, node.y) == key then nodeType = node.type break end
+                end
+                list[#list + 1] = { mapID = tonumber(mapID), x = tonumber(x), y = tonumber(y), type = nodeType }
+            end
+        end
+    end
+    return list
+end
+
+-- The pins the scan can probe: herb/ore pins on the minimap right now, with where
+-- each one sits on the minimap measured from its bottom-left corner (the same
+-- units as Minimap:GetLeft()/GetBottom()). HereBeDragons places every pin with
+-- SetPoint("CENTER", minimap, "CENTER", x, y), so that offset is read straight
+-- from the pin instead of recomputing bearings and rotation.
+function Markers:GetScanTargets()
+    local targets = {}
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then return targets, nil end
+    local half = Minimap:GetWidth() / 2
+    for _, pin in ipairs(minimapPinPool) do
+        if pin.inUse and pin:IsShown() and pin.nodeX and (pin.nodeType == "herb" or pin.nodeType == "mine") then
+            local sx, sy = self.SpotOf(pin)
+            if sx then
+                local dx, dy = sx - half, sy - Minimap:GetHeight() / 2
+                -- Skip pins parked on the edge (the route target floats there
+                -- when out of range): their position isn't the node's.
+                if dx * dx + dy * dy <= (half * 0.94) ^ 2 then
+                    targets[#targets + 1] = {
+                        pin = pin, key = NodeKey(mapID, pin.nodeX, pin.nodeY), dist2 = dx * dx + dy * dy,
+                    }
+                end
+            end
+        end
+    end
+    table.sort(targets, function(a, b) return a.dist2 < b.dist2 end)
+    return targets, mapID
+end
+
+-- A pin's spot on the minimap measured from its bottom-left corner, or nil.
+function Markers.SpotOf(pin)
+    local point, _, relativePoint, ox, oy = pin:GetPoint(1)
+    if point ~= "CENTER" or relativePoint ~= "CENTER" or not ox or not oy then return nil end
+    return Minimap:GetWidth() / 2 + ox, Minimap:GetHeight() / 2 + oy
+end
+
+-- Live pins pulse: one shared driver, running only while at least one is live.
+local pulseFrame = CreateFrame("Frame")
+local pulseClock = 0
+pulseFrame:SetScript("OnUpdate", function(_, elapsed)
+    pulseClock = pulseClock + elapsed
+    local any = false
+    for _, pin in ipairs(minimapPinPool) do
+        if pin.inUse and not pin.liveNear and (pin.liveState == "live" or pin.liveState == "rare") and pin.glowTex then
+            any = true
+            -- Rare nodes pulse faster so they read as different at a glance.
+            local speed = pin.liveState == "rare" and 8 or 5
+            pin.glowTex:SetAlpha(0.55 + 0.45 * math.sin(pulseClock * speed))
+        end
+    end
+    if not any then pulseFrame:Hide() end
+end)
+pulseFrame:Hide()
 
 local function AcquireMinimapPin()
     for _, pin in ipairs(minimapPinPool) do
@@ -96,7 +248,7 @@ end
 -- since it comes straight from the client's own minimap rendering state rather
 -- than a lookup table. Falls back to a flat percentage of the minimap radius
 -- only if that API is ever unavailable.
-local DEFAULT_PROXIMITY_DISTANCE_YARDS = 200
+local DEFAULT_PROXIMITY_DISTANCE_YARDS = 15
 local FALLBACK_RADIUS_PERCENT = 65
 
 local function ProximityTick(elapsed)
@@ -124,13 +276,21 @@ local function ProximityTick(elapsed)
         if pin.inUse and pin:IsShown() then
             local px, py = pin:GetCenter()
             local shouldBeNear = false
+            local liveNear = false
             if px then
                 local dx, dy = px - mx, py - my
-                shouldBeNear = math.sqrt(dx * dx + dy * dy) <= thresholdPixels
+                local pixels = math.sqrt(dx * dx + dy * dy)
+                shouldBeNear = pixels <= thresholdPixels
+                -- Within the highlight's reach the live pulse stops: the game's own
+                -- highlight takes over there, whatever the hide distance is set to.
+                if viewRadiusYards and viewRadiusYards > 0 then
+                    liveNear = (pixels / minimapRadius) * viewRadiusYards <= LIVE_NEAR_YARDS
+                end
             end
 
-            if shouldBeNear ~= pin.isNear then
+            if shouldBeNear ~= pin.isNear or liveNear ~= pin.liveNear then
                 pin.isNear = shouldBeNear
+                pin.liveNear = liveNear
                 SetPinAppearance(pin, pin.nodeType, pin.isRouteTarget, nil, shouldBeNear and 0 or nil)
             end
         end
@@ -209,10 +369,13 @@ function Markers:UpdatePins()
                 local isTarget = (targetNode and targetNode.x == node.x and targetNode.y == node.y)
                 local sameNodeAsBefore = (mPin.nodeX == node.x and mPin.nodeY == node.y)
                 mPin.nodeX, mPin.nodeY, mPin.nodeType, mPin.isRouteTarget = node.x, node.y, node.type, isTarget
+                mPin.liveState = LiveStateOf(playerMapID, node.x, node.y)
+                if mPin.liveState == "live" or mPin.liveState == "rare" then pulseFrame:Show() end
                 if not sameNodeAsBefore then
                     -- This pin now represents a different node than last time (or is
                     -- brand new) - let the next proximity tick judge it fresh.
                     mPin.isNear = nil
+                    mPin.liveNear = nil
                 end
                 -- UpdatePins() runs far more often than the proximity tick (every zone
                 -- change, route event, successful gather...). If we blindly redrew at
