@@ -52,7 +52,7 @@ local EXCLUDED_KEYS = {
     nodeHighlightQuest = true, nodeHighlightChest = true, nodeHighlightContainers = true,
     foreverDataImported = true, shareEnabled = true,
     liveScanEnabled = true, liveScanTimer = true, liveScanTimerSeconds = true, liveScanDistance = true,
-    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, skin = true,
+    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, liveScanAfterEvents = true, skin = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
