@@ -15,16 +15,43 @@ local function SaveNode(uiMapID, x, y, gatherType)
     local duplicateYards = Helpers.GetDuplicateYards()
     local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, x, y, duplicateYards)
 
+    -- Whatever live node (from the live scan) was just picked is gone now: its
+    -- pulse stops. Done before the position fine-tuning below moves the node.
+    if addonTable.Markers.MarkGathered then
+        addonTable.Markers:MarkGathered(uiMapID, x, y)
+    end
+    -- Scan by distance counts again from here.
+    if addonTable.LiveScan and addonTable.LiveScan.ResetDistance then
+        addonTable.LiveScan:ResetDistance()
+    end
+
     if existingIndex then
         -- Same spot gathered again - that's useful signal (it respawned and
         -- got picked), so refresh its freshness timestamp instead of just
         -- discarding the information.
-        zoneNodes[existingIndex].lastGathered = time()
-        print("|cffff9900Xal's XR:|r This node is already recorded.")
+        local existing = zoneNodes[existingIndex]
+        existing.lastGathered = time()
+        -- Fine-tune the saved position: move it partway toward where this
+        -- gather happened, weighted by how many gathers it already has, so a
+        -- marker that started a bit off settles onto the real spot after a few
+        -- visits and one sloppy gather can't throw it far. Capped so it still
+        -- adapts instead of freezing.
+        local seen = existing.n or 1
+        existing.x = math.floor((existing.x + (x - existing.x) / (seen + 1)) * 10000 + 0.5) / 10000
+        existing.y = math.floor((existing.y + (y - existing.y) / (seen + 1)) * 10000 + 0.5) / 10000
+        existing.n = math.min(seen + 1, 8)
+        if addonTable.Markers.UpdatePins then
+            addonTable.Markers:UpdatePins()
+        end
+        print("|cffff9900Xal's XR:|r This node is already recorded - its position was fine-tuned.")
         return
     end
 
-    table.insert(zoneNodes, { x = x, y = y, type = gatherType, lastGathered = time() })
+    local newNode = { x = x, y = y, type = gatherType, lastGathered = time() }
+    table.insert(zoneNodes, newNode)
+    if addonTable.Sync and addonTable.Sync.Share then
+        addonTable.Sync:Share(uiMapID, newNode)
+    end
     local NODE_LABELS = { mine = "Vein", herb = "Herb", lumber = "Tree" }
     print("|cff00ff00Xal's XR:|r " .. (NODE_LABELS[gatherType] or "Node") .. " saved to your database.")
     if addonTable.Markers.UpdatePins then
@@ -76,6 +103,10 @@ local NON_MAP_KEYS = {
     dungeonCompassPosition = true, lumberEnabled = true,
     dungeonButtonPosition = true,
     nodeHighlightEnabled = true, nodeHighlightRange = true, nodeHighlightSaved = true, nodeHighlightStyle = true,
+    nodeHighlightQuest = true, nodeHighlightChest = true, nodeHighlightContainers = true,
+    foreverDataImported = true, shareEnabled = true,
+    liveScanEnabled = true, liveScanTimer = true, liveScanTimerSeconds = true, liveScanDistance = true,
+    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, skin = true,
 }
 
 function NodeLogger.RemoveDuplicates()
