@@ -423,6 +423,52 @@ function PathPlanner:AddLiveNodes(mapID, liveNodes)
     return true
 end
 
+-- A rescan found some nodes empty: take the stops ahead of you that sit on one
+-- out of a route built from live nodes. Stops you've passed stay, a normal
+-- (non-live) route is never touched. results: { [nodeKey] = true / false }.
+-- Returns how many stops were removed.
+function PathPlanner:DropGoneStops(mapID, results)
+    if not (self:InProgress() and self.pathTypeFilter and self.pathTypeFilter.live) then return 0 end
+    if self.pathMapID ~= mapID or type(results) ~= "table" then return 0 end
+
+    local NodeKey = addonTable.Markers.NodeKey
+    local currentWasGone = false
+    local kept, removed = {}, 0
+    for i, stop in ipairs(self.currentPath) do
+        if i >= self.stopCursor and results[NodeKey(mapID, stop.x, stop.y)] == false then
+            removed = removed + 1
+            if i == self.stopCursor then currentWasGone = true end
+        else
+            kept[#kept + 1] = stop
+        end
+    end
+    if removed == 0 then return 0 end
+
+    -- Where the cursor lands in the shortened list: past every kept stop that was behind it.
+    local behind = 0
+    for i = 1, self.stopCursor - 1 do
+        if self.currentPath[i] then behind = behind + 1 end
+    end
+    self.currentPath = kept
+    self.stopCursor = behind + 1
+
+    print(string.format("|cff00ccffXal's XR:|r %d stop%s no longer there, removed from your route.",
+        removed, removed == 1 and "" or "s"))
+
+    if self.stopCursor > #self.currentPath then
+        self:CancelPath()
+        return removed
+    end
+    if currentWasGone then
+        if addonTable.Beacon.Retarget then addonTable.Beacon:Retarget() end
+        if XalsXRDB and XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.SyncCurrentStop then
+            addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
+        end
+    end
+    if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
+    return removed
+end
+
 function PathPlanner:StepForward()
     if not self:InProgress() then return end
 
