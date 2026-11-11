@@ -49,6 +49,10 @@ local EXCLUDED_KEYS = {
     dungeonCompassPosition = true, lumberEnabled = true,
     dungeonButtonPosition = true,
     nodeHighlightEnabled = true, nodeHighlightRange = true, nodeHighlightSaved = true, nodeHighlightStyle = true,
+    nodeHighlightQuest = true, nodeHighlightChest = true, nodeHighlightContainers = true,
+    foreverDataImported = true, shareEnabled = true,
+    liveScanEnabled = true, liveScanTimer = true, liveScanTimerSeconds = true, liveScanDistance = true,
+    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, skin = true,
 }
 
 SlashCmdList["XALMORASXR"] = function(msg)
@@ -76,25 +80,10 @@ SlashCmdList["XALMORASXR"] = function(msg)
             print("  |cff00ff00/xxr route skip|r - Skips the current node.")
         end
     elseif command == "reset" then
-        if subcommand == "all" then
-            for key in pairs(XalsXRDB) do
-                if not EXCLUDED_KEYS[key] then
-                    XalsXRDB[key] = nil
-                end
-            end
-            print("|cff00ccffXal's XR:|r All records have been deleted.")
-            PathPlanner:CancelPath()
-        else
-            local currentMapID = C_Map.GetBestMapForUnit("player")
-            if currentMapID and XalsXRDB[currentMapID] then
-                XalsXRDB[currentMapID] = nil
-                print("|cff00ccffXal's XR:|r Records for the current map have been deleted.")
-                PathPlanner:CancelPath()
-            else
-                print("|cff00ccffXal's XR:|r There are no records for this map.")
-            end
-        end
-        Markers:UpdatePins()
+        -- Resetting saved nodes is deliberately gone: the live node features
+        -- depend on the saved nodes being there. (Kept as a branch so a typed
+        -- /xxr reset says so instead of falling through to another command.)
+        print("|cff00ccffXal's XR:|r Resetting saved nodes isn't available - the live node features need them.")
     elseif command == "cleanup" then
         local duplicatesRemoved = NodeLogger.RemoveDuplicates()
         print("|cff00ccffXal's XR:|r Cleanup complete. Removed |cffff9900" .. duplicatesRemoved .. "|r duplicates.")
@@ -168,6 +157,18 @@ SlashCmdList["XALMORASXR"] = function(msg)
             print("|cff00ccffXal's XR:|r Current marker opacity: |cff00ff00" .. math.floor(((XalsXRDB.pinAlpha or 1) * 100) + 0.5) .. "%|r")
             print("|cff888888/xxr pinalpha <30-100>|r - Sets marker opacity as a percentage.")
         end
+    elseif command == "scan" then
+        -- Live node scan (Forever only): /xxr scan runs one; /xxr scan debug toggles probe prints.
+        local LiveScan = addonTable.LiveScan
+        if not (LiveScan and LiveScan.supported) then
+            print("|cff00ccffXal's XR:|r The live node scan is only available on WoW: Forever.")
+        elseif subcommand == "debug" then
+            LiveScan:ToggleDebug()
+        else
+            LiveScan:Start("chat")
+        end
+    elseif command == "share" then
+        if addonTable.Sync then addonTable.Sync:PrintStatus() end
     elseif command == "glow" then
         XalsXRDB.showGlow = not (XalsXRDB.showGlow ~= false)
         Markers:UpdatePins()
@@ -175,12 +176,12 @@ SlashCmdList["XALMORASXR"] = function(msg)
     elseif command == "proximity" then
         -- Always on - this just sets the hide distance, doesn't toggle anything
         local n = tonumber(subcommand)
-        if n and n >= 20 and n <= 500 then
+        if n and n >= 5 and n <= 500 then
             XalsXRDB.proximityDistanceYards = n
             print("|cff00ccffXal's XR:|r Marker hide distance set to |cff00ff00" .. n .. " yd|r.")
         else
-            print("|cff00ccffXal's XR:|r Current marker hide distance: |cff00ff00" .. (XalsXRDB.proximityDistanceYards or 200) .. " yd|r")
-            print("|cff888888/xxr proximity <20-500>|r - Sets the distance in yards.")
+            print("|cff00ccffXal's XR:|r Current marker hide distance: |cff00ff00" .. (XalsXRDB.proximityDistanceYards or 15) .. " yd|r")
+            print("|cff888888/xxr proximity <5-500>|r - Sets the distance in yards.")
         end
     elseif command == "pinsize" then
         local n = tonumber(subcommand)
@@ -246,8 +247,6 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr route skip|r - Skips the current node and moves to the next.")
         print("  |cff00ff00/xxr stats|r - Shows the total number of saved nodes.")
         print("  |cff00ff00/xxr cleanup|r - Cleans up duplicate nodes in the database.")
-        print("  |cff00ff00/xxr reset|r - Removes recorded nodes for the current zone.")
-        print("  |cff00ff00/xxr reset all|r - Removes all nodes from the addon.")
         print("  |cff00ff00/xxr pinstyle|r - Lists available map marker styles.")
         print("  |cff00ff00/xxr pinstyle <name>|r - Sets the map marker style (hollowx or star).")
         print("  |cff00ff00/xxr pinsize <8-28>|r - Sets the map marker size in pixels.")
