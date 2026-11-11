@@ -19,6 +19,7 @@ libs\LibDBIcon\LibDBIcon-1.0.lua
 
 Bootstrap.lua
 BrandStyle.lua
+XalsSkins.lua
 WhatsNew.lua
 Helpers.lua
 Engine.lua
@@ -36,4 +37,8 @@ RunTracker.lua
 DungeonNav.lua
 MinimapButton.lua
 NodeHighlight.lua
+ForeverNodeData.lua
+ForeverImport.lua
+Sync.lua
+LiveScan.lua
 ChatCommands.lua
