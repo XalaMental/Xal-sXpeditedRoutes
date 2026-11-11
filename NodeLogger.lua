@@ -106,7 +106,7 @@ local NON_MAP_KEYS = {
     nodeHighlightQuest = true, nodeHighlightChest = true, nodeHighlightContainers = true,
     foreverDataImported = true, shareEnabled = true,
     liveScanEnabled = true, liveScanTimer = true, liveScanTimerSeconds = true, liveScanDistance = true,
-    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, skin = true,
+    liveScanDistanceYards = true, liveScanDim = true, liveScanArrow = true, liveArrowPosition = true, liveScanRare = true, liveScanRoute = true, liveScanAfterEvents = true, skin = true,
 }
 
 function NodeLogger.RemoveDuplicates()
