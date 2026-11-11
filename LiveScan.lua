@@ -30,6 +30,9 @@
 --   * /xxr scan
 --   * optionally on a timer (adjustable seconds)
 --   * optionally each time you've walked a set distance (adjustable yards)
+--   * optionally once after a fight ends, a landing or dismount, or a loading screen
+-- Automatic scans never run while you're casting, gathering, aiming a spell, have
+-- a loot window open or something is under the mouse.
 local addonName, addonTable = ...
 local LiveScan = addonTable.LiveScan
 local Markers = addonTable.Markers
@@ -276,6 +279,24 @@ local function MouseBusy()
         or (IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")))
 end
 
+-- Something the player is in the middle of that an automatic scan must not
+-- interrupt: a cast or channel (gathering is a cast), aiming a spell, a loot
+-- window, or a creature/player under the mouse (the next click is probably a loot
+-- or target click, and a scan makes the minimap click-proof for a moment).
+-- Manual scans (key, button, /xxr scan) ignore this: you asked for them.
+local function BusyReason()
+    local ok, reason = pcall(function()
+        if UnitCastingInfo and UnitCastingInfo("player") then return "you're casting or gathering" end
+        if UnitChannelInfo and UnitChannelInfo("player") then return "you're channeling a spell" end
+        if SpellIsTargeting and SpellIsTargeting() then return "you're aiming a spell" end
+        if LootFrame and LootFrame:IsShown() then return "a loot window is open" end
+        if UnitExists and UnitExists("mouseover") then return "something is under the mouse" end
+        return nil
+    end)
+    if ok then return reason end
+    return nil
+end
+
 -- Is Find Herbs or Find Minerals tracking on? (If the game won't say, assume yes.)
 local function TrackingOn()
     if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo) then return true end
@@ -307,8 +328,18 @@ local function WhyNot(auto)
     local inside = IsInInstance()
     if Secret(inside) or inside then return "not in dungeons or raids" end
     if auto and (not MouseOnWorld() or MouseBusy()) then return "mouse busy" end
+    if auto then
+        local busy = BusyReason()
+        if busy then return busy end
+    end
     if not TrackingOn() then return "turn on Find Herbs or Find Minerals first" end
     return nil
+end
+
+-- The reason a scan can't start right now (as a short sentence), or nil if one
+-- could. Shown on the Live Nodes page so people aren't left guessing.
+function LiveScan:WhyNot()
+    return WhyNot(false)
 end
 
 --------------------------------------------------------------------------------
@@ -652,11 +683,45 @@ local autoElapsed = 0
 local STILL_SECONDS = 1.5   -- standing still this long restarts the distance count
 local stillSince, stillReset
 
+-- Optional (Live Nodes -> "Scan after you stop"): one scan shortly after a fight
+-- ends, after landing or dismounting, and after a loading screen - the moments
+-- the surroundings have just changed. It waits (up to 15 seconds) while an
+-- automatic scan isn't allowed, e.g. a loot window is open.
+local pendingEventScan
+local wasFlying = false
+local function RequestEventScan(delay)
+    if not (Enabled() and XalsXRDB.liveScanAfterEvents) then return end
+    local now = GetTime()
+    pendingEventScan = { due = now + delay, giveUp = now + delay + 15 }
+end
+
 local function AutoTick(_, elapsed)
     autoElapsed = autoElapsed + elapsed
     if autoElapsed < AUTO_TICK then return end
     autoElapsed = 0
     if scan or not Enabled() then return end
+
+    -- Landing: flying a moment ago, not now.
+    if XalsXRDB.liveScanAfterEvents and IsFlying then
+        local flying = IsFlying()
+        if not Secret(flying) then
+            flying = flying and true or false
+            if wasFlying and not flying then RequestEventScan(1.5) end
+            wasFlying = flying
+        end
+    else
+        wasFlying = false
+    end
+    local pending = pendingEventScan
+    if pending and GetTime() >= pending.due then
+        if GetTime() > pending.giveUp then
+            pendingEventScan = nil
+        elseif not WhyNot(true) then
+            pendingEventScan = nil
+            LiveScan:Start("auto")
+            return
+        end
+    end
 
     -- Scan by distance counts walking: when you stop, it starts counting again
     -- from where you stopped (once per stop, until you move off again).
@@ -859,12 +924,21 @@ function LiveScan:Init()
     watcher:RegisterEvent("PLAYER_LOGOUT")
     watcher:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+    watcher:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
     watcher:SetScript("OnEvent", function(_, event)
+        -- These two never cancel a scan in progress; they only ask for one later.
+        if event == "PLAYER_REGEN_ENABLED" then return RequestEventScan(1.5) end
+        if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+            if IsMounted and not IsMounted() then RequestEventScan(1.5) end
+            return
+        end
         if scan then Finish(scan, true, event == "PLAYER_REGEN_DISABLED" and "combat started" or "the zone changed") end
         if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
             lastScanPos = PlayerWorldPosition()
             lastScanAt = GetTime()
         end
+        if event == "PLAYER_ENTERING_WORLD" then RequestEventScan(3) end
     end)
 
     local autoFrame = CreateFrame("Frame")
