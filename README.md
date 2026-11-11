@@ -1,204 +1,126 @@
 # Xal's Xpedited Routes
 
-**Xal's Xpedited Routes** is a lightweight, modern World of Warcraft addon (fully ready for Midnight/TWW) that automatically records and displays mining veins and herbalism nodes you gather with your character on both the minimap and the world map, building a personal, local database.
+**Xal's Xpedited Routes** records the herbs, ore and lumber you gather, draws them on your map and minimap, and builds the fastest route through them with an on-screen compass. On **WoW: Forever** it also shows which of your saved nodes are really there right now, glows the herb or ore in front of you, and starts you off with a full set of Classic nodes.
 
-Additionally, it features an intelligent navigation system that guides you through the optimal gathering route in your current zone.
+Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Retail only; the node highlight, live node scan and built-in nodes are Forever only.
 
-> The idea behind this addon: combine gathering-node tracking and route optimization - concepts pioneered separately by GatherMate2/Gatherer (node recording) and Routes (route optimization) - into a single, beneficial tool instead of requiring multiple separate addons.
+> The idea: combine gathering-node tracking and route optimization - concepts pioneered separately by GatherMate2/Gatherer (node recording) and Routes (route optimization) - into one tool instead of several separate addons.
 
 ## Requirements
 
-**Requires [HereBeDragons](https://www.curseforge.com/wow/addons/herebedragons) for minimap and world map markers to show at all** - not bundled, install it separately. Without it, recording, routing, the compass, and the floating helper button all still work fine, but no pins will be drawn on either map. See "HereBeDragons Dependency" further down for the full breakdown of what does and doesn't need it.
+**Requires [HereBeDragons](https://www.curseforge.com/wow/addons/herebedragons) for minimap and world map markers to show at all** - not bundled, install it separately. Without it, recording, routing, the compass and the floating helper button still work, but no pins are drawn. See "HereBeDragons Dependency" below.
 
-No other dependencies. [TomTom](https://www.curseforge.com/wow/addons/tomtom) is fully optional and only adds the automatic route hand-off described below.
+[TomTom](https://www.curseforge.com/wow/addons/tomtom) is optional and only adds the route hand-off described below. The live node scan also works best alone: other addons that scan the minimap the same way (Lueur, NodeSight, GatherCompass) fight over it if more than one runs at once.
 
-## Key Features
+## Key features
 
-*   **Automatic Recording:** Listens to your gathering spells cast in real-time and saves the exact coordinates.
-*   **Local Database:** Data is stored in your personal `SavedVariables`, ensuring that your gathering database remains private and persistent.
-*   **False Nodes Filtering:** Automatically excludes corpse-based herbalism (such as those in Midnight) to avoid registering invalid coordinates.
-*   **Duplicate Cleanup:** Built-in algorithm to automatically detect and remove duplicate or extremely close node records.
-*   **Node Freshness:** Skips nodes gathered too recently when building a route, since they probably haven't respawned yet.
-*   **Route Optimization:** Builds an initial path with a greedy nearest-neighbor approach, then improves it with a 2-opt pass that un-crosses and shortens the route further, using real distances in yards when HereBeDragons is installed (an approximation otherwise).
-*   **HUD Compass:** A floating, dynamic arrow that rotates based on the direction your character is facing and shows the exact distance to the next node.
-*   **Simple Map Markers:** A hollow X (default) or hollow star, green for Herbalism and red for Mining, with a small dot marking your active route target. Fully hides itself once you're close to a node, since the real node model in the world is what matters at that range.
-*   **In-Game Settings Panel:** No need to memorize chat commands — split into three sections (General, Map Markers, Database) instead of one long page.
-*   **Floating Helper Button:** A small draggable button (like a minimap button) that generates or stops a route for your current zone in a single click — no chat commands required.
-*   **Independent Mine/Herb Route Control on the Floater:** A dual-gathering character gets two buttons — click either to route just that type, click both to merge into one combined route. Recording new gathers happens unconditionally regardless of these buttons.
-*   **TomTom Hand-off (optional, off by default):** Turn it on and, if TomTom is installed, its crazy arrow automatically follows your route stop by stop — no popup, no copy/paste, nothing to click.
+*   **Automatic recording** of every herb, ore and lumber node you gather, saved to your own `SavedVariables`. Re-gathering a saved node nudges its marker onto the real spot.
+*   **Route optimization:** a greedy nearest-first route improved with a 2-opt pass, using real distances in yards when HereBeDragons is installed. Nearby nodes group into one stop.
+*   **Compass and trail line:** a movable arrow with the distance to your next stop, auto-advance, skip, and a line on the minimap pointing at your next stop.
+*   **Map and minimap markers:** hollow X or star, adjustable size and opacity, with your route target marked. Markers for node types your character can't gather are hidden.
+*   **Floating helper button:** one click starts or updates a route; Mining, Herbalism and Lumberjacking each get an icon and combine into one route.
+*   **Gather Tally:** a live window tallying what you gather on a run, with optional timers.
+*   **TomTom hand-off:** if TomTom is installed its arrow follows your route (on by default when TomTom is present).
+*   **Dungeon Nav (Xperimental):** waypoints to Season 2 Mythic+ entrances, with portal routing through Silvermoon for three of them.
+*   **Skins:** six color skins (Crimson original, Ember, Bronze ledger, Midnight, Indigo slate, Parchment) that switch right away.
+*   **Node sharing (off by default):** swap newly found nodes with other players running the addon.
 
-## Settings Panel
+### WoW: Forever
 
-Open it any of these ways:
-*   `Escape` -> **Options** -> **AddOns** -> **Xal's Xpedited Routes**
-*   `/xxr options` (or `/xxr config`)
+*   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects (gold) and chests (blue) glow too. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
+*   **Live node scan (off by default):** finds which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Live nodes pulse yellow (rare herbs and ore violet) and nodes it found empty fade. Start a scan with a key you set on the Live Nodes page, `/xxr scan`, a timer, or each time you walk a set distance.
+*   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. A route you already have is never replaced - new live nodes are added to the end of it.
+*   **Built-in Classic nodes:** about 22,000 herb and ore nodes across 45 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
 
-It's split into five sections (shown as sub-items under Xal's Xpedited Routes in the AddOns category list) rather than one long page:
+## Settings
 
-*   **General** — show/hide the floating helper button (+ reset its position), auto-advance distance
-*   **Waypoint** — compass arrow style, arrow scale, progress coloring
-*   **Map Markers** — marker style, size, opacity, glow, proximity hide distance
-*   **Database** — stats, duplicate detection distance, node freshness, cleanup/reset
-*   **Integrations** — optional hand-offs to other addons (currently just TomTom); home for any future ones too
+Open them with `/xxr options`, the minimap button, or Escape -> Options -> AddOns -> Xal's Xpedited Routes. The window has a sidebar with these pages:
 
-Route control itself (Generate/Stop/Skip) doesn't have its own settings page — that's what the floating helper button is for. `/xxr route`, `/xxr route stop`, and `/xxr route skip` work from chat if you'd rather not use the floater. All three can also be bound to a real key at Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes. Unbound by default.
+*   **General** - the skin, minimap button, Lumberjacking (Retail), auto-advance distance
+*   **Floating** - the helper button
+*   **Waypoint** - compass arrow style, scale, progress coloring, trail line
+*   **Map Markers** - marker style, size, opacity, glow, the distance at which markers hide when you're close (15 yards by default)
+*   **Gather Tally** - the live window and timers, the dungeon button
+*   **Node Highlight** (Forever) - on/off, quest and chest glows, look, range
+*   **Live Nodes** (Forever) - the scanner, its key, timer and distance, and what it shows
+*   **Database** - stats, duplicate distance, node freshness, sharing, duplicate cleanup
+*   **Integrations** - TomTom
 
-## Floating Helper Button
+Route start, stop and skip, and "Scan for live nodes", can also be bound to keys at Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes. The scan key can be set right on the Live Nodes page.
 
-**Recording new gathers is always on, unconditionally, no matter what this button is doing.** The moment you successfully gather a mining or herb node, it's saved - that has nothing to do with this button or with routing at all. This button only controls navigation: which nodes you're actively being routed to.
+## Live node scan (Forever)
 
-A small draggable control, on by default, that puts route control one click away — and it adapts to what your current character can actually gather:
+The game never tells an addon where its Find Herbs / Find Minerals dots are, but it does name the dot under the real mouse. A scan slides your minimap under the mouse so each saved node's spot lands under it, one spot at a time, and reads the name the game gives back. Because it only checks the spots where you have saved nodes, it's short. While it runs the minimap is blank for a moment and the buttons on it can't be clicked; combat, a mouse press or a zone change cancels it and puts everything back at once. If the mouse is over a window the scan waits for you to move it onto the world (the Scan now button hides the settings window for you). Turn on Find Herbs or Find Minerals first.
 
-*   **Knows both Mining and Herbalism:** two buttons stacked vertically, Mine on top and Herb below.
-*   **Knows only one:** a single button for that profession.
-*   **Knows neither:** a single greyed placeholder with nothing to click (tooltip explains why).
+## Floating helper button
 
-Each button is drawn using whatever **Map Marker Style** you've selected in Settings — same shape, same green/red color logic — just larger, so the floater always visually matches your map pins instead of being a generic shape of its own.
+Recording new gathers is always on, no matter what this button is doing; it only controls navigation. It adapts to your character: one icon per gathering type you can use, each drawn in your chosen marker style. Click an icon to start or update a route with that type, click a lit icon to remove it, light several for one combined route. A route built from live nodes isn't "on" for any type, so clicking an icon starts a normal route. Drag it anywhere; `/xxr button` shows or hides it and `/xxr button reset` puts it back.
 
-*   **Click a button:** Starts (or updates) a route including that node type — the HUD compass appears, and if TomTom is installed, its crazy arrow follows along automatically. If both Mine and Herb are on, it's one combined route through everything this character can gather. If only one is on, the route is restricted to just that type.
-*   **Click an already-on button again:** Removes that type from the route. If that was the only type included, the route stops entirely (compass disappears).
-*   Whichever type(s) are currently included in the active route get a small dot marked at their center, matching how the map highlights your active target. A small number under each button shows how many of that node type are saved in your current zone.
+## Compass
 
-The whole thing can be dragged from anywhere on it (buttons included) — position is saved. Show/hide the button itself from the Settings panel or with `/xxr button`. Reset its position with `/xxr button reset` or the Settings panel.
+Drag it with Left-Click, right-click to skip the current node. When you get within your auto-advance distance (50 yards by default, adjustable to 150) it moves to the next node. Pick an arrow style and scale in the settings; the arrow turns green while you're closing in and red when you drift away.
 
-Profession detection is checked a few times right after login until it gets a confirmed answer, then it stops re-checking for the rest of the session (see "Markers/Routes Automatically Match Your Professions" below for why). If you train a new gathering profession mid-session, `/reload` to have the floater pick it up - it won't add the second button automatically without one.
+## Duplicates and freshness
 
-## HUD Compass Interaction
+*   **Duplicate distance** (default 15 yards, 5-50): how close two saved nodes must be to count as the same one. **Cleanup Duplicates** merges nodes already saved closer than that.
+*   **Node freshness** (off by default, up to 60 minutes): skips nodes you gathered recently when building a route, since they probably haven't respawned.
 
-*   **Move the HUD:** Hold **Left-Click** on the compass and drag it anywhere on your screen. Its position will be saved automatically for future sessions.
-*   **Skip Node:** **Right-Click** on the compass to skip the current node and immediately point to the next one.
-*   **Auto-Advance:** When you get within your configured distance (30 yards by default) of your current target node, the compass will automatically advance to the next node in the route.
-*   **Arrow style:** Two custom arrows are bundled (`RoutesArrow.tga` - "Chevron", a chunky glossy 3D-style arrow, and the default; and `Arrow3.tga` - "Topdown 2D Arrow", plain white/gray), plus the original Blizzard arrow as a fallback option. Pick one in Settings → General → Compass Arrow, or with `/xxr arrowstyle <custom3|custom4|blizzard>`.
-*   **Progress coloring:** The arrow turns **green** when your distance to the target is shrinking (checked every 0.5s, with a small deadband so it doesn't flicker on minor jitter) and **red** when it's growing, i.e. you've wandered off course. Toggle it in Settings → General or with `/xxr arrowprogress`. This works best with plain/light-colored arrow art — tinting already-colorful art can look muddy, since the tint multiplies the existing colors rather than replacing them.
+Resetting saved nodes isn't offered any more: the live node features rely on your saved nodes.
 
-Want different custom arrow art? Send it over (same spec as the marker icons: square-ish, transparent background, drawn pointing straight up) and it can be swapped into `Textures\RoutesArrow.tga` or `Textures\Arrow3.tga` the same way these were. If you want the green/red progress coloring to read cleanly, ask for the art in mostly white/light gray rather than richly colored — that's exactly what `Arrow3.tga` is.
+## TomTom hand-off
 
-## Map Marker Style
+If TomTom is installed, its crazy arrow follows your route stop by stop. TomTom's arrow tracks one active waypoint, so Routes keeps re-pointing it at the stop it currently considers next. Dungeon Nav waypoints use TomTom the same way and clear on arrival. Turn it off in Settings -> Integrations.
 
-Node markers are plain colored outlines, not icon art — icon-based styles were tried and dropped, they didn't read well in practice. Two options, from the Settings panel's **Map Markers** section:
+## Chat commands
 
-1. Hollow X *(default)*
-2. Hollow star
+Use `/xxr` or `/xalmoras`:
 
-Both use color coding: green = Herbalism, red = Mining. Your active route target doesn't change color or shape — it just gets a small dot marked at its center, so it's still clearly "this one" without needing a whole separate color scheme.
-
-The X is built as a single continuous 12-point outline (a plus-sign shape rotated 45 degrees), not two crossing bars — that avoids a box-shaped artifact where the arms would otherwise overlap. Both shapes are made of straight lines only (rotated rectangle textures), which is why neither is a circle: WoW addons can't draw true curves, and a circle approximated with too few straight segments just looks like a lumpy polygon instead of a circle.
-
-You can also set your style from chat with `/xxr pinstyle <name>` - `hollowx` or `star`.
-
-### Marker size and opacity
-
-A **Marker size** slider (8-28px) and a **Marker opacity** slider (30-100%) sit in Settings -> Map Markers, or set them from chat with `/xxr pinsize <8-28>` and `/xxr pinalpha <30-100>`. The active route target is always drawn about 40% larger than whatever size you pick.
-
-### Glow
-
-Every marker style can also get a soft colored glow behind it (green for Herbalism, red for Mining) so it stands out against busy terrain. **Off by default.** Toggle it in Settings -> Map Markers, or with `/xxr glow`.
-
-### Hide markers when close
-
-Once you're within a set distance of a node **on the minimap**, that marker disappears entirely - the actual node model in the game world is what matters at that range, not the addon's marker. **Always on** - this isn't a toggle, only the distance is adjustable.
-
-Distance is measured as on-screen pixel distance on the minimap (marker position vs. minimap center), converted to real yards using the minimap's own *current* view radius (`C_Minimap.GetViewRadius()` - a Blizzard API that reports how many yards the minimap currently spans, live, accounting for zoom level and indoor/outdoor). This is deliberately not tied to HereBeDragons' distance calculations, which don't have calibration data for every zone (some newer/less common zones are missing it) - reading the minimap's own live view radius has no such gap.
-
-Default hide distance is 200 yards (adjustable 20-500) in Settings -> Map Markers, or with `/xxr proximity <20-500>`.
-
-This only applies to the minimap, not the world map - the zone you're viewing on the world map isn't necessarily the one you're standing in, so "distance to player" wouldn't mean anything there.
-
-## Markers/Routes Automatically Match Your Professions
-
-Since the node database is shared across your whole account, a character with only Herbalism would otherwise still see every Mining node another character on your account ever recorded. This addon automatically skips that: markers for a node type your current character can't gather are hidden on both maps, and route generation skips them too. There's nothing to turn on - it's just how it behaves.
-
-This checks your character's actual known professions using WoW's profession-detection API, which needs the client to have loaded your profession data this session - that doesn't always happen right away on its own (often not until you've opened your Professions panel). Rather than leaving that to chance, the addon proactively nudges the client to load that data as soon as you log in, and re-checks a few times over the following half-minute and whenever WoW signals that skill/profession data has changed - so if the very first check happens to catch things too early, it corrects itself shortly after with no action needed from you. Once it gets a real, confirmed answer (not a guess), it stops checking entirely for the rest of the session - your professions aren't something that changes mid-session, so there's no reason to keep re-verifying something already known for certain.
-
-## Duplicate Detection Distance
-
-How close two saved nodes need to be before they're treated as "the same node" - used when recording a new gather and running Cleanup Duplicates. Distances are computed in actual yards via HereBeDragons when it's installed, rather than a raw fraction of the zone's coordinate space, which is why it could otherwise feel inconsistent - 1% of a zone's own coordinate space is a very different real distance in a small zone than a huge one. Default is 15 yards, adjustable 5-50 in Settings -> Database, or with `/xxr dupdistance <5-50>`.
-
-If you were seeing "this node is already recorded" with no marker anywhere nearby, lowering this should fix it - then run Cleanup Duplicates (or `/xxr cleanup`) to reapply the new distance to nodes you've already saved.
-
-## Node Freshness
-
-WoW doesn't tell addons when a node has actually respawned, so this is a simple heuristic: any node gathered more recently than this many minutes is skipped when building a route, since it probably hasn't grown/re-spawned back yet. Whenever you gather at an already-recorded spot, that node's "last gathered" time is refreshed too, so this keeps working correctly as nodes get picked over and over across sessions. Default is 10 minutes, adjustable 0-60 in Settings -> Database, or with `/xxr freshness <0-60>` - 0 turns it off and routes to every saved node regardless of when it was last picked. If filtering would leave nothing to route to, it's ignored for that route rather than leaving you with nothing.
-
-## TomTom Hand-off (optional, off by default)
-
-**Off by default.** Turn it on in Settings -> Integrations, or with `/xxr tomtom`. If [TomTom](https://www.curseforge.com/wow/addons/tomtom) is installed and this is switched on, its crazy arrow automatically follows your route, stop by stop, staying in sync as you advance through it - no popup, no copy/paste, nothing to click.
-
-This works a specific way worth understanding: TomTom's crazy arrow is built around a single active target, not an internal list it steps through on its own (confirmed by reading TomTom's own source - its `SetCrazyArrow` function just replaces one active waypoint, it doesn't manage a queue). So rather than dumping the whole route into TomTom at once and hoping it sorts out the order, this addon keeps re-pointing TomTom's one active waypoint at whatever stop it currently considers "next" - updating it every time the route advances, the same moment its own compass does. The result looks and feels like TomTom is following your whole route, because it's being actively kept in sync with it the entire time.
-
-This calls TomTom's real API (`AddWaypoint`/`RemoveWaypoint`) - a function it exposes specifically for other addons to use, the same category of thing as this addon calling HereBeDragons' API elsewhere. No code of TomTom's is used or bundled, just normal addon interoperability. It's still one-way: this addon only ever pushes to TomTom, it never reads anything back from it or reacts to its own state. If TomTom isn't installed, turning this on does nothing - no error, no popup, just a quiet no-op.
-
-Turning it off (or stopping the route) clears the waypoint TomTom was given.
-
-## Chat Commands
-
-Use `/xxr` or `/xalmoras` in chat followed by an option:
-
-*   `/xxr` (no arguments): Toggles the visibility of all gathering icons on the maps.
-*   `/xxr route`: Generates and activates the gathering route for your current zone, showing the HUD compass on screen.
-*   `/xxr route stop`: Stops the active route and hides the HUD compass.
-*   `/xxr route skip`: Skips the current node in the route (equivalent to right-clicking the compass).
-*   `/xxr stats`: Displays detailed statistics on the number of nodes saved in each map.
-*   `/xxr cleanup`: Removes duplicate or extremely close nodes from the database to optimize performance.
-*   `/xxr reset`: Deletes gathering records **only for the current map/zone**.
-*   `/xxr reset all`: Deletes the **entire database** of the addon.
-*   `/xxr pinstyle`: Lists the available map marker styles.
-*   `/xxr pinstyle <name>`: Sets the map marker style (`hollowx` or `star`).
-*   `/xxr pinsize <8-28>`: Sets the map marker size in pixels.
-*   `/xxr pinalpha <30-100>`: Sets marker opacity as a percentage.
-*   `/xxr glow`: Toggles the colored glow behind markers.
-*   `/xxr proximity <20-500>`: Sets the distance (yards) at which markers hide when close - always on, this just sets the distance.
-*   `/xxr dupdistance <5-50>`: Sets how close two nodes must be to count as the same one.
-*   `/xxr arrowstyle <name>`: Sets the compass arrow style (`custom3`, `custom4`, `blizzard`).
-*   `/xxr arrowprogress`: Toggles green/red arrow coloring based on whether you're closing in on the target.
-*   `/xxr button`: Shows or hides the floating helper button.
-*   `/xxr button reset`: Resets the helper button to its default position.
-*   `/xxr options` (or `/xxr config` or `/xxr settings`): Opens the Settings panel.
-*   `/xxr help`: Displays an interactive guide with the list of available commands in chat.
+*   `/xxr` - show or hide the gathering markers
+*   `/xxr route`, `/xxr route stop`, `/xxr route skip`
+*   `/xxr haul` - open the Gather Tally
+*   `/xxr scan` - run a live node scan (Forever); `/xxr scan debug` prints what each check found
+*   `/xxr share` - show node sharing status
+*   `/xxr dungeon` - waypoint a Season 2 Mythic+ dungeon entrance
+*   `/xxr stats`, `/xxr cleanup`
+*   `/xxr options` (also `config`, `settings`), `/xxr button`, `/xxr button reset`
+*   Marker and arrow tuning: `pinstyle`, `pinsize`, `pinalpha`, `glow`, `proximity`, `dupdistance`, `freshness`, `arrowstyle`, `arrowscale`, `arrowprogress`
+*   `/xxr help` - the full list
 
 ## License
 
-The addon code is MIT-licensed - free to use, modify, and redistribute, with attribution. The custom art in `Textures/` is All Rights Reserved. See [LICENSE.md](LICENSE.md) for the full terms.
+All Rights Reserved. The addon code and custom art are covered by the first section of [LICENSE.md](LICENSE.md), which also lists the parts that carry their own terms (bundled fonts and libraries).
 
 ## Installation
 
 1.  Download or clone the repository.
-2.  Copy the folder into your World of Warcraft addons directory:
-    `World of Warcraft\_retail_\Interface\AddOns\XalsXpeditedRoutes`
-3.  Ensure the destination folder is named exactly `XalsXpeditedRoutes`.
-4.  *Note*: After installing or updating, it's recommended to fully restart the game (or log out to the character selection screen) so the WoW client registers any changed files listed in the `.toc`.
+2.  Copy the folder into your World of Warcraft addons directory (`...\_retail_\Interface\AddOns\`, `_forever_`, `_classic_` or `_classic_era_` as appropriate).
+3.  Make sure the folder is named exactly `XalsXpeditedRoutes`.
+4.  After installing or updating, fully restart the game so the client registers any changed files listed in the `.toc`.
 
-## Modular Structure and Code
+## Structure
 
-The addon is structured following the best WoW development practices, split into the following sequentially loaded modules:
-*   `Bootstrap.lua`: Namespace initialization.
-*   `Helpers.lua`: Safe and compatible wrappers for WoW API functions.
-*   `Engine.lua`: Addon initialization, data persistence, and main event listening.
-*   `NodeLogger.lua`: Recording and validation of gathering events.
-*   `PathPlanner.lua`: Route construction (greedy nearest-first, then a 2-opt improvement pass) and route state.
-*   `Beacon.lua`: Creation, animations, and behavior of the HUD compass.
-*   `MarkerRenderer.lua`: Shared marker-shape drawing, used by both the map pins and the floating helper button.
-*   `QuickButton.lua`: Floating draggable button for one-click route/unroute control.
-*   `Markers.lua`: Pin pooling/placement on the minimap and world map via the optional `HereBeDragons-Pins-2.0` library, plus the proximity-hide.
-*   `TomTomBridge.lua`: Keeps TomTom's crazy arrow synced to the current route stop via its API when TomTom is detected.
-*   `SettingsPanel.lua`: In-game Settings panel.
-*   `ChatCommands.lua`: Processing of console commands.
+Modules load in this order (see the `.toc` files):
 
-## HereBeDragons Dependency
+*   `Bootstrap.lua` - namespace; `BrandStyle.lua` and `XalsSkins.lua` - colors, widgets and the shared skins; `WhatsNew.lua` - the once-per-update splash
+*   `Helpers.lua`, `Engine.lua` - safe API wrappers, startup, saved settings; `API.lua` - the public node-import API used by Xal's Routes Data
+*   `NodeLogger.lua` - recording and position fine-tuning; `PathPlanner.lua` - routes, including routes from live nodes
+*   `Beacon.lua`, `DungeonBeacon.lua` - the two compasses; `MarkerRenderer.lua`, `Markers.lua` - marker drawing, pooling and the live look
+*   `QuickButton.lua`, `TomTomBridge.lua`, `SettingsPanel.lua`, `RunTracker.lua`, `DungeonNav.lua`, `MinimapButton.lua`
+*   Forever only: `NodeHighlight.lua`, `ForeverNodeData.lua` and `ForeverImport.lua` (the built-in nodes), `LiveScan.lua`
+*   `Sync.lua` - node sharing; `ChatCommands.lua` - slash commands
 
-This addon bundles `LibStub` and `CallbackHandler-1.0` (both public-domain/permissively-licensed libraries meant for embedding), but **does not bundle HereBeDragons** - that library is large and map-data-heavy, and is best kept up to date on its own. Install it separately.
+## HereBeDragons dependency
 
-*   **Without HereBeDragons installed:** recording, route generation, the compass, and the helper button all still work. Distance calculations fall back to an approximation within your current zone. **Map/minimap pins are not drawn at all** - there's no reliable fallback for pin placement without it.
-*   **With HereBeDragons installed:** (search "HereBeDragons" by Nevcairiel on CurseForge/Wago) you get pins on the minimap/world map, plus more accurate cross-zone distances everywhere else.
+This addon bundles `LibStub`, `CallbackHandler-1.0`, `LibDataBroker-1.1` and `LibDBIcon-1.0` but **not HereBeDragons**, which is large and map-data-heavy and best kept up to date on its own.
 
-No configuration needed either way - Xal's Xpedited Routes detects and uses it automatically if it's present.
+*   **Without it:** recording, routing, the compass and the helper button work; distances fall back to an approximation; map and minimap pins are not drawn.
+*   **With it:** pins on both maps and more accurate distances everywhere.
+
+No configuration needed - it's detected automatically.
 
 ## Credits
 
-*   **The idea:** combining gathering-node tracking and route optimization into a single addon, in a way that's beneficial for the player - rather than requiring separate tools for recording and routing.
-*   **Conceptual inspiration:** GatherMate2 (kagaro, xinhuan, Nevcairiel) and Gatherer established node recording/display years earlier, and Routes (Antiarc, Esamynn, currently Xurkon) established route optimization for gathering data specifically, including proper TSP-solver-based path planning. No code, data, or assets from any of them are used here; they're credited for pioneering the general concepts.
-*   **LibStub** (public domain) and **CallbackHandler-1.0** (Ace3, permissively licensed for embedding) - bundled utility libraries.
-*   **HereBeDragons** by Nevcairiel - optional external addon this one can use if installed; not bundled.
-*   **Compass arrow artwork** - original art provided by the maintainer.
-*   **Addon icon/logo** - original artwork provided by the maintainer.
-*   **Xal's Xpedited Routes:** maintained by **XalaMental**.
+*   **The idea:** combining node tracking and route optimization in one addon.
+*   **Conceptual inspiration:** GatherMate2 and Gatherer (node recording) and Routes (route optimization). No code, data or assets from them are used here.
+*   **LibStub**, **CallbackHandler-1.0**, **LibDataBroker-1.1**, **LibDBIcon-1.0** - bundled utility libraries. **HereBeDragons** by Nevcairiel - optional, not bundled.
+*   Maintained by **XalaMental**.
