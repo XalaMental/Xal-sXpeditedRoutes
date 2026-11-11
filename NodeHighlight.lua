@@ -30,6 +30,8 @@ local GLOW_SIZE = 150
 local COLORS = {
     herb = { 0.35, 1.0, 0.45 },
     ore = { 1.0, 0.7, 0.25 },
+    quest = { 1.0, 0.85, 0.2 },
+    chest = { 0.45, 0.8, 1.0 },
 }
 
 -- Forever is the only client this runs on (WOW_PROJECT_CAMELOT is nil
@@ -41,10 +43,11 @@ function NodeHighlight:IsSupported()
 end
 
 -- The looks the settings page offers.
-NodeHighlight.STYLES = { "fire", "beam", "pulse", "sparkle", "spotlight", "rune" }
+NodeHighlight.STYLES = { "fire", "beam", "pulse", "sparkle", "spotlight", "rune", "storm", "reticle", "halo" }
 NodeHighlight.STYLE_LABELS = {
     fire = "Fire", beam = "Beam", pulse = "Pulse",
-    sparkle = "Sparkle", spotlight = "Spotlight", rune = "Rune Circle",
+    sparkle = "Sparkle", spotlight = "Spotlight", rune = "Rune Circle", storm = "Storm Cloud",
+    reticle = "Target Lock", halo = "Halo and Rays",
 }
 
 local function Secret(value)
@@ -157,35 +160,122 @@ local function BuildCursorLookup()
     end
 end
 
--- Returns "herb" or "ore" (and whether the game says it can't be gathered
--- right now) for the unit, or nil for anything else.
+-- Cursor-name keywords for the non-gathering kinds. The first match wins, and
+-- herb/ore are always checked before these.
+local EXTRA_CURSOR_WORDS = {
+    { "quest", "quest" }, { "important", "quest" }, { "recurring", "quest" }, { "wrapper", "quest" },
+    { "lootall", "chest" }, { "pickup", "chest" }, { "picklock", "chest" },
+}
+
+-- Chests have no cursor of their own (the game gives them a generic one), so
+-- they're recognized two ways: the object is one the player has looted from
+-- before (learned below), or its name contains a chest-type word.
+local CHEST_WORDS = {
+    "chest", "crate", "barrel", "coffer", "strongbox", "lockbox", "footlocker", "trunk", "cache",
+    "truhe", "kiste", "fass", "coffre", "caisse", "tonneau", "cofre", "caja", "barril",
+    "сундук", "ящик", "бочк",
+}
+
+local function ObjectID(unit)
+    local ok, guid = pcall(UnitGUID, unit)
+    if not ok or Secret(guid) or type(guid) ~= "string" then return nil end
+    return tonumber(guid:match("^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)"))
+end
+
+local function LooksLikeChestByName(unit)
+    local ok, name = pcall(UnitName, unit)
+    if not ok or Secret(name) or type(name) ~= "string" then return false end
+    local lower = name:lower()
+    for _, word in ipairs(CHEST_WORDS) do
+        if lower:find(word, 1, true) or name:find(word, 1, true) then return true end
+    end
+    return false
+end
+
+local function IsGameObject(unit)
+    if not UnitIsGameObject then return true end -- can't tell; don't block
+    local ok, isObject = pcall(UnitIsGameObject, unit)
+    return ok and isObject == true
+end
+
+-- Returns "herb", "ore", "quest" or "chest" (and whether the game says it
+-- can't be used right now) for the unit, or nil for anything else.
 local function Classify(unit)
     if not probe then
         probe = UIParent:CreateTexture(nil, "BACKGROUND")
         probe:Hide()
     end
     local ok, hasCursor = pcall(SetUnitCursorTexture, probe, unit, nil, true)
-    if not ok or not hasCursor then return nil end
+    if not ok then hasCursor = false end
 
-    local texture = probe:GetTexture()
-    local atlas = probe.GetAtlas and probe:GetAtlas()
-    if Secret(texture) then texture = nil end
-    if Secret(atlas) then atlas = nil end
+    local texture, atlas
+    if hasCursor then
+        texture = probe:GetTexture()
+        atlas = probe.GetAtlas and probe:GetAtlas()
+        if Secret(texture) then texture = nil end
+        if Secret(atlas) then atlas = nil end
 
-    local known = type(texture) == "number" and cursorLookup[texture]
-    if known then return known[1], known[2] end
+        local known = type(texture) == "number" and cursorLookup[texture]
+        if known then return known[1], known[2] end
 
-    -- The client gives a file ID, a path, or an atlas name depending on the
-    -- case, so fall back to looking for the cursor's name in the text.
+        -- The client gives a file ID, a path, or an atlas name depending on the
+        -- case, so fall back to looking for the cursor's name in the text.
+        for _, text in ipairs({ texture, atlas }) do
+            if type(text) == "string" then
+                local lower = text:lower()
+                local unable = lower:find("unable", 1, true) ~= nil
+                if lower:find("gatherherb", 1, true) then return "herb", unable end
+                if lower:find("mine", 1, true) then return "ore", unable end
+            end
+        end
+    end
+
+    -- Quest objects and chests are game objects only (not NPCs).
+    if not IsGameObject(unit) then return nil end
+
+    local unable = false
+    for _, text in ipairs({ texture, atlas }) do
+        if type(text) == "string" and text:lower():find("unable", 1, true) then unable = true end
+    end
+
+    if C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest then
+        local okQ, related = pcall(C_QuestLog.UnitIsRelatedToActiveQuest, unit)
+        if okQ and not Secret(related) and related == true then return "quest", unable end
+    end
+
     for _, text in ipairs({ texture, atlas }) do
         if type(text) == "string" then
             local lower = text:lower()
-            local unable = lower:find("unable", 1, true) ~= nil
-            if lower:find("gatherherb", 1, true) then return "herb", unable end
-            if lower:find("mine", 1, true) then return "ore", unable end
+            for _, entry in ipairs(EXTRA_CURSOR_WORDS) do
+                if lower:find(entry[1], 1, true) then return entry[2], unable end
+            end
         end
     end
+
+    local id = ObjectID(unit)
+    local learned = XalsXRDB and XalsXRDB.nodeHighlightContainers
+    if (id and learned and learned[id]) or LooksLikeChestByName(unit) then
+        return "chest", unable
+    end
     return nil
+end
+
+-- When a loot window opens, remember which kind of object it came from, so
+-- that kind is recognized as a chest from then on. Fishing and gathering
+-- (herb/ore) loot is left out.
+local function LearnContainers()
+    if not (XalsXRDB and GetNumLootItems and GetLootSourceInfo) then return end
+    if IsFishingLoot and IsFishingLoot() then return end
+    XalsXRDB.nodeHighlightContainers = XalsXRDB.nodeHighlightContainers or {}
+    for slot = 1, GetNumLootItems() do
+        local ok, guid = pcall(GetLootSourceInfo, slot)
+        if ok and not Secret(guid) and type(guid) == "string" then
+            local id = tonumber(guid:match("^GameObject%-%d+%-%d+%-%d+%-%d+%-(%d+)"))
+            if id and not (NodeHighlight.gatheredIDs and NodeHighlight.gatheredIDs[id]) then
+                XalsXRDB.nodeHighlightContainers[id] = true
+            end
+        end
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -244,6 +334,7 @@ local PINGS = {
     -- and again.
     pulse = { interval = 0.8, duration = 1.5, from = 0.2, to = 1.3, strength = 0.9, dome = true },
     rune = { interval = 3.6, from = 0.6, to = 1.5, strength = 0.4 },
+    reticle = { interval = 3.2, from = 0.5, to = 1.4, strength = 0.35 },
 }
 local SPARKLE_COUNT = 16
 
@@ -293,7 +384,8 @@ local function Animate(self, elapsed)
 
     -- Start every layer off; the chosen look switches on only what it uses.
     Off(self.band); Off(self.ring); Off(self.flare); Off(self.flame); Off(self.flameBack)
-    Off(self.spotShaft); Off(self.rune); Off(self.domeFill)
+    Off(self.spotShaft); Off(self.rune); Off(self.domeFill); Off(self.stormCloud); Off(self.stormBolt)
+    Off(self.reticle); Off(self.rays); Off(self.haloRing)
     self.beam:Hide() -- only the Beam look shows it (hiding it outright; zero alpha didn't hide it on Forever)
     for _, mote in ipairs(self.motes) do Off(mote) end
     for _, ember in ipairs(self.embers) do Off(ember) end
@@ -490,6 +582,127 @@ local function Animate(self, elapsed)
             mote:SetSize(moteSize, moteSize)
             Tint(mote, lr, lg, lb, alpha * ready * sin(pi * t) * 0.9)
         end
+
+    elseif style == "storm" then
+        -- A dark storm cloud hangs over the node and lightning strikes down from it
+        -- every second or two: the bolt flickers on, the cloud flashes brighter, and
+        -- a bright flare bursts on the ground where it lands. Out of reach it's a
+        -- quiet gray cloud with no strikes. Art: Textures\NodeGlow\storm_cloud.tga
+        -- (the cloud, shading kept) and storm_bolts.tga (four bolts, one per quarter
+        -- of the sheet, white so they take the node's color).
+        local cloudWidth = size * 1.05
+        local cloudHeight = cloudWidth * 0.5
+        local cloudY = footY + size * 0.98
+        local drift = sin(self.phase * 0.6) * size * 0.06
+
+        -- When the next strike happens, and which of the four bolts it uses.
+        self.strikeIn = (self.strikeIn or 0.8) - elapsed
+        if self.strikeIn <= 0 and ready > 0.5 then
+            self.strikeIn = 0.9 + random() * 1.7
+            self.strikeAge = 0
+            self.strikeBolt = random(0, 3)
+        end
+        local flash = 0
+        if self.strikeAge then
+            self.strikeAge = self.strikeAge + elapsed
+            local t = self.strikeAge / 0.34
+            if t >= 1 then
+                self.strikeAge = nil
+            elseif t < 0.14 or (t > 0.28 and t < 0.5) then
+                flash = 1                         -- the two bright beats of the flicker
+            else
+                flash = 0.35 * (1 - t)            -- dim between them
+            end
+        end
+
+        -- The cloud: a dull slate tinted a touch toward the node's color, lit up
+        -- toward white by each strike.
+        local base = 0.55
+        local cr = Lerp(Lerp(base, r, 0.25), 1, flash * 0.85)
+        local cg = Lerp(Lerp(base, g, 0.25), 1, flash * 0.85)
+        local cb = Lerp(Lerp(base + 0.08, b, 0.25), 1, flash * 0.85)
+        self.stormCloud:SetSize(cloudWidth, cloudHeight)
+        self.stormCloud:ClearAllPoints()
+        self.stormCloud:SetPoint("CENTER", self, "CENTER", drift, cloudY)
+        Tint(self.stormCloud, cr, cg, cb, alpha * Lerp(0.55, 0.95, ready))
+
+        -- The bolt, from the cloud's underside down to the ground.
+        if flash > 0 then
+            local top = cloudY - cloudHeight * 0.3
+            local boltHeight = math.max(top - footY, 1)
+            local boltWidth = boltHeight * 0.34
+            local cell = self.strikeBolt or 0
+            self.stormBolt:SetTexCoord(cell * 0.25, cell * 0.25 + 0.25, 0, 1)
+            self.stormBolt:SetSize(boltWidth, boltHeight)
+            self.stormBolt:ClearAllPoints()
+            self.stormBolt:SetPoint("BOTTOM", self, "CENTER", drift * 0.4, footY)
+            Tint(self.stormBolt, Lerp(r, 1, 0.7), Lerp(g, 1, 0.7), Lerp(b, 1, 0.7), alpha * flash)
+
+            -- The burst where it lands.
+            local burst = size * (0.28 + 0.34 * flash)
+            self.flare:SetSize(burst, burst)
+            self.flare:ClearAllPoints()
+            self.flare:SetPoint("CENTER", self, "CENTER", drift * 0.4, footY)
+            self.flare:SetRotation(0)
+            Tint(self.flare, wr, wg, wb, alpha * flash * 0.9)
+        end
+
+        -- A faint ring on the ground under the strike point, like the other looks.
+        self.ring:SetSize(size * 0.8, size * 0.8 * GROUND)
+        self.ring:ClearAllPoints()
+        self.ring:SetPoint("CENTER", self, "CENTER", 0, footY)
+        Tint(self.ring, lr, lg, lb, alpha * Lerp(0.2, 0.55, ready))
+
+    elseif style == "reticle" then
+        -- Target lock: a targeting reticle (ring, ticks, corner brackets, crosshair)
+        -- lying on the ground around the node. It starts a little wide and tightens
+        -- in when the node is picked, then breathes slowly; a small bright core sits
+        -- on the node itself. Art: Textures\NodeGlow\reticle.tga (drawn top-down,
+        -- flattened here to lie on the ground).
+        local reticleSize = size * 1.1 * (1 + 0.18 * (1 - arrive)) * (1 - 0.05 * breath)
+        self.reticle:SetSize(reticleSize, reticleSize * GROUND)
+        self.reticle:ClearAllPoints()
+        self.reticle:SetPoint("CENTER", self, "CENTER", 0, footY)
+        Tint(self.reticle, lr, lg, lb, alpha * Lerp(0.5, 1, ready) * (0.8 + 0.2 * breath))
+
+        local core = size * (0.16 + 0.04 * breath)
+        self.flare:SetSize(core, core)
+        self.flare:ClearAllPoints()
+        self.flare:SetPoint("CENTER", self, "CENTER", 0, footY)
+        self.flare:SetRotation(0)
+        Tint(self.flare, wr, wg, wb, alpha * Lerp(0.3, 0.9, ready))
+
+    elseif style == "halo" then
+        -- Halo and rays: a halo floats above the node, bobbing gently, with soft
+        -- shafts of light falling from it to a glowing pool on the ground and dust
+        -- drifting up through them. Art: Textures\NodeGlow\rays.tga (a fan of rays,
+        -- apex at the top) and ring.tga for the halo itself.
+        local haloY = footY + size * 1.05 + size * 0.025 * sin(self.phase * 0.9)
+        local haloWidth = size * 0.6 * (1 + 0.03 * breath)
+        self.haloRing:SetSize(haloWidth, haloWidth * 0.34)
+        self.haloRing:ClearAllPoints()
+        self.haloRing:SetPoint("CENTER", self, "CENTER", 0, haloY)
+        Tint(self.haloRing, wr, wg, wb, alpha * Lerp(0.6, 1, ready))
+
+        self.rays:SetSize(size * 0.95, max(haloY - footY, 1))
+        self.rays:ClearAllPoints()
+        self.rays:SetPoint("TOP", self, "CENTER", 0, haloY)
+        Tint(self.rays, lr, lg, lb, alpha * Lerp(0.3, 0.65, ready) * (0.85 + 0.15 * breath))
+
+        self.band:SetSize(size * 1.0, size * GROUND * 1.2)
+        self.band:ClearAllPoints()
+        self.band:SetPoint("CENTER", self, "CENTER", 0, footY)
+        Tint(self.band, r, g, b, alpha * Lerp(0.3, 0.7, ready) * (0.85 + 0.15 * breath))
+
+        for i, mote in ipairs(self.motes) do
+            local t = (self.phase / TWO_PI * 0.4 + i / MOTE_COUNT) % 1
+            local sway = sin(self.phase * 0.7 + i * 2.2) * size * 0.1
+            mote:ClearAllPoints()
+            mote:SetPoint("CENTER", self, "CENTER", sway, footY + 0.08 * size + t * size * 0.95)
+            local moteSize = size * 0.08
+            mote:SetSize(moteSize, moteSize)
+            Tint(mote, wr, wg, wb, alpha * ready * sin(pi * t) * 0.8)
+        end
     end
 
     -- Rings that ripple outward across the ground, on the beat this look uses.
@@ -604,6 +817,18 @@ local function BuildGlow()
         glow.rune:SetTexture(ART .. "ring.tga")
     end
 
+    -- Storm cloud look: the cloud (drawn normally, its own shading kept) and the
+    -- lightning (added on top so it glows).
+    glow.stormCloud = Layer(glow, "storm_cloud", "OVERLAY", 3, "BLEND")
+    glow.stormBolt = Layer(glow, "storm_bolts", "OVERLAY", 4, "ADD")
+
+    -- Target lock look: the reticle lying on the ground.
+    glow.reticle = Layer(glow, "reticle", "ARTWORK", 1, "ADD")
+
+    -- Halo and rays look: the fan of light behind everything, and the halo ring.
+    glow.rays = Layer(glow, "rays", "ARTWORK", -2, "ADD")
+    glow.haloRing = Layer(glow, "ring", "OVERLAY", 2, "ADD")
+
     glow.appear, glow.ready, glow.phase, glow.spin, glow.nextPing = 0, 0, 0, 0, 0.5
     glow.r, glow.g, glow.b = 1, 1, 1
     glow:SetScript("OnUpdate", Animate)
@@ -630,7 +855,19 @@ local function Refresh()
     end
 
     local kind, unable = Classify(SOFT)
-    if kind ~= "herb" and kind ~= "ore" then
+    if kind == "herb" or kind == "ore" then
+        -- Remember gathered objects so looting one never teaches "chest".
+        local id = ObjectID(SOFT)
+        if id then
+            NodeHighlight.gatheredIDs = NodeHighlight.gatheredIDs or {}
+            NodeHighlight.gatheredIDs[id] = true
+            if XalsXRDB.nodeHighlightContainers then XalsXRDB.nodeHighlightContainers[id] = nil end
+        end
+    elseif kind == "quest" then
+        if XalsXRDB.nodeHighlightQuest == false then HideGlow() return end
+    elseif kind == "chest" then
+        if XalsXRDB.nodeHighlightChest == false then HideGlow() return end
+    else
         HideGlow()
         return
     end
@@ -717,8 +954,11 @@ function NodeHighlight:Init()
     eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("PLAYER_LOGOUT")
     eventFrame:RegisterEvent("PLAYER_SOFT_INTERACT_CHANGED")
+    eventFrame:RegisterEvent("LOOT_OPENED")
     eventFrame:SetScript("OnEvent", function(_, event)
-        if event == "PLAYER_ENTERING_WORLD" then
+        if event == "LOOT_OPENED" then
+            LearnContainers()
+        elseif event == "PLAYER_ENTERING_WORLD" then
             -- The client resets some of these settings right after loading in,
             -- so apply again a moment later.
             NodeHighlight:Apply()
