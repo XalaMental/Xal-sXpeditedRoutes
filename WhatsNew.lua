@@ -31,9 +31,7 @@ W.WHATS_NEW = {
     intro = "",
     sections = {
         { heading = "Live nodes (WoW: Forever)", items = {
-            "Automatic scans now wait while you're casting or gathering, aiming a spell, have a loot window open, or have something under your mouse, so a scan never lands in the middle of a gather or a loot click.",
-            "The Live Nodes page now tells you whether a scan can start right now and, if not, why.",
-            "New option, off by default: one scan a moment after a fight ends, after you land or dismount, and after a loading screen.",
+            "Scanning again now takes stops that have been picked out of your live route, so you can press the scan button on the way and the route sorts itself out.",
         } },
     },
 }
