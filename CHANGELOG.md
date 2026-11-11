@@ -1,5 +1,23 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.7.0 - November 11, 2026
+
+---
+
+This is a big update, and most of it comes from one frustration: with so many people farming the same spots, I could never tell which of my saved nodes were actually still there. So on Forever there's now a live scan that makes the real ones pulse and can build you a route through them. Forever players also start with a full set of Classic nodes instead of an empty map, quest objects and chests glow like herbs and ore, there are three new glows (the storm cloud throwing lightning is my favorite), and I finally got out of my own dark, brooding styling: the settings now come in six skins. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Live node scan (Forever)** - finds which saved nodes are really there: live ones pulse yellow (rare ones violet), empty ones fade. Off by default; start it with a key, a timer, or every time you walk a set distance.
+- **Route from live nodes** - after a scan, a route through the live nodes, nearest first. A route you already have is never replaced; new live nodes go on the end.
+- **Built-in Classic nodes (Forever)** - about 22,000 herb and ore nodes added at first login, without touching your own.
+- **Quest objects and chests glow (Forever)**, plus three new Node Highlight looks: Storm Cloud, Target Lock, and Halo and Rays.
+- **Six skins** under General, switching right away, with new settings artwork.
+- **Share nodes with other players** - off by default.
+- **Steadier markers** - re-gathering a node nudges its marker onto the real spot.
+
+### 🔧 Fixed
+- Fixed the floating button's route icons misfiring when your character can't gather every type.
+- Removed the database reset options; the live features rely on your saved nodes.
 ## 2.6.1 - November 6, 2026
 
 ---
