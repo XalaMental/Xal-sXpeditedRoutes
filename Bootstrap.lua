@@ -20,3 +20,5 @@ addonTable.DungeonNav = {}
 addonTable.WhatsNew = {}
 addonTable.MinimapButton = {}
 addonTable.NodeHighlight = {}
+addonTable.Sync = {}
+addonTable.LiveScan = {}
