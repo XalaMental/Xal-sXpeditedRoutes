@@ -19,7 +19,9 @@ local Brand = addonTable.BrandStyle
 
 local rootPanel, waypointPanel, markersPanel, dataPanel, integrationsPanel, gatherPanel, floatingPanel
 local nodeHighlightPanel -- WoW: Forever only; nil everywhere else
+local liveNodesPanel -- WoW: Forever only; nil everywhere else
 local statsText = nil
+local nativeWraps, nativePanelList -- the Esc > Options wrappers and their page list (see ApplySkinLive)
 local pinStyleButtons = {}
 
 local function GetStatsString()
@@ -41,7 +43,13 @@ local function GetStatsString()
                 and mapID ~= "optionsWindowPoint" and mapID ~= "dungeonCompassPosition" and mapID ~= "lumberEnabled"
                 and mapID ~= "dungeonButtonPosition" and mapID ~= "nodeHighlightEnabled"
                 and mapID ~= "nodeHighlightRange" and mapID ~= "nodeHighlightSaved"
-                and mapID ~= "nodeHighlightStyle" and type(nodes) == "table" then
+                and mapID ~= "nodeHighlightStyle" and mapID ~= "nodeHighlightQuest"
+                and mapID ~= "nodeHighlightChest" and mapID ~= "nodeHighlightContainers"
+                and mapID ~= "foreverDataImported" and mapID ~= "shareEnabled"
+                and mapID ~= "liveScanEnabled" and mapID ~= "liveScanTimer" and mapID ~= "liveScanTimerSeconds"
+                and mapID ~= "liveScanDistance" and mapID ~= "liveScanDistanceYards" and mapID ~= "liveScanDim"
+                and mapID ~= "liveScanArrow" and mapID ~= "liveArrowPosition" and mapID ~= "liveScanRare" and mapID ~= "liveScanRoute" and mapID ~= "skin"
+                and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
             end
@@ -55,41 +63,6 @@ local function RefreshStats()
         statsText:SetText(GetStatsString())
     end
 end
-
-StaticPopupDialogs["XALMORASXR_RESET_ALL"] = {
-    text = "Delete the ENTIRE Xal's Xpedited Routes database (all maps, all zones)? This cannot be undone.",
-    button1 = "Delete Everything",
-    button2 = "Cancel",
-    OnAccept = function()
-        for key in pairs(XalsXRDB) do
-            if key ~= "showPins" and key ~= "compassPosition" and key ~= "autoAdvanceDistance"
-                and key ~= "pinStyle" and key ~= "pinSize" and key ~= "showHelperButton"
-                and key ~= "helperButtonPosition" and key ~= "showGlow"
-                and key ~= "proximityDistanceYards"
-                and key ~= "arrowProgressColor" and key ~= "pinAlpha"
-                and key ~= "duplicateDistanceYards" and key ~= "compassArrowStyle" and key ~= "arrowScale" and key ~= "tomtomSyncEnabled" and key ~= "freshnessMinutes"
-                and key ~= "showHaulSummary" and key ~= "haulFramePosition" and key ~= "haulShowIcons" and key ~= "haulFontScale"
-                and key ~= "haulGatherTimer" and key ~= "haulRouteTimer" and key ~= "arrowTextScale"
-                and key ~= "dungeonCoords" and key ~= "dungeonButtonEnabled" and key ~= "dungeonButtonSide"
-                and key ~= "minimap" and key ~= "helperButtonScale" and key ~= "groupingDistanceYards"
-                and key ~= "showTrailLine" and key ~= "boundaryNodes" and key ~= "helperButtonFadeWhenIdle"
-                and key ~= "optionsWindowPoint" and key ~= "dungeonCompassPosition" and key ~= "lumberEnabled"
-                and key ~= "dungeonButtonPosition" and key ~= "nodeHighlightEnabled"
-                and key ~= "nodeHighlightRange" and key ~= "nodeHighlightSaved"
-                and key ~= "nodeHighlightStyle" then
-                XalsXRDB[key] = nil
-            end
-        end
-        print("|cff00ccffXal's XR:|r All records have been deleted.")
-        PathPlanner:CancelPath()
-        Markers:UpdatePins()
-        RefreshStats()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
 
 -- First of what's meant to become a standard "Defaults" button on every
 -- settings panel (confirmed 2026-08-09) - testing it here first on the new
@@ -163,7 +136,6 @@ end
 local PANEL_DESC_FONT_SIZE = 13
 local PANEL_LABEL_FONT_SIZE = 14
 local RIGHT_MARGIN = 16
-local DESC_GRAY = 0.62
 
 --------------------------------------------------------------------------------
 -- Shared page-building helpers - the family settings layout (matches Xal's
@@ -182,7 +154,7 @@ end
 
 local function AddNote(panel, anchorTo, yGap, text)
     local fs = Brand.FS(panel, text, Brand.BODY_FONT_PATH, PANEL_DESC_FONT_SIZE, nil,
-        DESC_GRAY, DESC_GRAY, DESC_GRAY)
+        Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3])
     fs:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
     fs:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
     fs:SetJustifyH("LEFT")
@@ -203,19 +175,90 @@ local function AddDivider(panel, anchorTo, yGap)
     div:ClearAllPoints()
     div:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap or -14)
     div:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
+
+    -- A small compass star sits in the middle of every divider (Routes-only art,
+    -- Textures\CompassStar.tga: white on transparent, tinted with the skin's accent).
+    local star = panel:CreateTexture(nil, "ARTWORK", nil, 2)
+    star:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\CompassStar")
+    star:SetSize(28, 28)
+    star:SetPoint("CENTER", div, "CENTER", 0, 0)
+    star:SetVertexColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
     return div
+end
+
+-- A slide switch, used instead of the family checkbox on Routes' settings pages
+-- (Routes-only look). Same small API as Brand.MakeCheckbox - SetChecked,
+-- GetChecked and an OnToggle handler - so every toggle works unchanged. A slim
+-- track with a sliding square; when on it lights up in the skin's accent and gets
+-- a soft glow behind it.
+local function MakeSwitch(parent)
+    local sw = CreateFrame("Button", nil, parent)
+    PixelUtil.SetSize(sw, 34, 18)
+
+    local accent = Brand.ACCENT
+    local edge = sw:CreateTexture(nil, "BACKGROUND")
+    edge:SetAllPoints()
+    edge:SetColorTexture(accent[1], accent[2], accent[3], 1)
+    local inner = sw:CreateTexture(nil, "BORDER")
+    inner:SetPoint("TOPLEFT", 2, -2)
+    inner:SetPoint("BOTTOMRIGHT", -2, 2)
+    inner:SetColorTexture(Brand.WINDOW_BG[1], Brand.WINDOW_BG[2], Brand.WINDOW_BG[3], 1)
+    local lit = sw:CreateTexture(nil, "ARTWORK")
+    lit:SetPoint("TOPLEFT", 2, -2)
+    lit:SetPoint("BOTTOMRIGHT", -2, 2)
+    lit:SetColorTexture(accent[1], accent[2], accent[3], 0.3)
+    lit:Hide()
+    local halo = sw:CreateTexture(nil, "ARTWORK", nil, 1)
+    halo:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
+    halo:SetSize(34, 34)
+    halo:SetVertexColor(accent[1], accent[2], accent[3], 0.55)
+    halo:Hide()
+    local thumb = sw:CreateTexture(nil, "OVERLAY")
+    thumb:SetSize(10, 10)
+
+    sw.checked = false
+    local function Draw()
+        thumb:ClearAllPoints()
+        halo:ClearAllPoints()
+        if sw.checked then
+            thumb:SetPoint("RIGHT", sw, "RIGHT", -4, 0)
+            thumb:SetColorTexture(accent[1], accent[2], accent[3], 1)
+            lit:Show()
+            halo:SetPoint("CENTER", thumb, "CENTER", 0, 0)
+            halo:Show()
+        else
+            thumb:SetPoint("LEFT", sw, "LEFT", 4, 0)
+            thumb:SetColorTexture(Brand.DESC_COLOR[1], Brand.DESC_COLOR[2], Brand.DESC_COLOR[3], 1)
+            lit:Hide()
+            halo:Hide()
+        end
+    end
+    Draw()
+
+    function sw:SetChecked(state)
+        self.checked = state and true or false
+        Draw()
+    end
+    function sw:GetChecked()
+        return self.checked
+    end
+    sw:SetScript("OnClick", function(self)
+        self:SetChecked(not self.checked)
+        if self.OnToggle then self.OnToggle(self) end
+    end)
+    return sw
 end
 
 -- A checkbox with a short label beside it and a dim description under it.
 -- onToggle runs with the NEW state already applied (self:GetChecked()).
 -- Returns the description (anchor for whatever comes next) and the checkbox.
 local function AddToggle(panel, anchorTo, yGap, label, description, onToggle)
-    local cb = Brand.MakeCheckbox(panel, 20)
+    local cb = MakeSwitch(panel)
     cb:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
     cb.OnToggle = onToggle
 
     local text = Brand.FS(panel, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
-        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+        Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
     text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
     text:SetPoint("RIGHT", panel, "RIGHT", -RIGHT_MARGIN, 0)
     text:SetJustifyH("LEFT")
@@ -232,7 +275,7 @@ end
 -- template's Low/High/Text sub-regions are only reachable by name.
 local function AddSlider(panel, anchorTo, yGap, name, label, min, max, step, formatFn, onChange)
     local lbl = Brand.FS(panel, label, Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, nil,
-        Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+        Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
     lbl:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yGap)
     lbl:SetJustifyH("LEFT")
 
@@ -248,7 +291,7 @@ local function AddSlider(panel, anchorTo, yGap, name, label, min, max, step, for
     local valueText = _G[name .. "Text"]
     valueText:SetFont(Brand.BODY_FONT_PATH, PANEL_LABEL_FONT_SIZE, "")
     -- Blizzard's template hardcodes this text gold - doesn't read Brand.*.
-    valueText:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
+    valueText:SetTextColor(Brand.TEXT_COLOR[1], Brand.TEXT_COLOR[2], Brand.TEXT_COLOR[3])
 
     slider:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value / step + 0.5) * step
@@ -313,7 +356,24 @@ local function BuildRootPanel()
     local professionNote = AddNote(rootPanel, credit, -10,
         "Markers and routes automatically skip node types this character doesn't have the profession to gather - e.g. a pure-Herbalism character won't see Mining nodes another character on your account recorded.")
 
-    local div1 = AddDivider(rootPanel, professionNote, -14)
+    -- Skin: just colors (XalsSkins.lua, shared by every Xal's addon). Windows keep
+    -- the colors they were built with, so a change asks for a reload.
+    local skinDivider = AddDivider(rootPanel, professionNote, -14)
+    local skinHeader = AddSection(rootPanel, skinDivider, "Skin")
+    local Skins = addonTable.Skins
+    local skinButtons, skinGrid = AddPickerGrid(rootPanel, skinHeader, -10,
+        Skins.ORDER, Skins.LABELS, 2, 205, 24,
+        function(key)
+            if XalsXRDB and XalsXRDB.skin ~= key then
+                -- Next frame: this window is rebuilt, so not from inside its own click.
+                C_Timer.After(0, function() SettingsPanel:ApplySkinLive(key) end)
+            end
+        end)
+    rootPanel.skinButtons = skinButtons
+    local skinNote = AddNote(rootPanel, skinGrid, -8,
+        "Changes the colors of every Routes window right away - only colors, the layout stays the same.")
+
+    local div1 = AddDivider(rootPanel, skinNote, -14)
 
     -- Lumberjacking gets its own on/off toggle, unlike Mining/Herbalism -
     -- those come from actively choosing to level a profession, while
@@ -373,6 +433,10 @@ local function BuildRootPanel()
             lumberCheck:SetChecked(not (XalsXRDB and XalsXRDB.lumberEnabled == false))
         end
         slider:Sync((XalsXRDB and XalsXRDB.autoAdvanceDistance) or 50)
+        local currentSkin = (XalsXRDB and XalsXRDB.skin) or "current"
+        for key, button in pairs(rootPanel.skinButtons or {}) do
+            button:SetSelected(key == currentSkin)
+        end
     end
     rootPanel:SetScript("OnShow", RefreshRootPanel)
     rootPanel.Refresh = RefreshRootPanel
@@ -602,7 +666,7 @@ local function BuildMarkersPanel()
     -- Proximity hide - always on, distance is the only adjustable part
     local proximityHeader = AddSection(markersPanel, div3, "Hide markers when close")
     local proximitySlider = AddSlider(markersPanel, proximityHeader, -10, "XalsXRProximitySlider",
-        "Hide distance", 20, 500, 10,
+        "Hide distance", 5, 500, 5,
         function(v) return v .. " yd" end,
         function(v) XalsXRDB.proximityDistanceYards = v end)
     markersPanel.proximitySlider = proximitySlider
@@ -630,7 +694,7 @@ local function BuildMarkersPanel()
         pinSizeSlider:Sync((XalsXRDB and XalsXRDB.pinSize) or 14)
         pinAlphaSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.pinAlpha) or 1) * 100 + 0.5))
         glowCheck:SetChecked(not (XalsXRDB and XalsXRDB.showGlow == false))
-        proximitySlider:Sync((XalsXRDB and XalsXRDB.proximityDistanceYards) or 200)
+        proximitySlider:Sync((XalsXRDB and XalsXRDB.proximityDistanceYards) or 15)
         groupingSlider:Sync((XalsXRDB and XalsXRDB.groupingDistanceYards) or 240)
     end
     markersPanel:SetScript("OnShow", RefreshMarkersPanel)
@@ -675,7 +739,18 @@ local function BuildDataPanel()
     local freshnessHelp = AddNote(dataPanel, freshnessSlider, -16,
         "Skips nodes you gathered more recently than this when building a route, since they probably haven't respawned yet. Off routes to every saved node regardless of when it was last picked.")
 
-    local div3 = AddDivider(dataPanel, freshnessHelp, -14)
+    local divShare = AddDivider(dataPanel, freshnessHelp, -14)
+
+    local shareHeader = AddSection(dataPanel, divShare, "Sharing")
+    local shareDesc, shareCheck = AddToggle(dataPanel, shareHeader, -10,
+        "Share nodes with other players",
+        "Off by default. Swaps newly found nodes, invisibly, with anyone else running this addon who has it on. Only nodes you gathered yourself are ever sent; nodes from other players only fill gaps in your map, and strangers' nodes need several players to report them before they're added.",
+        function(self)
+            addonTable.Sync:SetEnabled(self:GetChecked() and true or false)
+        end)
+    dataPanel.shareCheck = shareCheck
+
+    local div3 = AddDivider(dataPanel, shareDesc, -14)
 
     local cleanupHeader = AddSection(dataPanel, div3, "Cleanup")
     local cleanupBtn = CreateButton(dataPanel, cleanupHeader, 0, -10, "Cleanup Duplicates", 170, function()
@@ -684,39 +759,12 @@ local function BuildDataPanel()
         Markers:UpdatePins()
         RefreshStats()
     end)
-    -- Stacked vertically (CreateButton's own default: new button's TOP
-    -- anchors to the given anchor's BOTTOM), not side by side. Confirmed
-    -- 2026-08-09.
-    CreateButton(dataPanel, cleanupBtn, 0, -8, "Reset Current Zone", 170, function()
-        local currentMapID = C_Map.GetBestMapForUnit("player")
-        if currentMapID and XalsXRDB[currentMapID] then
-            XalsXRDB[currentMapID] = nil
-            print("|cff00ccffXal's XR:|r Records for the current map have been deleted.")
-            PathPlanner:CancelPath()
-        else
-            print("|cff00ccffXal's XR:|r There are no records for this map.")
-        end
-        Markers:UpdatePins()
-        RefreshStats()
-    end)
-
-    -- Deliberately far from the other buttons, pinned to the panel's own
-    -- bottom-right corner - the mirror of the close button's top-right
-    -- position - so a destructive action never sits within easy misclick
-    -- range of the harmless ones above it. Confirmed 2026-08-09.
-    local resetAllBtn = CreateButton(dataPanel, cleanupBtn, 0, -34, "Reset ALL Data", 170, function()
-        StaticPopup_Show("XALMORASXR_RESET_ALL")
-    end)
-    resetAllBtn:ClearAllPoints()
-    resetAllBtn:SetPoint("BOTTOMRIGHT", dataPanel, "BOTTOMRIGHT", -16, 16)
-    -- Intentionally styled as a warning - this one's destructive
-    resetAllBtn:SetBorderColor(0.75, 0.2, 0.2, 1)
-    resetAllBtn.text:SetTextColor(1, 0.55, 0.5)
 
     local RefreshDataPanel = function()
         RefreshStats()
         dupSlider:Sync((XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15)
         freshnessSlider:Sync((XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES)
+        shareCheck:SetChecked(XalsXRDB and XalsXRDB.shareEnabled == true)
     end
     dataPanel:SetScript("OnShow", RefreshDataPanel)
     dataPanel.Refresh = RefreshDataPanel
@@ -857,7 +905,7 @@ local function BuildNodeHighlightPanel()
 
     local title = PageTitle(nodeHighlightPanel, "Node Highlight")
     local intro = AddNote(nodeHighlightPanel, title, -10,
-        "Makes the herb or ore the game has picked for your Interact key glow as you approach. Only one node glows at a time - the one in front of you.")
+        "Makes the herb, ore, quest object or chest the game has picked for your Interact key glow as you approach. Only one thing glows at a time - the one in front of you.")
 
     local div1 = AddDivider(nodeHighlightPanel, intro, -14)
 
@@ -869,7 +917,20 @@ local function BuildNodeHighlightPanel()
             NodeHighlight:SetEnabled(self:GetChecked() and true or false)
         end)
 
-    local div2 = AddDivider(nodeHighlightPanel, highlightDesc, -14)
+    local questDesc, questCheck = AddToggle(nodeHighlightPanel, highlightDesc, -10,
+        "Highlight quest objects",
+        "Glows objects tied to one of your active quests.",
+        function(self)
+            if XalsXRDB then XalsXRDB.nodeHighlightQuest = self:GetChecked() and true or false end
+        end)
+    local chestDesc, chestCheck = AddToggle(nodeHighlightPanel, questDesc, -10,
+        "Highlight chests and containers",
+        "Glows chests, crates and barrels. A container is recognized by its name, or after you've looted one of that kind once.",
+        function(self)
+            if XalsXRDB then XalsXRDB.nodeHighlightChest = self:GetChecked() and true or false end
+        end)
+
+    local div2 = AddDivider(nodeHighlightPanel, chestDesc, -14)
 
     local lookHeader = AddSection(nodeHighlightPanel, div2, "Look")
     local lookButtons, lookGrid = AddPickerGrid(nodeHighlightPanel, lookHeader, -10,
@@ -878,7 +939,7 @@ local function BuildNodeHighlightPanel()
             if XalsXRDB then XalsXRDB.nodeHighlightStyle = key end
         end)
     local lookNote = AddNote(nodeHighlightPanel, lookGrid, -8,
-        "Herbs glow green and ore glows orange in every look.")
+        "Herbs glow green, ore orange, quest objects gold and chests blue. The Fire look's flames stay orange for everything except herbs.")
 
     local div3 = AddDivider(nodeHighlightPanel, lookNote, -14)
 
@@ -895,6 +956,8 @@ local function BuildNodeHighlightPanel()
 
     local RefreshNodeHighlightPanel = function()
         highlightCheck:SetChecked(XalsXRDB and XalsXRDB.nodeHighlightEnabled == true)
+        questCheck:SetChecked(not (XalsXRDB and XalsXRDB.nodeHighlightQuest == false))
+        chestCheck:SetChecked(not (XalsXRDB and XalsXRDB.nodeHighlightChest == false))
         rangeSlider:Sync(NodeHighlight:GetRange())
         local currentStyle = (XalsXRDB and XalsXRDB.nodeHighlightStyle) or "fire"
         for styleKey, styleBtn in pairs(lookButtons) do
@@ -905,6 +968,126 @@ local function BuildNodeHighlightPanel()
     nodeHighlightPanel.Refresh = RefreshNodeHighlightPanel
 
     return nodeHighlightPanel
+end
+
+--------------------------------------------------------------------------------
+-- Live Nodes panel (WoW: Forever only): the minimap scan that finds which of
+-- your saved nodes are really there, and what to do with the answer.
+--------------------------------------------------------------------------------
+local function BuildLiveNodesPanel()
+    local LiveScan = addonTable.LiveScan
+    if not (LiveScan and LiveScan.supported) then return nil end
+
+    liveNodesPanel = CreateFrame("Frame")
+    liveNodesPanel.name = "Live Nodes"
+
+    local title = PageTitle(liveNodesPanel, "Live Nodes")
+    local intro = AddNote(liveNodesPanel, title, -10,
+        "Finds out which of your saved nodes are actually there right now, using the game's own Find Herbs and Find Minerals dots on your minimap. Live nodes pulse on the minimap; nodes the scan checked and found empty fade. A scan briefly blanks your minimap (well under a second) and is cancelled at once if you enter combat or press a mouse button.")
+
+    local div1 = AddDivider(liveNodesPanel, intro, -14)
+
+    local scanHeader = AddSection(liveNodesPanel, div1, "Scanner")
+    local scanDesc, scanCheck = AddToggle(liveNodesPanel, scanHeader, -10,
+        "Enable the live node scanner",
+        "Off by default. Nothing below does anything until this is on. Needs Find Herbs or Find Minerals turned on in your minimap tracking.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanEnabled = self:GetChecked() and true or false end
+        end)
+    -- The scan key, set right here: click, then press the key you want.
+    local scanKeyBtn
+    scanKeyBtn = CreateButton(liveNodesPanel, scanDesc, 0, -10, "Scan key: " .. LiveScan:GetKeyText(), 240, function()
+        scanKeyBtn.text:SetText("Press a key... (Esc to cancel)")
+        LiveScan:CaptureKey(function()
+            scanKeyBtn.text:SetText("Scan key: " .. LiveScan:GetKeyText())
+        end)
+    end)
+    local clearKeyBtn = CreateButton(liveNodesPanel, scanKeyBtn, 0, -4, "Clear key", 120, function()
+        LiveScan:ClearKey()
+        scanKeyBtn.text:SetText("Scan key: " .. LiveScan:GetKeyText())
+    end)
+    local scanNow = CreateButton(liveNodesPanel, clearKeyBtn, 0, -4, "Scan now", 140, function()
+        -- The settings window covers the world, which stops the scan from reading
+        -- the minimap, so it hides itself for the moment the scan takes.
+        LiveScan:ScanFromButton(_G.XalsXRStandaloneOptions)
+    end)
+    local keyNote = AddNote(liveNodesPanel, scanNow, -8,
+        "Click \"Scan key\" and press the key you want; the key scans without opening this window. For an action bar button, make a macro with /xxr scan.")
+
+    local div2 = AddDivider(liveNodesPanel, keyNote, -14)
+
+    local timerHeader = AddSection(liveNodesPanel, div2, "Scan on a timer")
+    local timerDesc, timerCheck = AddToggle(liveNodesPanel, timerHeader, -10,
+        "Scan every few seconds",
+        "Off by default. Runs a scan on its own at the interval below. It waits for a moment when your mouse is over the world and you aren't in combat or holding a mouse button.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanTimer = self:GetChecked() and true or false end
+        end)
+    local timerSlider = AddSlider(liveNodesPanel, timerDesc, -12, "XalsXRLiveTimerSlider",
+        "Seconds between scans", 5, 120, 5,
+        function(v) return v .. " sec" end,
+        function(v) if XalsXRDB then XalsXRDB.liveScanTimerSeconds = v end end)
+
+    local div3 = AddDivider(liveNodesPanel, timerSlider, -22)
+
+    local distanceHeader = AddSection(liveNodesPanel, div3, "Scan by distance")
+    local distanceDesc, distanceCheck = AddToggle(liveNodesPanel, distanceHeader, -10,
+        "Scan each time you've walked a set distance",
+        "Off by default. Runs a scan every time you move this far from where the last one ran, so it only scans while you're actually travelling.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanDistance = self:GetChecked() and true or false end
+        end)
+    local distanceSlider = AddSlider(liveNodesPanel, distanceDesc, -12, "XalsXRLiveDistanceSlider",
+        "Distance between scans", 10, 100, 5,
+        function(v) return v .. " yd" end,
+        function(v) if XalsXRDB then XalsXRDB.liveScanDistanceYards = v end end)
+
+    local div4 = AddDivider(liveNodesPanel, distanceSlider, -22)
+
+    local displayHeader = AddSection(liveNodesPanel, div4, "What it shows")
+    local dimDesc, dimCheck = AddToggle(liveNodesPanel, displayHeader, -10,
+        "Fade nodes the scan found empty",
+        "Nodes the scan checked and found nothing at fade on the minimap for a couple of minutes, so the bright pulsing ones stand out.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanDim = self:GetChecked() and true or false end
+            addonTable.Markers:UpdatePins()
+        end)
+    local routeDesc, routeCheck = AddToggle(liveNodesPanel, dimDesc, -14,
+        "Build a route from live nodes",
+        "After a scan, builds a route through the live nodes it found, nearest first. If you already have a route going, it is never changed: new live nodes are added to the end of it. The route's own arrow leads you; turn this off to get a separate arrow to the nearest live node instead.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanRoute = self:GetChecked() and true or false end
+        end)
+    local rareDesc, rareCheck = AddToggle(liveNodesPanel, routeDesc, -14,
+        "Pulse rare herbs and ore violet",
+        "A live Black Lotus, Silver, Gold or Truesilver vein, Rich Thorium or Dark Iron deposit pulses violet and faster than the rest (live nodes pulse yellow). Matched by the node's English name, so on another game language it shows as an ordinary live node.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanRare = self:GetChecked() and true or false end
+            addonTable.Markers:UpdatePins()
+        end)
+    local arrowDesc, arrowCheck = AddToggle(liveNodesPanel, rareDesc, -14,
+        "Arrow to the nearest live node",
+        "Only used when \"Build a route from live nodes\" is off: shows an arrow and distance pointing at the closest live node the last scan found. Drag it to move it; right-click it to hide it until the next scan.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanArrow = self:GetChecked() and true or false end
+        end)
+
+    local RefreshLivePanel = function()
+        scanKeyBtn.text:SetText("Scan key: " .. LiveScan:GetKeyText())
+        scanCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanEnabled == true)
+        timerCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanTimer == true)
+        timerSlider:Sync((XalsXRDB and XalsXRDB.liveScanTimerSeconds) or 20)
+        distanceCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanDistance == true)
+        distanceSlider:Sync((XalsXRDB and XalsXRDB.liveScanDistanceYards) or 30)
+        dimCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanDim == false))
+        rareCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanRare == false))
+        routeCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanRoute == false))
+        arrowCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanArrow == false))
+    end
+    liveNodesPanel:SetScript("OnShow", RefreshLivePanel)
+    liveNodesPanel.Refresh = RefreshLivePanel
+
+    return liveNodesPanel
 end
 
 --------------------------------------------------------------------------------
@@ -998,12 +1181,21 @@ end
 -- would otherwise put it back to its own white/orange.
 -- Lightened 2026-11-06 (was #323264 / the dark HEADER_COLOR red, both hard to
 -- read on Forever): option B from the settings mockup.
-local SIDEBAR_UNSELECTED_COLOR = { 0.588, 0.588, 0.824 } -- #9696d2
-local SIDEBAR_SELECTED_COLOR = { 0.8, 0.188, 0.212 } -- #cc3036
+-- Now skin colors (XalsSkins.lua): these are the very tables Skins.Apply fills in,
+-- so the original look's #9696d2 / #cc3036 live in BrandStyle.lua.
+local SIDEBAR_UNSELECTED_COLOR = Brand.TAB_COLOR
+local SIDEBAR_SELECTED_COLOR = Brand.TAB_SELECTED_COLOR
+-- Which cell of Textures\TabIcons.tga (a 3x3 sheet, row by row) belongs to each tab.
+local TAB_ICON_INDEX = {
+    General = 0, Floating = 1, Waypoint = 2, ["Map Markers"] = 3, ["Gather Tally"] = 4,
+    ["Node Highlight"] = 5, ["Live Nodes"] = 6, Database = 7, Integrations = 8,
+}
+
 local function SetSidebarTabSelected(tab, selected)
     tab:SetSelected(selected)
     local color = selected and SIDEBAR_SELECTED_COLOR or SIDEBAR_UNSELECTED_COLOR
     tab.label:SetTextColor(color[1], color[2], color[3], 1)
+    if tab.icon then tab.icon:SetVertexColor(color[1], color[2], color[3], 1) end
     tab.sidebarSelected = selected
 end
 
@@ -1036,7 +1228,21 @@ local function BuildStandaloneWindow()
 
     -- Fixed window size; pages taller than the content area scroll (see
     -- SizeStandaloneContent).
-    local FW, FH = 640, 820
+    -- The sidebar sizes itself to its widest tab (icon + name) with room to spare,
+    -- measured with the same font the tabs use, so no name can run into the
+    -- divider next to it. The window grows by exactly as much as the sidebar did,
+    -- so the content area keeps its width.
+    local ICON_SPACE = 2 + 16 + 5 -- left pad + icon + gap before the label
+    local probe = UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local widest = 0
+    for label in pairs(TAB_ICON_INDEX) do
+        probe:SetText(label)
+        widest = math.max(widest, probe:GetStringWidth())
+    end
+    probe:SetText("")
+    local TAB_W = math.max(116, math.ceil(widest + ICON_SPACE + 14)) -- 14px clear on the right
+    local SIDEBAR_W = TAB_W + 16 -- tabs inset 8px on both sides
+    local FW, FH = 640 + (SIDEBAR_W - 132), 820
     local f = CreateFrame("Frame", "XalsXRStandaloneOptions", UIParent, "BackdropTemplate")
     tinsert(UISpecialFrames, "XalsXRStandaloneOptions") -- lets the Escape key close it, like any other UI panel
     f:SetSize(FW, FH)
@@ -1070,7 +1276,7 @@ local function BuildStandaloneWindow()
     -- confirmed 2026-09-02 ("we're removing the background image... I
     -- wanted a dark blue bordering on purple"). Scoped to just this window,
     -- not Brand.BG itself.
-    local WINDOW_BG = { 0.03, 0.028, 0.06 } -- #08070f
+    local WINDOW_BG = Brand.WINDOW_BG -- a skin color now (the original look is #08070f)
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(WINDOW_BG[1], WINDOW_BG[2], WINDOW_BG[3], 1)
@@ -1097,13 +1303,23 @@ local function BuildStandaloneWindow()
     -- Uses DrawHeaderDivider (2026-09-20) since this is THE one header
     -- divider directly under the main title - every other divider in this
     -- window stays on Brand.DrawDivider's muted tone.
-    Brand.DrawHeaderDivider(f, Brand.SAFE_MARGIN, 66, FW - Brand.SAFE_MARGIN * 2)
+    -- A dotted route line with node markers winds under the title (Routes-only
+    -- art, Textures\RouteLine.tga: white on transparent, tinted with the skin's
+    -- accent). Only the middle band of the picture is shown, where the line is.
+    local routeLine = f:CreateTexture(nil, "ARTWORK")
+    routeLine:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\RouteLine")
+    routeLine:SetTexCoord(0, 1, 0.39, 0.61)
+    routeLine:SetSize(560, 30)
+    routeLine:SetPoint("TOP", f, "TOP", 0, -64)
+    routeLine:SetVertexColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 0.9)
+
+    Brand.DrawHeaderDivider(f, Brand.SAFE_MARGIN, 96, FW - Brand.SAFE_MARGIN * 2)
 
     -- Left-side tab list, matching the established sidebar-tabs convention.
     local sidebar = CreateFrame("Frame", nil, f)
-    sidebar:SetPoint("TOPLEFT", f, "TOPLEFT", Brand.SAFE_MARGIN, -78)
+    sidebar:SetPoint("TOPLEFT", f, "TOPLEFT", Brand.SAFE_MARGIN, -108)
     sidebar:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
-    sidebar:SetWidth(132)
+    sidebar:SetWidth(SIDEBAR_W)
 
     -- Sidebar/content divider - NOT the header divider, so it stays on the
     -- muted Brand.DIVIDER_COLOR tone (2026-09-20), not orange.
@@ -1117,10 +1333,47 @@ local function BuildStandaloneWindow()
     -- fills the space the content frame used to, and the content frame is
     -- its scroll child, fixed to the visible width so every page's RIGHT
     -- margin anchors resolve exactly as they did before.
-    local contentViewW = FW - Brand.SAFE_MARGIN - 132 - 10 - Brand.LINE_THICKNESS - 12 - Brand.SAFE_MARGIN
+    local contentViewW = FW - Brand.SAFE_MARGIN - SIDEBAR_W - 10 - Brand.LINE_THICKNESS - 12 - Brand.SAFE_MARGIN
     standaloneScroll = CreateFrame("ScrollFrame", nil, f)
     standaloneScroll:SetPoint("TOPLEFT", vDivider, "TOPRIGHT", 12, 0)
     standaloneScroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -Brand.SAFE_MARGIN, Brand.SAFE_MARGIN)
+
+    -- The content area's own background, a shade apart from the window and
+    -- sidebar (a skin color; identical to the window in the original look).
+    local contentBg = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+    contentBg:SetPoint("TOPLEFT", standaloneScroll, "TOPLEFT", -8, 6)
+    contentBg:SetPoint("BOTTOMRIGHT", standaloneScroll, "BOTTOMRIGHT", 6, -6)
+    contentBg:SetColorTexture(Brand.PANEL_COLOR[1], Brand.PANEL_COLOR[2], Brand.PANEL_COLOR[3], 1)
+
+    -- Faint topographic contour lines over the content background (Routes-only
+    -- art, Textures\ContourTile.tga: white lines on transparent, so each skin
+    -- tints them with its own header color). Tiled, not stretched, so the lines
+    -- keep their thickness at any window size.
+    local contour = f:CreateTexture(nil, "BACKGROUND", nil, 2)
+    contour:SetPoint("TOPLEFT", standaloneScroll, "TOPLEFT", -8, 6)
+    contour:SetPoint("BOTTOMRIGHT", standaloneScroll, "BOTTOMRIGHT", 6, -6)
+    contour:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\ContourTile", "REPEAT", "REPEAT")
+    contour:SetTexCoord(0, (FW - 150) / 512, 0, FH / 512)
+    contour:SetVertexColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3],
+        Brand.IS_LIGHT and 0.22 or 0.14)
+
+    -- Small corner brackets on the content area, in the accent color: two straight
+    -- lines per corner, so a framed look without a heavy box.
+    local function CornerTick(point, dx, dy)
+        local across = f:CreateTexture(nil, "ARTWORK", nil, 3)
+        across:SetSize(16, 2)
+        across:SetPoint(point, contentBg, point, dx, dy)
+        across:SetColorTexture(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+        local down = f:CreateTexture(nil, "ARTWORK", nil, 3)
+        down:SetSize(2, 16)
+        down:SetPoint(point, contentBg, point, dx, dy)
+        down:SetColorTexture(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    end
+    CornerTick("TOPLEFT", 3, -3)
+    CornerTick("TOPRIGHT", -3, -3)
+    CornerTick("BOTTOMLEFT", 3, 3)
+    CornerTick("BOTTOMRIGHT", -3, 3)
+
     standaloneScroll:EnableMouseWheel(true)
     standaloneScroll:SetScript("OnMouseWheel", function(self, delta)
         local range = self:GetVerticalScrollRange()
@@ -1152,6 +1405,10 @@ local function BuildStandaloneWindow()
     if nodeHighlightPanel then
         table.insert(standalonePanels, 6, { label = "Node Highlight", panel = nodeHighlightPanel })
     end
+    -- Live Nodes (Forever only) sits right after Node Highlight.
+    if liveNodesPanel then
+        table.insert(standalonePanels, nodeHighlightPanel and 7 or 6, { label = "Live Nodes", panel = liveNodesPanel })
+    end
 
     -- 8px inset on BOTH sides (116-wide tab in a 132-wide sidebar) - the
     -- first version anchored tabs flush to the sidebar's left edge (0
@@ -1160,14 +1417,55 @@ local function BuildStandaloneWindow()
     local TAB_SIDE_PAD = 8
     local anchorTab = nil
     for i, entry in ipairs(standalonePanels) do
-        local tab = Brand.MakeButton(sidebar, entry.label, 116, 24, function() ShowStandaloneTab(i) end)
+        local tab = Brand.MakeButton(sidebar, entry.label, TAB_W, 24, function() ShowStandaloneTab(i) end)
         -- Restores the sidebar-specific color after a hover, since
         -- MakeButton's own OnLeave (already wired via SetScript inside
         -- MakeButton) would otherwise reset the label to white/orange.
         tab:HookScript("OnLeave", function(self)
             local color = self.sidebarSelected and SIDEBAR_SELECTED_COLOR or SIDEBAR_UNSELECTED_COLOR
             self.label:SetTextColor(color[1], color[2], color[3], 1)
+            if self.icon then self.icon:SetVertexColor(color[1], color[2], color[3], 1) end
         end)
+
+        -- A small icon beside each tab's name (Routes-only art: Textures\TabIcons.tga,
+        -- a 3x3 sheet of 64px cells, white on transparent, tinted like the label).
+        local iconIndex = TAB_ICON_INDEX[entry.label]
+        if iconIndex then
+            local icon = tab:CreateTexture(nil, "ARTWORK")
+            icon:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\TabIcons")
+            local col, row = iconIndex % 3, math.floor(iconIndex / 3)
+            icon:SetTexCoord(col * 0.25, col * 0.25 + 0.25, row * 0.25, row * 0.25 + 0.25)
+            icon:SetSize(16, 16)
+            icon:SetPoint("LEFT", tab, "LEFT", 2, 0)
+            tab.icon = icon
+            tab.label:ClearAllPoints()
+            tab.label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+            icon:SetVertexColor(SIDEBAR_UNSELECTED_COLOR[1], SIDEBAR_UNSELECTED_COLOR[2], SIDEBAR_UNSELECTED_COLOR[3], 1)
+        end
+
+        -- A pulsing dot on the Live Nodes tab while the scanner is switched on, so
+        -- it's visible at a glance that it's active.
+        if entry.label == "Live Nodes" then
+            local halo = tab:CreateTexture(nil, "OVERLAY")
+            halo:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
+            halo:SetSize(18, 18)
+            halo:SetPoint("RIGHT", tab, "RIGHT", -2, 0)
+            halo:SetVertexColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+            local core = tab:CreateTexture(nil, "OVERLAY", nil, 1)
+            core:SetColorTexture(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+            core:SetSize(5, 5)
+            core:SetPoint("CENTER", halo, "CENTER", 0, 0)
+            tab:HookScript("OnUpdate", function()
+                if XalsXRDB and XalsXRDB.liveScanEnabled then
+                    halo:Show()
+                    core:Show()
+                    halo:SetAlpha(0.45 + 0.4 * math.sin(GetTime() * 4))
+                else
+                    halo:Hide()
+                    core:Hide()
+                end
+            end)
+        end
         tab:ClearAllPoints()
         if anchorTab then
             PixelUtil.SetPoint(tab, "TOPLEFT", anchorTab, "BOTTOMLEFT", 0, -4)
@@ -1224,7 +1522,7 @@ end
 -- accent"), color updated 2026-09-25. Blizzard's checkbox/slider templates
 -- default that text gold; this just overrides it after the fact.
 local function RecolorLabelsOrange(panel)
-    local o = Brand.HEADER_COLOR
+    local o = Brand.TEXT_COLOR -- labels use the skin's text color (the header crimson in the original look)
     local function walk(f)
         if not f or not f.GetObjectType then return end
         local otype = f:GetObjectType()
@@ -1283,7 +1581,11 @@ local function WrapForNativeScroll(panel)
         ScrollUpdateThumb(scroll, content, thumb)
     end)
 
+    -- The page this wrapper shows. A skin change builds fresh pages, and
+    -- ApplySkinLive points the wrapper at the new one through panelRef.
+    wrapper.panelRef = panel
     wrapper:SetScript("OnShow", function()
+        local panel = wrapper.panelRef
         panel:SetParent(content)
         panel:ClearAllPoints()
         panel:SetAllPoints(content)
@@ -1310,9 +1612,11 @@ function SettingsPanel:Init()
     BuildDataPanel()
     BuildIntegrationsPanel()
     BuildNodeHighlightPanel() -- Forever only; leaves nodeHighlightPanel nil elsewhere
+    BuildLiveNodesPanel() -- Forever only; leaves liveNodesPanel nil elsewhere
 
     local allPanels = { rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel, dataPanel, integrationsPanel }
     if nodeHighlightPanel then table.insert(allPanels, 6, nodeHighlightPanel) end
+    if liveNodesPanel then table.insert(allPanels, 7, liveNodesPanel) end
 
     for _, panel in ipairs(allPanels) do
         RecolorLabelsOrange(panel)
@@ -1327,6 +1631,15 @@ function SettingsPanel:Init()
     local dataWrap = WrapForNativeScroll(dataPanel)
     local integrationsWrap = WrapForNativeScroll(integrationsPanel)
     local nodeHighlightWrap = nodeHighlightPanel and WrapForNativeScroll(nodeHighlightPanel)
+    local liveNodesWrap = liveNodesPanel and WrapForNativeScroll(liveNodesPanel)
+
+    -- Kept so a skin change can point these at freshly built pages (ApplySkinLive).
+    nativeWraps = {
+        root = rootWrap, floating = floatingWrap, waypoint = waypointWrap, markers = markersWrap,
+        gather = gatherWrap, data = dataWrap, integrations = integrationsWrap,
+        highlight = nodeHighlightWrap, live = liveNodesWrap,
+    }
+    nativePanelList = allPanels
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         -- Modern Settings API (retail 10.0+), with real sub-sections in the category tree
@@ -1342,6 +1655,9 @@ function SettingsPanel:Init()
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, gatherWrap, gatherWrap.name)
             if nodeHighlightWrap then
                 Settings.RegisterCanvasLayoutSubcategory(rootCategory, nodeHighlightWrap, nodeHighlightWrap.name)
+            end
+            if liveNodesWrap then
+                Settings.RegisterCanvasLayoutSubcategory(rootCategory, liveNodesWrap, liveNodesWrap.name)
             end
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, dataWrap, dataWrap.name)
             Settings.RegisterCanvasLayoutSubcategory(rootCategory, integrationsWrap, integrationsWrap.name)
@@ -1360,6 +1676,10 @@ function SettingsPanel:Init()
         if nodeHighlightWrap then
             nodeHighlightWrap.parent = rootWrap.name
             InterfaceOptions_AddCategory(nodeHighlightWrap)
+        end
+        if liveNodesWrap then
+            liveNodesWrap.parent = rootWrap.name
+            InterfaceOptions_AddCategory(liveNodesWrap)
         end
         dataWrap.parent = rootWrap.name
         InterfaceOptions_AddCategory(dataWrap)
@@ -1390,6 +1710,73 @@ function SettingsPanel:Init()
             wasVisible[panel] = isVisible
         end
     end)
+end
+
+-- Switches skin without a reload. Windows keep the colors they were built with, so
+-- the settings window is rebuilt from scratch with the new colors: every page is
+-- built again and the window reopens on General (where the Skin picker is). The
+-- old window and pages are simply left hidden. Other Routes windows (Gather
+-- Tally, the floating button) and the game's own Esc > Options page pick the new
+-- skin up after the next reload.
+function SettingsPanel:ApplySkinLive(key)
+    local Skins = addonTable.Skins
+    if not (Skins and XalsXRDB and rootPanel) then return end
+    XalsXRDB.skin = Skins.Apply(Brand, key)
+
+    local wasShown = standaloneFrame and standaloneFrame:IsShown()
+    if standaloneFrame then standaloneFrame:Hide() end
+    standaloneFrame = nil
+    wipe(standaloneTabs)
+
+    BuildRootPanel()
+    BuildFloatingButtonPanel()
+    BuildWaypointPanel()
+    BuildMarkersPanel()
+    BuildGatherTallyPanel()
+    BuildDataPanel()
+    BuildIntegrationsPanel()
+    nodeHighlightPanel, liveNodesPanel = nil, nil -- the builders below set them only where supported
+    BuildNodeHighlightPanel()
+    BuildLiveNodesPanel()
+
+    for _, panel in ipairs({ rootPanel, floatingPanel, waypointPanel, markersPanel, gatherPanel,
+        dataPanel, integrationsPanel, nodeHighlightPanel, liveNodesPanel }) do
+        RecolorLabelsOrange(panel)
+    end
+
+    -- The game's own Esc > Options pages show the new pages from now on too.
+    local byKey = {
+        root = rootPanel, floating = floatingPanel, waypoint = waypointPanel, markers = markersPanel,
+        gather = gatherPanel, data = dataPanel, integrations = integrationsPanel,
+        highlight = nodeHighlightPanel, live = liveNodesPanel,
+    }
+    for pageKey, wrap in pairs(nativeWraps or {}) do
+        local fresh = byKey[pageKey]
+        if fresh then
+            if wrap.panelRef and wrap.panelRef ~= fresh then wrap.panelRef:Hide() end
+            wrap.panelRef = fresh
+            fresh:Hide()
+            if wrap:IsShown() then wrap:GetScript("OnShow")(wrap) end
+        end
+    end
+    if nativePanelList then
+        wipe(nativePanelList)
+        for _, pageKey in ipairs({ "root", "floating", "waypoint", "markers", "gather", "highlight", "live", "data", "integrations" }) do
+            if byKey[pageKey] then nativePanelList[#nativePanelList + 1] = byKey[pageKey] end
+        end
+    end
+
+    -- The standalone window reopens only if it was the one open (the picker may
+    -- have been clicked on the game's own options page instead).
+    local window = BuildStandaloneWindow()
+    if wasShown then
+        ShowStandaloneTab(1)
+        window:Show()
+    end
+
+    -- The other Routes windows take the new colors right away too.
+    if addonTable.RunTracker and addonTable.RunTracker.ApplySkin then addonTable.RunTracker:ApplySkin() end
+    if addonTable.QuickButton and addonTable.QuickButton.ApplySkin then addonTable.QuickButton:ApplySkin() end
 end
 
 function SettingsPanel:Open()
