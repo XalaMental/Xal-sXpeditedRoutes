@@ -612,6 +612,16 @@ local function ApplyTallyStyle()
     frame.subtitle:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3])
 end
 
+-- Called when the skin changes: recolors the header and the Close link right
+-- away (the item rows float over the game world and keep their own colors).
+function RunTracker:ApplySkin()
+    if not frame then return end
+    ApplyTallyStyle()
+    if frame.close and frame.close.label then
+        frame.close.label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
+    end
+end
+
 -- Builds the subtitle text - the "Gather Tally" title already says what this
 -- is (confirmed 2026-09-01, "it already says gather tally, gathered is
 -- redundant"), so this just shows the timer (if enabled) and the count.
