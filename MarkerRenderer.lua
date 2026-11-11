@@ -106,14 +106,51 @@ end
 -- the color or size of the shape itself.
 -- alphaOverride, if given, replaces the global opacity slider entirely (used for
 -- the proximity fade - fully hidden by default once you're close, see Markers.lua).
-function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, isTarget, alphaOverride)
+-- liveState (optional, from the live node scan in LiveScan.lua): "live" makes the
+-- marker pop with a big pulsing glow; "gone" (the scan checked and found
+-- nothing there) fades it, if the player left that option on.
+function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, isTarget, alphaOverride, liveState)
     MarkerRenderer.EnsureParts(pin)
     for _, tex in ipairs(pin.segTex) do tex:Hide() end
     pin.dotTex:Hide()
 
     local alphaMult = alphaOverride or (XalsXRDB and XalsXRDB.pinAlpha) or 1
+    if liveState == "gone" and alphaOverride == nil and not (XalsXRDB and XalsXRDB.liveScanDim == false) then
+        alphaMult = alphaMult * 0.35
+    end
 
-    if XalsXRDB and XalsXRDB.showGlow == false then
+    -- A thin dark rim sits behind a live node's glow. A bright glow on bright
+    -- ground (the snow zones) has almost no contrast whatever its color, so the
+    -- rim is what keeps it visible there; on dark ground it's barely noticed.
+    if not pin.rimTex then
+        pin.rimTex = pin:CreateTexture(nil, "BACKGROUND", nil, -1)
+        pin.rimTex:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
+        pin.rimTex:SetVertexColor(0, 0, 0, 0)
+        pin.rimTex:Hide()
+    end
+    pin.rimTex:Hide()
+
+    if (liveState == "live" or liveState == "rare") and alphaOverride == nil then
+        -- Always draw the glow for a live node, even with glows turned off
+        -- elsewhere: it's the whole point of the marker. Warm yellow for a live
+        -- node; violet and bigger for a rare herb or ore (so the two can't be
+        -- mistaken for each other).
+        local glowSize = size * (liveState == "rare" and 4.2 or 3.4)
+        pin.rimTex:ClearAllPoints()
+        pin.rimTex:SetSize(glowSize * 1.18, glowSize * 1.18)
+        pin.rimTex:SetPoint("CENTER", pin, "CENTER", 0, 0)
+        pin.rimTex:SetVertexColor(0, 0, 0, 0.7)
+        pin.rimTex:Show()
+        pin.glowTex:ClearAllPoints()
+        pin.glowTex:SetSize(glowSize, glowSize)
+        pin.glowTex:SetPoint("CENTER", pin, "CENTER", 0, 0)
+        if liveState == "rare" then
+            pin.glowTex:SetVertexColor(0.82, 0.38, 1, 1)
+        else
+            pin.glowTex:SetVertexColor(1, 0.82, 0.12, 1)
+        end
+        pin.glowTex:Show()
+    elseif XalsXRDB and XalsXRDB.showGlow == false then
         pin.glowTex:Hide()
     else
         local glowSize = size * (isTarget and 2.4 or 2.2)
@@ -123,6 +160,7 @@ function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, is
         pin.glowTex:SetVertexColor(color[1], color[2], color[3], (isTarget and 0.65 or 0.55) * alphaMult)
         pin.glowTex:Show()
     end
+    pin.glowTex:SetAlpha(1)
 
     local shape = SHAPES[styleKey] or SHAPES.hollowx
     local half = size / 2
@@ -149,13 +187,15 @@ end
 
 -- Convenience wrapper: picks color/thickness from node type + a base size, then
 -- draws. This is what most callers actually want to use.
-function MarkerRenderer.SetAppearance(pin, nodeType, isTarget, baseSize, styleKey, alphaOverride)
+function MarkerRenderer.SetAppearance(pin, nodeType, isTarget, baseSize, styleKey, alphaOverride, liveState)
     local color = NODE_COLORS[nodeType] or MarkerRenderer.HERB_COLOR
     styleKey = styleKey or (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
 
     local size = isTarget and math.floor(baseSize * 1.4 + 0.5) or baseSize
+    -- A live node is drawn a bit larger than the rest.
+    if (liveState == "live" or liveState == "rare") and alphaOverride == nil then size = math.floor(size * 1.3 + 0.5) end
     local thickness = isTarget and math.max(2, baseSize / 6 + 0.5) or math.max(1.5, baseSize / 7)
 
     pin:SetSize(size, size)
-    MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, isTarget, alphaOverride)
+    MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, isTarget, alphaOverride, liveState)
 end
