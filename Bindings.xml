@@ -2,4 +2,5 @@
     <Binding name="XALSXR_ROUTE_START" category="BINDING_HEADER_XALSXPEDITEDROUTES"> XalsXR_KeybindStartRoute() </Binding>
     <Binding name="XALSXR_ROUTE_STOP" category="BINDING_HEADER_XALSXPEDITEDROUTES"> XalsXR_KeybindStopRoute() </Binding>
     <Binding name="XALSXR_ROUTE_SKIP" category="BINDING_HEADER_XALSXPEDITEDROUTES"> XalsXR_KeybindSkipNode() </Binding>
+    <Binding name="XALSXR_LIVESCAN" category="BINDING_HEADER_XALSXPEDITEDROUTES"> XalsXR_LiveScan() </Binding>
 </Bindings>
