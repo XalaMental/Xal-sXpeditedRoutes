@@ -24,6 +24,7 @@ libs\LibDBIcon\LibDBIcon-1.0.lua
 
 Bootstrap.lua
 BrandStyle.lua
+XalsSkins.lua
 WhatsNew.lua
 Helpers.lua
 Engine.lua
