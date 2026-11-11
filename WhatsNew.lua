@@ -31,19 +31,9 @@ W.WHATS_NEW = {
     intro = "",
     sections = {
         { heading = "Live nodes (WoW: Forever)", items = {
-            "A new live scan checks your minimap and makes the saved nodes that are really there pulse yellow, and fades the ones it found empty. Turn it on under the new Live Nodes page and set a scan key right there.",
-            "After a scan Routes can build you a route through the live nodes, nearest first - and if you already have a route going, new live nodes are added to the end of it instead of replacing it.",
-            "New players on Forever start with about 22,000 built-in Classic herb and ore nodes, added the first time you log in.",
-        } },
-        { heading = "Node Highlight", items = {
-            "Quest objects now glow gold and chests glow blue, and there are three new looks: Storm Cloud, Target Lock, and Halo and Rays.",
-        } },
-        { heading = "Skins and a new look", items = {
-            "Pick a skin under General - Crimson (the original), Ember, Bronze ledger, Midnight, Indigo slate, or Parchment. It changes right away.",
-            "The settings window has new map-style artwork, tab icons, and slide switches.",
-        } },
-        { heading = "Sharing", items = {
-            "You can now share the nodes you find with other players running Routes. It's off by default - Database, Sharing.",
+            "Automatic scans now wait while you're casting or gathering, aiming a spell, have a loot window open, or have something under your mouse, so a scan never lands in the middle of a gather or a loot click.",
+            "The Live Nodes page now tells you whether a scan can start right now and, if not, why.",
+            "New option, off by default: one scan a moment after a fight ends, after you land or dismount, and after a loading screen.",
         } },
     },
 }
