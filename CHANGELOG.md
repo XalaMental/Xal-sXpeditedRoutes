@@ -1,5 +1,13 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.7.2 - November 11, 2026
+
+---
+
+Out on the road I kept getting to a node only to find someone had already picked it, and my live route still had it on the list. I wanted to be able to just hit the scan button again and have the route reaffirm itself, so now a second scan takes the stops that are gone out of your live route and moves the compass on if it was pointing at one. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Scan again to tidy your route** - a new scan removes stops ahead of you that it finds empty from a route built from live nodes. A route you plotted yourself is never changed.
 ## 2.7.1 - November 11, 2026
 
 ---
