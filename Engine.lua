@@ -189,6 +189,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if XalsXRDB.liveScanArrow == nil then XalsXRDB.liveScanArrow = true end
             if XalsXRDB.liveScanRare == nil then XalsXRDB.liveScanRare = true end
             if XalsXRDB.liveScanRoute == nil then XalsXRDB.liveScanRoute = true end
+            if XalsXRDB.liveScanAfterEvents == nil then XalsXRDB.liveScanAfterEvents = false end
             if XalsXRDB.shareEnabled == nil then XalsXRDB.shareEnabled = false end
             -- Skin (colors for every window; see XalsSkins.lua). Applied right here,
             -- before any window is built, so everything picks it up.
