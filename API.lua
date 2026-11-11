@@ -23,7 +23,9 @@ local API = _G.XalsXpeditedRoutesAPI
 -- import doesn't get to skip the check just because it came in bulk.
 -- Returns {added = N, skipped = N, invalid = N} so the caller can report
 -- real numbers back to the player instead of just "done."
-function API.ImportNodeData(nodesByMapID)
+-- Optional second argument: pass true to skip the map-pin refresh at the end
+-- (for callers that import in several batches and refresh once themselves).
+function API.ImportNodeData(nodesByMapID, skipPinUpdate)
     local added, skipped, invalid = 0, 0, 0
 
     if type(nodesByMapID) ~= "table" then
@@ -60,7 +62,7 @@ function API.ImportNodeData(nodesByMapID)
         end
     end
 
-    if added > 0 and addonTable.Markers and addonTable.Markers.UpdatePins then
+    if added > 0 and not skipPinUpdate and addonTable.Markers and addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
     end
 
