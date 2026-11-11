@@ -83,6 +83,12 @@ Helpers.LUMBERJACK_PASSIVE_SPELL_ID = 1256697
 -- on (Engine.lua) - this only ever short-circuits to false once the player
 -- explicitly turns it off in Settings.
 function Helpers.HasLumberjacking()
+    -- Lumberjacking only exists on Retail (it comes from Player Housing). On every
+    -- other version it's never known, so it can't pass for a type the character
+    -- can gather (it used to make the other two types' filters misfire).
+    if not Helpers.IsRetail() then
+        return false
+    end
     if XalsXRDB and XalsXRDB.lumberEnabled == false then
         return false
     end
