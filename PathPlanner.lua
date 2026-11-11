@@ -334,9 +334,98 @@ function PathPlanner:PlotCourse(typeFilter)
     end
 end
 
+-- Live route (from the live node scan, see LiveScan.lua)
+--
+-- liveNodes is a list of { x, y, type } for nodes the scan found live on mapID.
+--   * No route going: builds one through them, nearest first - then the nearest
+--     remaining one from there, and so on. Plain nearest-first, no 2-opt
+--     reshuffle, so the first stop really is the closest.
+--   * A route already going on this map: it is NEVER changed. Live nodes that
+--     aren't already ahead in the route are added to the END of it, nearest
+--     first starting from the route's last stop.
+-- Returns true if anything was added or built.
+local function LiveStop(node)
+    local stop = { x = node.x, y = node.y, type = node.type }
+    return { anchor = stop, x = stop.x, y = stop.y, type = stop.type, members = { stop } }
+end
+
+function PathPlanner:AddLiveNodes(mapID, liveNodes)
+    if not mapID or type(liveNodes) ~= "table" or #liveNodes == 0 then return false end
+
+    -- A route going on another map isn't touched.
+    if self.currentPath and self.pathMapID and self.pathMapID ~= mapID then return false end
+
+    if self:InProgress() then
+        local duplicateYards = Helpers.GetDuplicateYards()
+        local fresh = {}
+        for _, node in ipairs(liveNodes) do
+            local already = false
+            for i = self.stopCursor, #self.currentPath do
+                local stop = self.currentPath[i]
+                for _, member in ipairs(stop.members or { stop }) do
+                    if DistanceBetween(mapID, member.x, member.y, node.x, node.y) <= duplicateYards then
+                        already = true
+                        break
+                    end
+                end
+                if already then break end
+            end
+            if not already then fresh[#fresh + 1] = LiveStop(node) end
+        end
+        if #fresh == 0 then return false end
+
+        local last = self.currentPath[#self.currentPath]
+        for _, stop in ipairs(BuildGreedyOrder(mapID, last.x, last.y, fresh)) do
+            table.insert(self.currentPath, stop)
+        end
+        print(string.format("|cff00ccffXal's XR:|r %d live node%s added to the end of your route.",
+            #fresh, #fresh == 1 and "" or "s"))
+        return true
+    end
+
+    local startX, startY
+    if Engine.HBD then startX, startY = Engine.HBD:GetPlayerZonePosition() end
+    if not (startX and startY) then
+        local position = C_Map.GetPlayerMapPosition(mapID, "player")
+        if position then startX, startY = position:GetXY() end
+    end
+    if not (startX and startY) then return false end
+
+    local stops = {}
+    for _, node in ipairs(liveNodes) do stops[#stops + 1] = LiveStop(node) end
+    self.currentPath = BuildGreedyOrder(mapID, startX, startY, stops)
+    self.stopCursor = 1
+    self.pathMapID = mapID
+    -- Marked as a live route, not "no filter": a nil filter means "every type is on"
+    -- to the floating button, which would show its Mining/Herb/Lumber icons lit and
+    -- turn a click on one into "remove it from this route". With this marker none of
+    -- them read as on, so a click starts a normal route instead.
+    self.pathTypeFilter = { live = true }
+    self.paused = false
+
+    if addonTable.RunTracker and addonTable.RunTracker.StartRun then
+        addonTable.RunTracker:StartRun()
+    end
+    print(string.format("|cff00ccffXal's XR:|r Live route built: |cff00ff00%d|r stop%s, nearest first.",
+        #self.currentPath, #self.currentPath == 1 and "" or "s"))
+
+    if addonTable.Markers.UpdatePins then addonTable.Markers:UpdatePins() end
+    if XalsXRDB and XalsXRDB.tomtomSyncEnabled and addonTable.TomTomBridge.SyncCurrentStop then
+        addonTable.TomTomBridge:SyncCurrentStop(self:CurrentStop(), self.pathMapID)
+    end
+    if addonTable.Beacon.Show then
+        if not (addonTable.TomTomBridge.IsActive and addonTable.TomTomBridge:IsActive()) then
+            addonTable.Beacon:Show()
+        else
+            addonTable.Beacon:Hide()
+        end
+    end
+    return true
+end
+
 function PathPlanner:StepForward()
     if not self:InProgress() then return end
-    
+
     self.stopCursor = self.stopCursor + 1
     if self.stopCursor > #self.currentPath then
         print("|cff00ccffXal's XR:|r You have completed the gathering route!")
