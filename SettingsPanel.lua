@@ -48,7 +48,7 @@ local function GetStatsString()
                 and mapID ~= "foreverDataImported" and mapID ~= "shareEnabled"
                 and mapID ~= "liveScanEnabled" and mapID ~= "liveScanTimer" and mapID ~= "liveScanTimerSeconds"
                 and mapID ~= "liveScanDistance" and mapID ~= "liveScanDistanceYards" and mapID ~= "liveScanDim"
-                and mapID ~= "liveScanArrow" and mapID ~= "liveArrowPosition" and mapID ~= "liveScanRare" and mapID ~= "liveScanRoute" and mapID ~= "skin"
+                and mapID ~= "liveScanArrow" and mapID ~= "liveArrowPosition" and mapID ~= "liveScanRare" and mapID ~= "liveScanRoute" and mapID ~= "liveScanAfterEvents" and mapID ~= "skin"
                 and type(nodes) == "table" then
                 mapCount = mapCount + 1
                 totalNodes = totalNodes + #nodes
@@ -985,7 +985,10 @@ local function BuildLiveNodesPanel()
     local intro = AddNote(liveNodesPanel, title, -10,
         "Finds out which of your saved nodes are actually there right now, using the game's own Find Herbs and Find Minerals dots on your minimap. Live nodes pulse on the minimap; nodes the scan checked and found empty fade. A scan briefly blanks your minimap (well under a second) and is cancelled at once if you enter combat or press a mouse button.")
 
-    local div1 = AddDivider(liveNodesPanel, intro, -14)
+    -- Whether a scan could start right now, and if not, why (refreshed while this
+    -- page is open).
+    local statusLine = AddNote(liveNodesPanel, intro, -10, "Ready: a scan can start now.")
+    local div1 = AddDivider(liveNodesPanel, statusLine, -14)
 
     local scanHeader = AddSection(liveNodesPanel, div1, "Scanner")
     local scanDesc, scanCheck = AddToggle(liveNodesPanel, scanHeader, -10,
@@ -1044,7 +1047,17 @@ local function BuildLiveNodesPanel()
 
     local div4 = AddDivider(liveNodesPanel, distanceSlider, -22)
 
-    local displayHeader = AddSection(liveNodesPanel, div4, "What it shows")
+    local eventsHeader = AddSection(liveNodesPanel, div4, "Scan after you stop")
+    local eventsDesc, eventsCheck = AddToggle(liveNodesPanel, eventsHeader, -10,
+        "Scan once after a fight, a landing or a loading screen",
+        "Off by default. Runs one scan a moment after a fight ends, after you land or dismount, and after a loading screen - when the nodes around you have just changed. Automatic scans never run while you're casting, gathering, aiming a spell, have a loot window open, or have something under your mouse.",
+        function(self)
+            if XalsXRDB then XalsXRDB.liveScanAfterEvents = self:GetChecked() and true or false end
+        end)
+
+    local div5 = AddDivider(liveNodesPanel, eventsDesc, -14)
+
+    local displayHeader = AddSection(liveNodesPanel, div5, "What it shows")
     local dimDesc, dimCheck = AddToggle(liveNodesPanel, displayHeader, -10,
         "Fade nodes the scan found empty",
         "Nodes the scan checked and found nothing at fade on the minimap for a couple of minutes, so the bright pulsing ones stand out.",
@@ -1072,7 +1085,33 @@ local function BuildLiveNodesPanel()
             if XalsXRDB then XalsXRDB.liveScanArrow = self:GetChecked() and true or false end
         end)
 
+    local function RefreshStatus()
+        if not (XalsXRDB and XalsXRDB.liveScanEnabled == true) then
+            statusLine:SetText("The scanner is off. Turn it on below to use anything on this page.")
+            statusLine:SetTextColor(0.95, 0.5, 0.1)
+            return
+        end
+        local reason = LiveScan:WhyNot()
+        if reason then
+            statusLine:SetText("Can't scan right now: " .. reason .. ".")
+            statusLine:SetTextColor(0.95, 0.5, 0.1)
+        else
+            statusLine:SetText("Ready: a scan can start now.")
+            statusLine:SetTextColor(0.25, 0.75, 0.3)
+        end
+    end
+    local statusElapsed = 0
+    liveNodesPanel:HookScript("OnUpdate", function(_, elapsed)
+        statusElapsed = statusElapsed + elapsed
+        if statusElapsed >= 0.5 then
+            statusElapsed = 0
+            RefreshStatus()
+        end
+    end)
+
     local RefreshLivePanel = function()
+        RefreshStatus()
+        eventsCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanAfterEvents == true)
         scanKeyBtn.text:SetText("Scan key: " .. LiveScan:GetKeyText())
         scanCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanEnabled == true)
         timerCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanTimer == true)
