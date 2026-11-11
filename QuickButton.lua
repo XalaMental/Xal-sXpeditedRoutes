@@ -151,12 +151,35 @@ end
 -- Flips one type's toggle and regenerates the route to match the resulting
 -- combination of on/off states.
 local function ToggleType(nodeType)
+    -- Only the types this character can actually gather count. Without this, a
+    -- route with no type filter reads as "mining, herbs and lumber all on", so
+    -- clicking Herbs on a herbalist asked for a route of the two types the
+    -- character can't gather and got "No routable node types".
+    local known = {
+        mine = Helpers.HasGatheringProfession(Helpers.MINING_SKILL_LINE, Helpers.MINING_NAMES),
+        herb = Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES),
+        lumber = Helpers.HasLumberjacking(),
+    }
+    if not known.mine and not known.herb and not known.lumber then
+        known = { mine = true, herb = true, lumber = true } -- same detection-glitch safety net as the rest of the addon
+    end
+
     local on = { mine = IsTypeOn("mine"), herb = IsTypeOn("herb"), lumber = IsTypeOn("lumber") }
     on[nodeType] = not on[nodeType]
+    local allKnownOn, anyOn = true, false
+    for kind, isKnown in pairs(known) do
+        if not isKnown then
+            on[kind] = false
+        elseif on[kind] then
+            anyOn = true
+        else
+            allKnownOn = false
+        end
+    end
 
-    if on.mine and on.herb and on.lumber then
+    if anyOn and allKnownOn then
         PathPlanner:PlotCourse()
-    elseif on.mine or on.herb or on.lumber then
+    elseif anyOn then
         PathPlanner:PlotCourse(on)
     else
         PathPlanner:CancelPath()
@@ -561,6 +584,13 @@ local function UpdateLayout()
             dungeonContainer:Hide()
             if dungeonMenu then dungeonMenu:Hide() end
         end
+    end
+end
+
+-- Called when the skin changes: the "Gather" text takes the new accent color now.
+function QuickButton:ApplySkin()
+    if gatherBtn and gatherBtn.label then
+        gatherBtn.label:SetTextColor(Brand.HEADER_COLOR[1], Brand.HEADER_COLOR[2], Brand.HEADER_COLOR[3], 1)
     end
 end
 
