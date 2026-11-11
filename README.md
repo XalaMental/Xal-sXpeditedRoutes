@@ -29,7 +29,7 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 
 *   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects (gold) and chests (blue) glow too. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
 *   **Live node scan (off by default):** finds which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Live nodes pulse yellow (rare herbs and ore violet) and nodes it found empty fade. Start a scan with a key you set on the Live Nodes page, `/xxr scan`, a timer, each time you walk a set distance, or once after a fight, a landing or a loading screen. Automatic scans wait while you're casting, gathering, aiming a spell, looting or hovering something, and the Live Nodes page says why a scan can't start.
-*   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. A route you already have is never replaced - new live nodes are added to the end of it.
+*   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. A route you already have is never replaced - new live nodes are added to the end of it, and scanning again takes out stops that have since been picked.
 *   **Built-in Classic nodes:** about 22,000 herb and ore nodes across 45 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
 
 ## Settings
