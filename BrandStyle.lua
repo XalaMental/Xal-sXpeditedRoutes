@@ -37,6 +37,21 @@ Brand.BG     = { 0.035, 0.035, 0.035, 1 } -- near-black, fully opaque
 -- above) and for panel/card edges (Brand.DrawBorder's default color).
 Brand.DIVIDER_COLOR = { 0.0627, 0.0627, 0.1255 }
 Brand.LINE_THICKNESS = 2 -- minimum for ANY border/divider - never go below this
+
+-- Skin colors (see XalsSkins.lua, the shared family file). These hold the
+-- original "current" look; Skins.Apply copies a chosen skin's colors into these
+-- same tables in place, so every widget built after that uses it. Anything that
+-- needs a color should read it from here, never hardcode one.
+Brand.WINDOW_BG = { 0.03, 0.028, 0.06 }           -- window + sidebar background (#08070f)
+Brand.PANEL_COLOR = { 0.03, 0.028, 0.06 }         -- content area background
+Brand.TEXT_COLOR = { 0.4078, 0.0784, 0.0902 }     -- checkbox/slider labels: same crimson as the header in the original look
+Brand.DESC_COLOR = { 0.62, 0.62, 0.62 }           -- dim description text
+Brand.BODY_COLOR = { 0.85, 0.85, 0.85 }           -- plain reading text (What's New)
+Brand.TAB_COLOR = { 0.588, 0.588, 0.824 }         -- sidebar tab, not selected (#9696d2)
+Brand.TAB_SELECTED_COLOR = { 0.8, 0.188, 0.212 }  -- sidebar tab, selected (#cc3036)
+Brand.HOVER_COLOR = { 1, 1, 1 }                   -- text-link button under the mouse
+Brand.IS_LIGHT = false
+Brand.IMAGE_ALPHA = 1
 -- Minimum gap between a panel's true outer edge and the nearest button/text
 -- (close buttons especially). DrawBorder()'s line occupies out to 8px in
 -- (6px inset + 2px thick) - the FIRST version of this constant was set to
@@ -136,7 +151,9 @@ function Brand.MakeButton(parent, text, w, h, onClick)
     btn.label = label
 
     btn:SetScript("OnEnter", function(self)
-        if not self.selected then label:SetTextColor(1, 1, 1, 1) end
+        if not self.selected then
+            label:SetTextColor(Brand.HOVER_COLOR[1], Brand.HOVER_COLOR[2], Brand.HOVER_COLOR[3], 1)
+        end
     end)
     btn:SetScript("OnLeave", function(self)
         if not self.selected then
@@ -148,7 +165,7 @@ function Brand.MakeButton(parent, text, w, h, onClick)
     function btn:SetSelected(selected)
         self.selected = selected
         if selected then
-            label:SetTextColor(1, 1, 1, 1)
+            label:SetTextColor(Brand.HOVER_COLOR[1], Brand.HOVER_COLOR[2], Brand.HOVER_COLOR[3], 1)
         else
             label:SetTextColor(BTN_LABEL_UNSELECTED[1], BTN_LABEL_UNSELECTED[2], BTN_LABEL_UNSELECTED[3], 1)
         end
@@ -180,9 +197,12 @@ function Brand.MakeCheckbox(parent, size)
     local cb = CreateFrame("Button", nil, parent)
     PixelUtil.SetSize(cb, size, size)
 
+    -- Dark box on the dark skins; a darker-paper box on the light skin.
+    local rest = Brand.IS_LIGHT and { 0.78, 0.72, 0.58, 0.7 } or { 0.1, 0.1, 0.1, 0.6 }
+    local hover = Brand.IS_LIGHT and { 0.70, 0.63, 0.48, 0.85 } or { 0.18, 0.18, 0.18, 0.75 }
     local bg = cb:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
+    bg:SetColorTexture(rest[1], rest[2], rest[3], rest[4])
 
     local thick = Brand.LINE_THICKNESS
     local r, g, b = Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3]
@@ -230,8 +250,8 @@ function Brand.MakeCheckbox(parent, size)
         return self.checked
     end
 
-    cb:SetScript("OnEnter", function() bg:SetColorTexture(0.18, 0.18, 0.18, 0.75) end)
-    cb:SetScript("OnLeave", function() bg:SetColorTexture(0.1, 0.1, 0.1, 0.6) end)
+    cb:SetScript("OnEnter", function() bg:SetColorTexture(hover[1], hover[2], hover[3], hover[4]) end)
+    cb:SetScript("OnLeave", function() bg:SetColorTexture(rest[1], rest[2], rest[3], rest[4]) end)
     cb:SetScript("OnClick", function(self)
         self:SetChecked(not self.checked)
         if self.OnToggle then self.OnToggle(self) end
@@ -316,6 +336,7 @@ function Brand.ApplyBackgroundImage(f)
     local img = f:CreateTexture(nil, "BORDER")
     img:SetAllPoints(f)
     img:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\PanelBackground.jpg")
+    img:SetAlpha(Brand.IMAGE_ALPHA or 1) -- a skin can fade or hide it (see XalsSkins.lua)
     return img
 end
 
@@ -338,7 +359,9 @@ function Brand.MakeCloseButton(parent, onClick)
     label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
     btn.label = label
 
-    btn:SetScript("OnEnter", function() label:SetTextColor(1, 1, 1, 1) end)
+    btn:SetScript("OnEnter", function()
+        label:SetTextColor(Brand.HOVER_COLOR[1], Brand.HOVER_COLOR[2], Brand.HOVER_COLOR[3], 1)
+    end)
     btn:SetScript("OnLeave", function()
         label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
     end)
@@ -383,7 +406,9 @@ function Brand.MakeDiscordLink(parent)
     btn.label = label
     btn:SetWidth(label:GetStringWidth())
 
-    btn:SetScript("OnEnter", function() label:SetTextColor(1, 1, 1, 1) end)
+    btn:SetScript("OnEnter", function()
+        label:SetTextColor(Brand.HOVER_COLOR[1], Brand.HOVER_COLOR[2], Brand.HOVER_COLOR[3], 1)
+    end)
     btn:SetScript("OnLeave", function()
         label:SetTextColor(Brand.ACCENT[1], Brand.ACCENT[2], Brand.ACCENT[3], 1)
     end)
