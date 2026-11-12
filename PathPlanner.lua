@@ -229,7 +229,8 @@ function PathPlanner:PlotCourse(typeFilter)
     -- Safety net: same detection-glitch guard as Markers.lua - "knows none of
     -- the three" is far more likely stale/uncached detection than reality, so
     -- don't let it alone block routing (typeFilter still applies below).
-    if not knowsMining and not knowsHerbs and not knowsLumber then
+    if not knowsMining and not knowsHerbs and not knowsLumber
+        and not Helpers.IsProfessionDetectionConfirmed() then
         knowsMining, knowsHerbs, knowsLumber = true, true, true
     end
 
