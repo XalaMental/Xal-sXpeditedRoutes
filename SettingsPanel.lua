@@ -532,11 +532,22 @@ local function BuildWaypointPanel()
 
     local arrowHeader = AddSection(waypointPanel, div1, "Arrow style")
     local arrowStyleButtons, arrowGrid = AddPickerGrid(waypointPanel, arrowHeader, -10,
-        Beacon.ARROW_STYLES, Beacon.ARROW_STYLE_LABELS, 2, 170, 24,
+        Beacon.ARROW_STYLES, Beacon.ARROW_STYLE_LABELS, 2, 190, 40,
         function(key)
             XalsXRDB.compassArrowStyle = key
             Beacon:ApplyArrowStyle()
         end)
+    -- Each button shows the arrow itself (the same texture the compass uses) beside
+    -- its name, so you can see what you're picking.
+    for styleKey, styleBtn in pairs(arrowStyleButtons) do
+        local preview = styleBtn:CreateTexture(nil, "ARTWORK")
+        preview:SetTexture(Beacon.ARROW_TEXTURES[styleKey])
+        preview:SetSize(32, 32)
+        preview:SetPoint("LEFT", styleBtn, "LEFT", 6, 0)
+        styleBtn.label:ClearAllPoints()
+        styleBtn.label:SetPoint("LEFT", preview, "RIGHT", 10, 0)
+        styleBtn.label:SetJustifyH("LEFT")
+    end
 
     local div2 = AddDivider(waypointPanel, arrowGrid, -14)
 
