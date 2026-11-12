@@ -27,11 +27,15 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
-    date = "November 11, 2026",
+    date = "November 12, 2026",
     intro = "",
     sections = {
-        { heading = "Live nodes (WoW: Forever)", items = {
-            "Scanning again now takes stops that have been picked out of your live route, so you can press the scan button on the way and the route sorts itself out.",
+        { heading = "Fixed", items = {
+            "Characters with no Mining or Herbalism no longer see every herb and ore marker.",
+            "Live nodes (WoW: Forever): a scan that finds nothing now clears the glow, and a glowing node you stand at without gathering it stops glowing.",
+        } },
+        { heading = "New", items = {
+            "The Arrow style picker shows each arrow, and the Topdown 2D Arrow is a new orange arrowhead.",
         } },
     },
 }
