@@ -108,6 +108,60 @@ function Markers:MarkGathered(mapID, x, y)
     end
 end
 
+-- You've reached a live node. If it is still marked live after EXPECT_GATHER_SECONDS
+-- (gathering it would have turned it off through MarkGathered), nothing was there:
+-- it stops pulsing and fades like any other node found empty.
+local EXPECT_GATHER_SECONDS = 15 -- 15 yards of walking plus the gather cast fit inside this
+function Markers:ExpectGatherAt(mapID, x, y)
+    local key = NodeKey(mapID, x, y)
+    C_Timer.After(EXPECT_GATHER_SECONDS, function()
+        local entry = liveState[key]
+        if entry and entry.live then
+            entry.live, entry.rare, entry.t = false, nil, GetTime()
+            Markers:UpdatePins()
+        end
+    end)
+end
+
+-- Standing at a live node's spot (no route needed): if you stay within
+-- AT_SPOT_YARDS for AT_SPOT_SECONDS and it hasn't been gathered, it isn't there.
+local AT_SPOT_YARDS, AT_SPOT_SECONDS = 10, 4
+local atSpotSince = {}
+local spotWatcher = CreateFrame("Frame")
+local spotElapsed = 0
+spotWatcher:SetScript("OnUpdate", function(_, elapsed)
+    spotElapsed = spotElapsed + elapsed
+    if spotElapsed < 0.5 then return end
+    spotElapsed = 0
+    local mapID = C_Map.GetBestMapForUnit("player")
+    local position = mapID and C_Map.GetPlayerMapPosition(mapID, "player")
+    if not position then return end
+    local px, py = position:GetXY()
+    if not px then return end
+    local now = GetTime()
+    local changed = false
+    for key, entry in pairs(liveState) do
+        if entry.live and entry.mapID == mapID and now - entry.t <= LIVE_TTL then
+            local _, kx, ky = key:match("^(%d+):([%d%.]+):([%d%.]+)$")
+            kx, ky = tonumber(kx), tonumber(ky)
+            local yards = kx and Helpers.NodeDistanceYards(Engine, mapID, px, py, kx, ky)
+            if yards and yards <= AT_SPOT_YARDS then
+                atSpotSince[key] = atSpotSince[key] or now
+                if now - atSpotSince[key] >= AT_SPOT_SECONDS then
+                    entry.live, entry.rare, entry.t = false, nil, now
+                    atSpotSince[key] = nil
+                    changed = true
+                end
+            else
+                atSpotSince[key] = nil
+            end
+        else
+            atSpotSince[key] = nil
+        end
+    end
+    if changed then Markers:UpdatePins() end
+end)
+
 function Markers:ClearLiveState()
     wipe(liveState)
     self:UpdatePins()
@@ -342,10 +396,12 @@ function Markers:UpdatePins()
     local showHerbs = Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES)
     local showLumber = Helpers.HasLumberjacking()
 
-    -- Safety net: a character with saved nodes but detected as having NONE of
-    -- the three is far more likely a detection glitch than reality. Rather than
-    -- risk silently blanking the whole map again, show everything in that case.
-    if not showMining and not showHerbs and not showLumber then
+    -- Safety net, only while detection is still unconfirmed: "none of the three"
+    -- before the game has handed over real profession data is a glitch, so show
+    -- everything rather than blank the map. Once both answers are confirmed, a
+    -- character with no gathering skills really does see no markers.
+    if not showMining and not showHerbs and not showLumber
+        and not Helpers.IsProfessionDetectionConfirmed() then
         showMining, showHerbs, showLumber = true, true, true
     end
 
