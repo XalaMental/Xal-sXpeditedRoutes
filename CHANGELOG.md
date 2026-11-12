@@ -1,5 +1,17 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.7.3 - November 12, 2026
+
+---
+
+A clean-up release after the last one. Out in the field I found the live scan still lighting up nodes that weren't there, so a scan that finds nothing now actually clears them, and a node you walk up to without gathering turns itself off. The map was also still showing herb and ore markers on characters with no gathering skills, which was a real bug and is fixed. And since I was in the settings anyway, the arrow picker now shows you the arrows instead of just their names, with a new orange arrow in place of the old top-down one. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🔧 Fixed
+- **Markers on characters with no gathering skills** - a character with no Mining or Herbalism now sees no herb or ore markers.
+- **Glow that wouldn't go away (Forever)** - a scan that finds nothing live now clears the glow and removes those stops from your route, and a glowing node you stand at for a few seconds without gathering stops glowing.
+
+### 🆕 New
+- **Arrow previews** - the Arrow style picker shows each arrow, and the Topdown 2D Arrow is now a new orange arrowhead.
 ## 2.7.2 - November 11, 2026
 
 ---
