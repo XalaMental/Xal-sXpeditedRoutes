@@ -28,6 +28,7 @@ local ARROW_STYLES = {
     blizzard = "Interface\\Minimap\\MiniMap-DeadArrow",
 }
 Beacon.ARROW_STYLES = { "custom4", "custom3", "blizzard" }
+Beacon.ARROW_TEXTURES = ARROW_STYLES -- the settings page draws each style's real art next to its name
 Beacon.ARROW_STYLE_LABELS = {
     custom3 = "Topdown 2D Arrow",
     custom4 = "Chevron (default)",
@@ -382,6 +383,13 @@ function Beacon:RunUpdateLoop()
         advanceDistance = math.min(advanceDistance, 15)
     end
     if distance <= advanceDistance then
+        -- Arriving at a live node: if it isn't gathered in a few seconds it was never there.
+        if PathPlanner.pathTypeFilter and PathPlanner.pathTypeFilter.live then
+            local reached = PathPlanner:CurrentStop()
+            if reached and PathPlanner.pathMapID and addonTable.Markers.ExpectGatherAt then
+                addonTable.Markers:ExpectGatherAt(PathPlanner.pathMapID, reached.x, reached.y)
+            end
+        end
         PathPlanner:StepForward()
         return
     end
