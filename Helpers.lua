@@ -140,9 +140,65 @@ end
 -- profession's actual name against - e.g. Helpers.MINING_NAMES. Matching by
 -- either the ID or the name is enough; this way a stale/renumbered ID doesn't
 -- silently break detection as long as the name still reads "Mining"/"Herbalism".
+-- The tracking spell each gathering profession teaches (Find Minerals, Find
+-- Herbs), plus the second spell ID other addons that already run on Forever check
+-- for the same thing. Knowing one is proof of the profession in any language,
+-- with no wait for the skill list to load.
+local FINDER_SPELLS = {
+    [186] = { 2580, 8388 },
+    [182] = { 2383, 8387 },
+}
+local loadedAt = GetTime()
+
+-- True once the client has handed over the character's skill list. A character
+-- with no professions at all still has skill lines (weapons, languages), so a
+-- non-empty list means "the data is here", and a missing profession in it is a
+-- real "no". Falls back to time since login for clients without these calls.
+local function SkillDataReady()
+    if C_SkillInfo and C_SkillInfo.GetNumSkillLines then
+        local ok, count = pcall(C_SkillInfo.GetNumSkillLines)
+        if ok and type(count) == "number" and count > 0 then return true end
+    end
+    if _G.GetNumSkillLines then
+        local ok, count = pcall(_G.GetNumSkillLines)
+        if ok and type(count) == "number" and count > 0 then return true end
+    end
+    return GetTime() - loadedAt > 20
+end
+
 function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
     if confirmedProfessionCache[parentSkillLineID] ~= nil then
         return confirmedProfessionCache[parentSkillLineID]
+    end
+
+    -- Signal 1: the profession's tracking spell. Known = certain yes. Every spell
+    -- answering "not known" is remembered for the no-profession-list case below.
+    local finderSaidNo = false
+    local isKnown = (C_SpellBook and C_SpellBook.IsSpellKnown) or _G.IsPlayerSpell or _G.IsSpellKnown
+    local finders = FINDER_SPELLS[parentSkillLineID]
+    if isKnown and finders then
+        local answered = 0
+        for _, spellID in ipairs(finders) do
+            local ok, known = pcall(isKnown, spellID)
+            if ok and known == true then
+                confirmedProfessionCache[parentSkillLineID] = true
+                return true
+            end
+            if ok and known == false then answered = answered + 1 end
+        end
+        finderSaidNo = answered == #finders
+    end
+
+    -- Signal 2: the skill line itself, by ID (language independent).
+    if C_SkillInfo and C_SkillInfo.GetSkillLineInfoByID then
+        local ok, info = pcall(C_SkillInfo.GetSkillLineInfoByID, parentSkillLineID)
+        if ok and type(info) == "table" and not (issecretvalue and issecretvalue(info)) then
+            local rank, most = info.rank, info.maxRank
+            if (type(rank) == "number" and rank > 0) or (type(most) == "number" and most > 0) then
+                confirmedProfessionCache[parentSkillLineID] = true
+                return true
+            end
+        end
     end
 
     -- Primary: the older GetProfessions()/GetProfessionInfo() globals. Despite
@@ -169,6 +225,13 @@ function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
         -- shot at it once the data's actually loaded, instead of permanently
         -- locking in a false "no professions" result for the whole session.
         if not prof1 and not prof2 then
+            -- A character with no professions at all lands here too, and used to be
+            -- treated as "not loaded yet" forever - so it saw every gathering marker.
+            -- Once the skill list has loaded, no profession slots is a real "no".
+            if SkillDataReady() then
+                confirmedProfessionCache[parentSkillLineID] = false
+                return false
+            end
             return true
         end
 
@@ -221,6 +284,13 @@ function Helpers.HasGatheringProfession(parentSkillLineID, matchNames)
             confirmedProfessionCache[parentSkillLineID] = false
             return false
         end
+    end
+
+    -- No profession list on this client (Classic Era): the tracking spell is all
+    -- there is. Not knowing it once the skill list has loaded is a real "no".
+    if finderSaidNo and SkillDataReady() then
+        confirmedProfessionCache[parentSkillLineID] = false
+        return false
     end
 
     -- Neither detection method gave us usable data - don't guess, assume known,
