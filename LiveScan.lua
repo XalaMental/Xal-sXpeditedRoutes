@@ -371,10 +371,21 @@ local function Finish(s, aborted, reason)
         if isLive then live = live + 1 end
     end
 
-    if live == 0 then
-        -- Nothing answered at all. That can be a real empty patch - but it is
-        -- also exactly what a scan that isn't reading the minimap looks like, so
-        -- don't fade every marker on the strength of it.
+    -- Which thing had the mouse for most of the probes. While the scan really
+    -- reads the minimap that is the minimap itself (or whatever it was on a scan
+    -- that did find live nodes).
+    local topFocus, topCount = nil, 0
+    for name, count in pairs(s.focusCounts) do
+        if count > topCount then topFocus, topCount = name, count end
+    end
+    local reading = topFocus ~= nil and checked > 0 and topCount >= checked * 0.8
+        and (topFocus == "Minimap" or topFocus == LiveScan.goodFocus)
+    if live > 0 and topFocus then LiveScan.goodFocus = topFocus end
+
+    if live == 0 and not reading then
+        -- Nothing answered at all, and the mouse wasn't on the minimap while it
+        -- looked: that is what a scan that isn't reading the minimap looks like,
+        -- so don't fade every marker on the strength of it.
         if s.source ~= "auto" then
             -- Say what had the mouse: the game names a dot only while the minimap has it.
             local parts = {}
@@ -404,8 +415,23 @@ local function Finish(s, aborted, reason)
     if s.source ~= "auto" then
         local rareCount = 0
         for _ in pairs(s.rare) do rareCount = rareCount + 1 end
-        Say(string.format("Live scan: %d of %d node(s) are live%s.", live, checked,
-            rareCount > 0 and (" (" .. rareCount .. " rare)") or ""))
+        -- What answered and how far from you it is, so a wrong "live" can be traced.
+        local parts = {}
+        local px, py
+        local position = C_Map.GetPlayerMapPosition(s.mapID, "player")
+        if position then px, py = position:GetXY() end
+        for key, text in pairs(s.names or {}) do
+            local _, kx, ky = key:match("^(%d+):([%d%.]+):([%d%.]+)$")
+            kx, ky = tonumber(kx), tonumber(ky)
+            local yards = px and kx and Helpers.NodeDistanceYards(Engine, s.mapID, px, py, kx, ky)
+            parts[#parts + 1] = yards and string.format("%s %d yd", text, math.floor(yards + 0.5)) or text
+        end
+        table.sort(parts)
+        local shown = {}
+        for i = 1, math.min(#parts, 6) do shown[i] = parts[i] end
+        Say(string.format("Live scan: %d of %d node(s) are live%s%s.", live, checked,
+            rareCount > 0 and (" (" .. rareCount .. " rare)") or "",
+            #shown > 0 and (": " .. table.concat(shown, ", ")) or ""))
     end
 end
 
@@ -422,6 +448,10 @@ local function Step()
         local target = s.targets[s.at]
         local text = ReadMouseover()
         s.results[target.key] = text ~= nil
+        if text then
+            s.names = s.names or {}
+            s.names[target.key] = text
+        end
         if text and IsRareName(text) then s.rare[target.key] = true end
         local _, focusName = MouseFocus()
         s.lastFocus = focusName
