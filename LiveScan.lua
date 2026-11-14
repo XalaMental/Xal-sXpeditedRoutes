@@ -254,11 +254,28 @@ end
 -- The text the minimap gives for the spot under the mouse right now, or nil.
 local function ReadMouseover()
     local data = C_TooltipInfo.GetMinimapMouseover()
-    if Secret(data) or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
+    -- Hidden details only mean "the game is hiding the minimap" during a fight;
+    -- out of combat a hidden line is just skipped, as before.
+    if Secret(data) then LiveScan.lastRead = "hidden"; return nil, InCombatLockdown() and true or false end
+    if type(data) ~= "table" then LiveScan.lastRead = "no data"; return nil end
+    if type(data.lines) ~= "table" then LiveScan.lastRead = "no lines"; return nil end
+    local nLines, nHidden, nEmpty = 0, 0, 0
+    for _, line in ipairs(data.lines) do
+        nLines = nLines + 1
+        local t = line and line.leftText
+        if Secret(t) then nHidden = nHidden + 1 elseif type(t) ~= "string" or t == "" then nEmpty = nEmpty + 1 end
+    end
+    LiveScan.lastRead = string.format("no text (%d lines, %d hidden, %d empty)", nLines, nHidden, nEmpty)
     local text
     for _, line in ipairs(data.lines) do
         local leftText = line and line.leftText
+        if Secret(leftText) and InCombatLockdown() then return nil, true end
         if type(leftText) == "string" and not Secret(leftText) and leftText ~= "" then
+            -- A quest objective on the minimap (title, then "- 3/4 Boar Meat"
+            -- lines, from the game or a guide addon) is not a gathering node.
+            if leftText:find("%d+/%d+") or leftText:find("^%s*%- ") then
+                return nil, false, leftText
+            end
             text = text and (text .. " / " .. leftText) or leftText
         end
     end
@@ -324,7 +341,8 @@ local function WhyNot(auto)
     if scan then return "already scanning" end
     if not Enabled() then return "the scanner is turned off in Options -> Live Nodes" end
     if not Minimap:IsVisible() or not Minimap:GetLeft() then return "the minimap isn't visible" end
-    if InCombatLockdown() then return "in combat" end
+    -- Automatic scans wait out a fight; the key, the button and /xxr scan still work.
+    if auto and InCombatLockdown() then return "in combat" end
     local inside = IsInInstance()
     if Secret(inside) or inside then return "not in dungeons or raids" end
     if auto and (not MouseOnWorld() or MouseBusy()) then return "mouse busy" end
@@ -429,9 +447,26 @@ local function Finish(s, aborted, reason)
         table.sort(parts)
         local shown = {}
         for i = 1, math.min(#parts, 6) do shown[i] = parts[i] end
+        if live == 0 and s.reads and not s.reads.answered then
+            Say("Live scan isn't working right now: Blizzard's November 2026 WoW Forever update stopped addons from reading the minimap's node dots. It stays in until a workaround is found.")
+        end
         Say(string.format("Live scan: %d of %d node(s) are live%s%s.", live, checked,
             rareCount > 0 and (" (" .. rareCount .. " rare)") or "",
             #shown > 0 and (": " .. table.concat(shown, ", ")) or ""))
+        if live == 0 and s.reads then
+            local kinds = {}
+            for how, n in pairs(s.reads) do kinds[#kinds + 1] = how .. " x" .. n end
+            table.sort(kinds)
+            Say("The game's answers: " .. table.concat(kinds, ", ") .. ".")
+        end
+        -- Tooltip text the scan threw out as "not a node", so a wrong rejection shows.
+        if live == 0 and s.rejected then
+            local ignored = {}
+            for text in pairs(s.rejected) do
+                if #ignored < 3 then ignored[#ignored + 1] = text end
+            end
+            Say("Ignored (looked like a quest, not a node): " .. table.concat(ignored, " | "))
+        end
     end
 end
 
@@ -439,14 +474,25 @@ local function Step()
     local s = scan
     if not s then return end
 
-    if InCombatLockdown() then return Finish(s, true, "combat started") end
+    -- Automatic scans stop when a fight starts; one you asked for (the key) keeps going.
+    if s.source == "auto" and InCombatLockdown() then return Finish(s, true, "combat started") end
     if GetTime() - s.started > WATCHDOG_SECONDS then return Finish(s, true, "it took too long") end
     if MouseBusy() then return Finish(s, true, "a mouse button was pressed") end
 
     -- Read what the game said about the spot placed last frame.
     if s.at then
         local target = s.targets[s.at]
-        local text = ReadMouseover()
+        local text, hidden, rejected = ReadMouseover()
+        s.reads = s.reads or {}
+        local how = text and "answered" or LiveScan.lastRead or "?"
+        s.reads[how] = (s.reads[how] or 0) + 1
+        if rejected then
+            s.rejected = s.rejected or {}
+            s.rejected[rejected] = true
+        end
+        -- In a fight the game may hide what the minimap shows. That is not "empty":
+        -- stop rather than report every node gone.
+        if hidden then return Finish(s, true, "the game hides minimap details right now") end
         s.results[target.key] = text ~= nil
         if text then
             s.names = s.names or {}
