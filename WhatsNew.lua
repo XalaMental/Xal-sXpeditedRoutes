@@ -27,15 +27,19 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
-    date = "November 12, 2026",
+    date = "November 13, 2026",
     intro = "",
     sections = {
-        { heading = "Fixed", items = {
-            "Characters with no Mining or Herbalism no longer see every herb and ore marker.",
-            "Live nodes (WoW: Forever): a scan that finds nothing now clears the glow, and a glowing node you stand at without gathering it stops glowing.",
-        } },
         { heading = "New", items = {
-            "The Arrow style picker shows each arrow, and the Topdown 2D Arrow is a new orange arrowhead.",
+            "Sounds (WoW: Forever): an optional sound when you get to a herb or ore, and another when you finish a route. Pick them on the Waypoint page.",
+            "Two new switches on the Map Markers page hide your node markers on the minimap or the world map.",
+            "Quest objects and chests now glow violet-blue, so they can't be mistaken for herbs and ore.",
+            "About 580 more Classic herb and ore nodes (WoW: Forever).",
+        } },
+        { heading = "Fixed", items = {
+            "The live scan (WoW: Forever) isn't working: Blizzard's November update stopped addons reading the minimap's node dots. It stays in until a workaround is found, and live nodes no longer glow.",
+            "Markers stay fully drawn until you're within the hide distance, then dim instead of disappearing (WoW: Forever).",
+            "Ore veins next to each other, or next to a herb, are saved separately now (duplicate distance is 5 yards and only counts the same kind).",
         } },
     },
 }
