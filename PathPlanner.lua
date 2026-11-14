@@ -476,6 +476,7 @@ function PathPlanner:StepForward()
     self.stopCursor = self.stopCursor + 1
     if self.stopCursor > #self.currentPath then
         print("|cff00ccffXal's XR:|r You have completed the gathering route!")
+        if addonTable.Sounds then addonTable.Sounds:Play("finish") end
         self:CancelPath()
     else
         print("|cff00ccffXal's XR:|r Next node: |cff00ff00" .. self.stopCursor .. "/" .. #self.currentPath .. "|r")
