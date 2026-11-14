@@ -34,7 +34,7 @@ local function GetStatsString()
                 and mapID ~= "helperButtonPosition" and mapID ~= "showGlow"
                 and mapID ~= "proximityDistanceYards"
                 and mapID ~= "arrowProgressColor" and mapID ~= "pinAlpha"
-                and mapID ~= "duplicateDistanceYards" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and mapID ~= "freshnessMinutes"
+                and mapID ~= "duplicateDistanceYards" and mapID ~= "duplicateDistanceMigrated" and mapID ~= "showMinimapMarkers" and mapID ~= "sounds" and mapID ~= "showWorldMapMarkers" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and mapID ~= "freshnessMinutes"
                 and mapID ~= "showHaulSummary" and mapID ~= "haulFramePosition" and mapID ~= "haulShowIcons" and mapID ~= "haulFontScale"
                 and mapID ~= "haulGatherTimer" and mapID ~= "haulRouteTimer" and mapID ~= "arrowTextScale"
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
@@ -592,7 +592,7 @@ local function BuildWaypointPanel()
     local div4 = AddDivider(waypointPanel, textScaleHelp, -14)
 
     local trailHeader = AddSection(waypointPanel, div4, "Minimap trail line")
-    local _, trailLineCheck = AddToggle(waypointPanel, trailHeader, -10,
+    local trailLineDesc, trailLineCheck = AddToggle(waypointPanel, trailHeader, -10,
         "Show a trail line to your next stop",
         "A thin line on your minimap that points straight from you to your next stop, on top of the usual arrow.",
         function(self)
@@ -600,7 +600,39 @@ local function BuildWaypointPanel()
         end)
     waypointPanel.trailLineCheck = trailLineCheck
 
+    -- Sounds: one on/off switch and one pick-a-sound grid per moment. Clicking a
+    -- sound in the grid selects it and plays it so you can hear it.
+    local Sounds = addonTable.Sounds
+    local soundControls = {}
+    local soundAnchor = AddDivider(waypointPanel, trailLineDesc, -14)
+    if Sounds and #Sounds.KEYS > 0 then
+        local function AddSoundBlock(event, header, toggleLabel, toggleDesc)
+            local sectionHeader = AddSection(waypointPanel, soundAnchor, header)
+            local desc, check = AddToggle(waypointPanel, sectionHeader, -10, toggleLabel, toggleDesc,
+                function(self) Sounds:SetEnabled(event, self:GetChecked() and true or false) end)
+            local buttons, grid = AddPickerGrid(waypointPanel, desc, -10,
+                Sounds.KEYS, Sounds.LABELS, 2, 165, 22, -- 2 x 165 is the width the Marker style grid already fits in
+                function(key)
+                    Sounds:SetKey(event, key)
+                    Sounds:Preview(key)
+                end)
+            soundControls[event] = { check = check, buttons = buttons }
+            soundAnchor = AddDivider(waypointPanel, grid, -14)
+        end
+        AddSoundBlock("arrive", "Sound when you arrive at a node",
+            "Play a sound when you get to a node",
+            "Plays once when you get to a herb or ore you can gather - once its Node Highlight glow has fully come up. Needs Node Highlight turned on. Pick a sound below to hear it.")
+        AddSoundBlock("finish", "Sound when you finish a route",
+            "Play a sound when you finish a route",
+            "Plays when you reach the last stop (or skip it) and the route is complete.")
+    end
+
     local RefreshWaypointPanel = function()
+        for event, controls in pairs(soundControls) do
+            controls.check:SetChecked(Sounds:IsEnabled(event))
+            local current = Sounds:GetKey(event)
+            for key, btn in pairs(controls.buttons) do btn:SetSelected(key == current) end
+        end
         local currentArrowStyle = (XalsXRDB and XalsXRDB.compassArrowStyle) or "custom4"
         for styleKey, styleBtn in pairs(arrowStyleButtons) do
             styleBtn:SetSelected(styleKey == currentArrowStyle)
@@ -627,7 +659,24 @@ local function BuildMarkersPanel()
     local intro = AddNote(markersPanel, title, -10,
         "How gathering nodes are drawn on the minimap and world map. Green = Herbalism, red = Mining. Your active route target gets a small dot at its center.")
 
-    local div1 = AddDivider(markersPanel, intro, -14)
+    local miniDesc, miniCheck = AddToggle(markersPanel, intro, -14,
+        "Show markers on the minimap",
+        "Turn this off to hide every saved node marker on the minimap. Your nodes are still recorded, and routes still work.",
+        function(self)
+            XalsXRDB.showMinimapMarkers = self:GetChecked() and true or false
+            Markers:UpdatePins()
+        end)
+    markersPanel.miniCheck = miniCheck
+    local worldDesc, worldCheck = AddToggle(markersPanel, miniDesc, -14,
+        "Show markers on the world map",
+        "Turn this off to hide every saved node marker on the world map.",
+        function(self)
+            XalsXRDB.showWorldMapMarkers = self:GetChecked() and true or false
+            Markers:UpdatePins()
+        end)
+    markersPanel.worldCheck = worldCheck
+
+    local div1 = AddDivider(markersPanel, worldDesc, -14)
 
     local styleHeader = AddSection(markersPanel, div1, "Marker style")
     local styleButtons, styleGrid = AddPickerGrid(markersPanel, styleHeader, -10,
@@ -684,6 +733,11 @@ local function BuildMarkersPanel()
     local proximityHelp = AddNote(markersPanel, proximitySlider, -16,
         "Once you're this close to a node, its marker disappears entirely - the actual node model in the world is what matters at that range. Always on. Applies to the minimap only.")
 
+    -- WoW Forever: markers stay visible when you're close, so there is nothing to set.
+    if WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT then
+        proximityHelp:SetText("Within this distance of a node its marker dims instead of disappearing. Beyond it, markers are fully drawn.")
+    end
+
     local div4 = AddDivider(markersPanel, proximityHelp, -14)
 
     -- Node grouping - nearby nodes become one route stop instead of a separate
@@ -705,6 +759,8 @@ local function BuildMarkersPanel()
         pinSizeSlider:Sync((XalsXRDB and XalsXRDB.pinSize) or 14)
         pinAlphaSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.pinAlpha) or 1) * 100 + 0.5))
         glowCheck:SetChecked(not (XalsXRDB and XalsXRDB.showGlow == false))
+        miniCheck:SetChecked(not (XalsXRDB and XalsXRDB.showMinimapMarkers == false))
+        worldCheck:SetChecked(not (XalsXRDB and XalsXRDB.showWorldMapMarkers == false))
         proximitySlider:Sync((XalsXRDB and XalsXRDB.proximityDistanceYards) or 15)
         groupingSlider:Sync((XalsXRDB and XalsXRDB.groupingDistanceYards) or 240)
     end
@@ -773,7 +829,7 @@ local function BuildDataPanel()
 
     local RefreshDataPanel = function()
         RefreshStats()
-        dupSlider:Sync((XalsXRDB and XalsXRDB.duplicateDistanceYards) or 15)
+        dupSlider:Sync((XalsXRDB and XalsXRDB.duplicateDistanceYards) or 5)
         freshnessSlider:Sync((XalsXRDB and XalsXRDB.freshnessMinutes) or Helpers.DEFAULT_FRESHNESS_MINUTES)
         shareCheck:SetChecked(XalsXRDB and XalsXRDB.shareEnabled == true)
     end
@@ -950,7 +1006,7 @@ local function BuildNodeHighlightPanel()
             if XalsXRDB then XalsXRDB.nodeHighlightStyle = key end
         end)
     local lookNote = AddNote(nodeHighlightPanel, lookGrid, -8,
-        "Herbs glow green, ore orange, quest objects gold and chests blue. The Fire look's flames stay orange for everything except herbs.")
+        "Herbs glow green, ore orange, and everything else (quest objects, chests) violet-blue, in every look including Fire.")
 
     local div3 = AddDivider(nodeHighlightPanel, lookNote, -14)
 
@@ -993,8 +1049,11 @@ local function BuildLiveNodesPanel()
     liveNodesPanel.name = "Live Nodes"
 
     local title = PageTitle(liveNodesPanel, "Live Nodes")
-    local intro = AddNote(liveNodesPanel, title, -10,
-        "Finds out which of your saved nodes are actually there right now, using the game's own Find Herbs and Find Minerals dots on your minimap. Live nodes pulse on the minimap; nodes the scan checked and found empty fade. A scan briefly blanks your minimap (well under a second) and is cancelled at once if you enter combat or press a mouse button.")
+    local brokenNote = AddNote(liveNodesPanel, title, -10,
+        "Not working right now: Blizzard's November 2026 WoW Forever update stopped addons from reading the minimap's herb and ore dots, so the scan can't see any live nodes. It stays here until a workaround is found.")
+    brokenNote:SetTextColor(1, 0.35, 0.2)
+    local intro = AddNote(liveNodesPanel, brokenNote, -10,
+        "Finds out which of your saved nodes are actually there right now, using the game's own Find Herbs and Find Minerals dots on your minimap. Nodes the scan checked and found empty fade on the minimap, and the live ones are used to build a route. A scan briefly blanks your minimap (well under a second) and is cancelled at once if you enter combat or press a mouse button.")
 
     -- Whether a scan could start right now, and if not, why (refreshed while this
     -- page is open).
@@ -1071,7 +1130,7 @@ local function BuildLiveNodesPanel()
     local displayHeader = AddSection(liveNodesPanel, div5, "What it shows")
     local dimDesc, dimCheck = AddToggle(liveNodesPanel, displayHeader, -10,
         "Fade nodes the scan found empty",
-        "Nodes the scan checked and found nothing at fade on the minimap for a couple of minutes, so the bright pulsing ones stand out.",
+        "Nodes the scan checked and found nothing at fade on the minimap for a couple of minutes.",
         function(self)
             if XalsXRDB then XalsXRDB.liveScanDim = self:GetChecked() and true or false end
             addonTable.Markers:UpdatePins()
@@ -1082,14 +1141,7 @@ local function BuildLiveNodesPanel()
         function(self)
             if XalsXRDB then XalsXRDB.liveScanRoute = self:GetChecked() and true or false end
         end)
-    local rareDesc, rareCheck = AddToggle(liveNodesPanel, routeDesc, -14,
-        "Pulse rare herbs and ore violet",
-        "A live Black Lotus, Silver, Gold or Truesilver vein, Rich Thorium or Dark Iron deposit pulses violet and faster than the rest (live nodes pulse yellow). Matched by the node's English name, so on another game language it shows as an ordinary live node.",
-        function(self)
-            if XalsXRDB then XalsXRDB.liveScanRare = self:GetChecked() and true or false end
-            addonTable.Markers:UpdatePins()
-        end)
-    local arrowDesc, arrowCheck = AddToggle(liveNodesPanel, rareDesc, -14,
+    local arrowDesc, arrowCheck = AddToggle(liveNodesPanel, routeDesc, -14,
         "Arrow to the nearest live node",
         "Only used when \"Build a route from live nodes\" is off: shows an arrow and distance pointing at the closest live node the last scan found. Drag it to move it; right-click it to hide it until the next scan.",
         function(self)
@@ -1130,7 +1182,6 @@ local function BuildLiveNodesPanel()
         distanceCheck:SetChecked(XalsXRDB and XalsXRDB.liveScanDistance == true)
         distanceSlider:Sync((XalsXRDB and XalsXRDB.liveScanDistanceYards) or 30)
         dimCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanDim == false))
-        rareCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanRare == false))
         routeCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanRoute == false))
         arrowCheck:SetChecked(not (XalsXRDB and XalsXRDB.liveScanArrow == false))
     end
