@@ -1,5 +1,24 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.7.4 - November 13, 2026
+
+---
+
+Some rough news first: Blizzard's November update stopped addons from reading the herb and ore dots on the minimap, so the live scan can't see anything anymore. I've left it in, with a plain note on the Live Nodes page, until somebody finds a way around it, and since the pulsing glow on live nodes had been nothing but a headache I took it out completely. The things I actually use every day got better, though. You can now hear a sound when you walk up to a node and when you finish a route, and pick which sound you like. You can switch the map markers off if you'd rather just follow the glow. Quest objects and chests now burn violet-blue so they can't be mistaken for herbs and ore, and a clump of ore veins is no longer lumped into one saved node. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Sounds (Forever)** - an optional sound when you get to a herb or ore, once its glow is fully up, and another when you finish a route. Each has its own switch and about twenty of the game's own sounds to pick from on the Waypoint page, and clicking one plays it. Type `/xxr sound` to hear both.
+- **Turn the markers off** - two new switches on the Map Markers page hide your saved node markers on the minimap or on the world map. Your nodes are still recorded and routes still work.
+- **Violet-blue glow for everything else (Forever)** - herbs glow green and ore orange as before; quest objects and chests now glow violet-blue, in every look including Fire.
+- **More Classic nodes (Forever)** - about 580 more herb and ore nodes across 31 zones, including one new zone, added the first time you log in after updating. Yours are never touched.
+
+### 🔧 Fixed
+- **Live scan not working (Forever)** - Blizzard's November update stopped addons from reading the minimap's node dots. The scan stays in, with a note on the Live Nodes page and in chat, until a workaround is found. Live nodes no longer glow or pulse, and the violet rare-node option is gone.
+- **Markers up close (Forever)** - markers stay fully drawn until you're within the hide distance (15 yards by default) and then dim instead of disappearing.
+- **Ore veins mined several times** - nodes are only counted as the same one when they're the same kind and within 5 yards (it was 15), so a vein next to a herb is no longer swallowed by it. If you were still on the old 15, it moves to 5 once.
+- **Quest markers counted as nodes** - a scan no longer treats a quest objective on your minimap as a live node.
+- **Scanning in a fight** - the scan key works while something is attacking you. Automatic scans still wait until the fight is over.
+
 ## 2.7.3 - November 12, 2026
 
 ---
