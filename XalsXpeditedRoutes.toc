@@ -25,6 +25,7 @@ Helpers.lua
 Engine.lua
 API.lua
 NodeLogger.lua
+Sounds.lua
 PathPlanner.lua
 Beacon.lua
 DungeonBeacon.lua
