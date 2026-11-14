@@ -13,7 +13,7 @@ local function SaveNode(uiMapID, x, y, gatherType)
     local zoneNodes = XalsXRDB[uiMapID]
 
     local duplicateYards = Helpers.GetDuplicateYards()
-    local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, x, y, duplicateYards)
+    local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, x, y, duplicateYards, gatherType)
 
     -- Whatever live node (from the live scan) was just picked is gone now: its
     -- pulse stops. Done before the position fine-tuning below moves the node.
@@ -94,7 +94,7 @@ local NON_MAP_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
+    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
@@ -119,7 +119,7 @@ function NodeLogger.RemoveDuplicates()
         if not NON_MAP_KEYS[mapID] and type(nodes) == "table" then
             local kept = {}
             for _, node in ipairs(nodes) do
-                if Helpers.FindNearbyNodeIndex(kept, Engine, mapID, node.x, node.y, duplicateYards) then
+                if Helpers.FindNearbyNodeIndex(kept, Engine, mapID, node.x, node.y, duplicateYards, node.type) then
                     removedCount = removedCount + 1
                 else
                     table.insert(kept, node)
