@@ -218,7 +218,7 @@ local function HandleNode(mapID, entry, sender, trusted)
 
     -- Already known: just remember another player has it too.
     if zoneNodes then
-        local index = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, mapID, x, y, duplicateYards)
+        local index = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, mapID, x, y, duplicateYards, nodeType)
         if index then
             local node = zoneNodes[index]
             heard[node] = (heard[node] or 0) + 1
