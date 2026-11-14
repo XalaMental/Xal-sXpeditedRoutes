@@ -43,7 +43,7 @@ function API.ImportNodeData(nodesByMapID, skipPinUpdate)
                 if type(node) == "table" and type(node.x) == "number" and type(node.y) == "number"
                     and (node.type == "mine" or node.type == "herb" or node.type == "lumber")
                     and node.x >= 0 and node.x <= 1 and node.y >= 0 and node.y <= 1 then
-                    local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, node.x, node.y, duplicateYards)
+                    local existingIndex = Helpers.FindNearbyNodeIndex(zoneNodes, Engine, uiMapID, node.x, node.y, duplicateYards, node.type)
                     if existingIndex then
                         skipped = skipped + 1
                     else
