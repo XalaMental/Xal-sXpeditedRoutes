@@ -40,7 +40,7 @@ local EXCLUDED_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
+    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
@@ -134,7 +134,7 @@ SlashCmdList["XALMORASXR"] = function(msg)
             XalsXRDB.duplicateDistanceYards = n
             print("|cff00ccffXal's XR:|r Duplicate detection distance set to |cff00ff00" .. n .. " yd|r. Run /xxr cleanup to apply it to already-saved nodes.")
         else
-            print("|cff00ccffXal's XR:|r Current duplicate detection distance: |cff00ff00" .. (XalsXRDB.duplicateDistanceYards or 15) .. " yd|r")
+            print("|cff00ccffXal's XR:|r Current duplicate detection distance: |cff00ff00" .. (XalsXRDB.duplicateDistanceYards or 5) .. " yd|r")
             print("|cff888888/xxr dupdistance <5-50>|r - Sets the distance in yards.")
         end
     elseif command == "freshness" then
@@ -169,6 +169,20 @@ SlashCmdList["XALMORASXR"] = function(msg)
         end
     elseif command == "share" then
         if addonTable.Sync then addonTable.Sync:PrintStatus() end
+    elseif command == "sound" then
+        -- Plays the arrival and finish sounds and says what each one is set to.
+        local Sounds = addonTable.Sounds
+        if not Sounds then
+            print("|cff00ccffXal's XR:|r Sounds module not loaded.")
+        else
+            print("|cff00ccffXal's XR:|r Sounds available on this client: " .. #Sounds.KEYS)
+            for _, event in ipairs({ "arrive", "finish" }) do
+                local key = Sounds:GetKey(event)
+                print(string.format("|cff00ccffXal's XR:|r %s: %s, sound %s (id %s)", event,
+                    Sounds:IsEnabled(event) and "on" or "OFF", tostring(key), tostring(key and Sounds.IDS[key])))
+                if key then Sounds:Preview(key) end
+            end
+        end
     elseif command == "glow" then
         XalsXRDB.showGlow = not (XalsXRDB.showGlow ~= false)
         Markers:UpdatePins()
@@ -253,6 +267,7 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr pinalpha <30-100>|r - Sets marker opacity as a percentage.")
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
+        print("  |cff00ff00/xxr sound|r - Plays the arrival and finish sounds and shows what each is set to.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
         print("  |cff00ff00/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
         print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom3, custom4, blizzard).")
