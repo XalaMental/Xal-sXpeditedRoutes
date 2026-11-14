@@ -119,7 +119,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 XalsXRDB.arrowProgressColor = true
             end
             if XalsXRDB.duplicateDistanceYards == nil then
-                XalsXRDB.duplicateDistanceYards = 15
+                XalsXRDB.duplicateDistanceYards = 5
+            end
+            -- The default dropped from 15 to 5 yd (2026-11-12): move anyone still on the
+            -- old 15 once. A value they picked themselves is left alone.
+            if not XalsXRDB.duplicateDistanceMigrated then
+                if XalsXRDB.duplicateDistanceYards == 15 then XalsXRDB.duplicateDistanceYards = 5 end
+                XalsXRDB.duplicateDistanceMigrated = true
             end
             if XalsXRDB.compassArrowStyle == nil then
                 XalsXRDB.compassArrowStyle = "custom4"
