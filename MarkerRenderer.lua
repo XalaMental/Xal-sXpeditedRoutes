@@ -115,7 +115,9 @@ function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, is
     pin.dotTex:Hide()
 
     local alphaMult = alphaOverride or (XalsXRDB and XalsXRDB.pinAlpha) or 1
-    if liveState == "gone" and alphaOverride == nil and not (XalsXRDB and XalsXRDB.liveScanDim == false) then
+    -- (On WoW Forever an empty node is not faded at a distance; markers only dim up close.)
+    local onForever = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+    if liveState == "gone" and alphaOverride == nil and not onForever and not (XalsXRDB and XalsXRDB.liveScanDim == false) then
         alphaMult = alphaMult * 0.35
     end
 
