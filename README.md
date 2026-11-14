@@ -1,8 +1,8 @@
 # Xal's Xpedited Routes
 
-**Xal's Xpedited Routes** records the herbs, ore and lumber you gather, draws them on your map and minimap, and builds the fastest route through them with an on-screen compass. On **WoW: Forever** it also shows which of your saved nodes are really there right now, glows the herb or ore in front of you, and starts you off with a full set of Classic nodes.
+**Xal's Xpedited Routes** records the herbs, ore and lumber you gather, draws them on your map and minimap, and builds the fastest route through them with an on-screen compass. On **WoW: Forever** it also glows the herb or ore in front of you, plays a sound when you get to one, and starts you off with a full set of Classic nodes.
 
-Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Retail only; the node highlight, live node scan and built-in nodes are Forever only.
+Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Retail only; the node highlight, live node scan (currently not working) and built-in nodes are Forever only.
 
 > The idea: combine gathering-node tracking and route optimization - concepts pioneered separately by GatherMate2/Gatherer (node recording) and Routes (route optimization) - into one tool instead of several separate addons.
 
@@ -27,10 +27,11 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 
 ### WoW: Forever
 
-*   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects (gold) and chests (blue) glow too. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
-*   **Live node scan (off by default):** finds which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Live nodes pulse yellow (rare herbs and ore violet) and nodes it found empty fade. Start a scan with a key you set on the Live Nodes page, `/xxr scan`, a timer, each time you walk a set distance, or once after a fight, a landing or a loading screen. Automatic scans wait while you're casting, gathering, aiming a spell, looting or hovering something, and the Live Nodes page says why a scan can't start. A glowing node you stand at for a few seconds without gathering it stops glowing.
-*   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. A route you already have is never replaced - new live nodes are added to the end of it, and scanning again takes out stops that have since been picked.
-*   **Built-in Classic nodes:** about 22,000 herb and ore nodes across 45 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
+*   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects and chests glow too, in violet-blue. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
+*   **Live node scan (off by default) - not working right now:** it was built to find which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Blizzard's November 2026 WoW Forever update stopped addons from reading those dots, so the scan can't see any live nodes. It stays in, with a note on the Live Nodes page, until a workaround is found. Live nodes no longer glow or pulse.
+*   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. This depends on the scan, so it's on hold with it.
+*   **Sounds:** an optional sound when you get to a herb or ore (once its glow is fully up) and another when you finish a route. Each can be switched off and set to any of about twenty of the game's own sounds on the Waypoint page.
+*   **Built-in Classic nodes:** about 22,600 herb and ore nodes across 46 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
 
 ## Settings
 
@@ -38,8 +39,8 @@ Open them with `/xxr options`, the minimap button, or Escape -> Options -> AddOn
 
 *   **General** - the skin, minimap button, Lumberjacking (Retail), auto-advance distance
 *   **Floating** - the helper button
-*   **Waypoint** - compass arrow style, scale, progress coloring, trail line
-*   **Map Markers** - marker style, size, opacity, glow, the distance at which markers hide when you're close (15 yards by default)
+*   **Waypoint** - compass arrow style, scale, progress coloring, trail line, the arrival and finish sounds
+*   **Map Markers** - switches to show or hide the markers on the minimap and on the world map, marker style, size, opacity, glow, the distance at which markers hide when you're close (15 yards by default; on Forever they dim there instead of disappearing)
 *   **Gather Tally** - the live window and timers, the dungeon button
 *   **Node Highlight** (Forever) - on/off, quest and chest glows, look, range
 *   **Live Nodes** (Forever) - the scanner, its key, timer and distance, and what it shows
@@ -49,6 +50,8 @@ Open them with `/xxr options`, the minimap button, or Escape -> Options -> AddOn
 Route start, stop and skip, and "Scan for live nodes", can also be bound to keys at Escape -> Options -> Key Bindings -> AddOns -> Xal's Xpedited Routes. The scan key can be set right on the Live Nodes page.
 
 ## Live node scan (Forever)
+
+**Not working right now.** Blizzard's November 2026 WoW Forever update (build 70862) means the game only names a minimap dot while the real mouse cursor is over it, and a scan that moves the minimap under the cursor no longer gets an answer. The scan stays in, and says so, until a workaround is found. The rest of this section describes how it was built to work.
 
 The game never tells an addon where its Find Herbs / Find Minerals dots are, but it does name the dot under the real mouse. A scan slides your minimap under the mouse so each saved node's spot lands under it, one spot at a time, and reads the name the game gives back. Because it only checks the spots where you have saved nodes, it's short. While it runs the minimap is blank for a moment and the buttons on it can't be clicked; combat, a mouse press or a zone change cancels it and puts everything back at once. If the mouse is over a window the scan waits for you to move it onto the world (the Scan now button hides the settings window for you). Turn on Find Herbs or Find Minerals first.
 
@@ -62,7 +65,7 @@ Drag it with Left-Click, right-click to skip the current node. When you get with
 
 ## Duplicates and freshness
 
-*   **Duplicate distance** (default 15 yards, 5-50): how close two saved nodes must be to count as the same one. **Cleanup Duplicates** merges nodes already saved closer than that.
+*   **Duplicate distance** (default 5 yards, 5-50): how close two saved nodes of the same kind (ore, herb or lumber) must be to count as the same one. **Cleanup Duplicates** merges nodes already saved closer than that.
 *   **Node freshness** (off by default, up to 60 minutes): skips nodes you gathered recently when building a route, since they probably haven't respawned.
 
 Resetting saved nodes isn't offered any more: the live node features rely on your saved nodes.
@@ -78,7 +81,8 @@ Use `/xxr` or `/xalmoras`:
 *   `/xxr` - show or hide the gathering markers
 *   `/xxr route`, `/xxr route stop`, `/xxr route skip`
 *   `/xxr haul` - open the Gather Tally
-*   `/xxr scan` - run a live node scan (Forever); `/xxr scan debug` prints what each check found
+*   `/xxr scan` - run a live node scan (Forever; not working right now, see above); `/xxr scan debug` prints what each check found
+*   `/xxr sound` - play the arrival and finish sounds and show what each is set to
 *   `/xxr share` - show node sharing status
 *   `/xxr dungeon` - waypoint a Season 2 Mythic+ dungeon entrance
 *   `/xxr stats`, `/xxr cleanup`
@@ -104,6 +108,7 @@ Modules load in this order (see the `.toc` files):
 *   `Bootstrap.lua` - namespace; `BrandStyle.lua` and `XalsSkins.lua` - colors, widgets and the shared skins; `WhatsNew.lua` - the once-per-update splash
 *   `Helpers.lua`, `Engine.lua` - safe API wrappers, startup, saved settings; `API.lua` - the public node-import API used by Xal's Routes Data
 *   `NodeLogger.lua` - recording and position fine-tuning; `PathPlanner.lua` - routes, including routes from live nodes
+*   `Sounds.lua` - the arrival and finish sounds
 *   `Beacon.lua`, `DungeonBeacon.lua` - the two compasses; `MarkerRenderer.lua`, `Markers.lua` - marker drawing, pooling and the live look
 *   `QuickButton.lua`, `TomTomBridge.lua`, `SettingsPanel.lua`, `RunTracker.lua`, `DungeonNav.lua`, `MinimapButton.lua`
 *   Forever only: `NodeHighlight.lua`, `ForeverNodeData.lua` and `ForeverImport.lua` (the built-in nodes), `LiveScan.lua`
