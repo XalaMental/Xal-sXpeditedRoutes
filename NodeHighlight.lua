@@ -30,8 +30,8 @@ local GLOW_SIZE = 150
 local COLORS = {
     herb = { 0.35, 1.0, 0.45 },
     ore = { 1.0, 0.7, 0.25 },
-    quest = { 1.0, 0.85, 0.2 },
-    chest = { 0.45, 0.8, 1.0 },
+    quest = { 0.55, 0.5, 1.0 },
+    chest = { 0.55, 0.5, 1.0 },
 }
 
 -- Forever is the only client this runs on (WOW_PROJECT_CAMELOT is nil
@@ -363,6 +363,13 @@ local function Animate(self, elapsed)
     self.ready = Approach(self.ready, self.unable and 0 or 1, elapsed / 0.25)
     local ready = self.ready
     local locked = 1 - ready
+
+    -- The arrival sound waits for the glow's final, full-bright form: the swell-in is
+    -- finished and the node is one you can gather (ready, not grayed out).
+    if self.soundPending and self.appear >= 1 and ready >= 0.99 then
+        self.soundPending = false
+        if addonTable.Sounds then addonTable.Sounds:Play("arrive") end
+    end
 
     self.phase = self.phase + elapsed * TWO_PI / Lerp(3.6, 1.8, ready)
     self.spin = self.spin + elapsed * Lerp(0.5, 1.4, ready)
@@ -835,6 +842,8 @@ local function BuildGlow()
 end
 
 local function HideGlow()
+    NodeHighlight.soundFor = nil -- the next node you come to plays its sound again
+    if glow then glow.soundPending = false end
     if glow and glow:IsShown() then glow:Hide() end
 end
 
@@ -882,11 +891,12 @@ local function Refresh()
     local color = COLORS[kind]
     glow.r, glow.g, glow.b = color[1], color[2], color[3]
     glow.unable = unable == true
-    -- Herbs burn green, ore burns the natural orange. The flame art comes in
-    -- both hues, so swap the textures only when the node type changes.
+    -- Herbs burn green, ore burns the natural orange, and everything else (quest
+    -- objects, chests) burns violet-blue. The flame art comes in all three hues,
+    -- so swap the textures only when the node type changes.
     if glow.fireKind ~= kind then
         glow.fireKind = kind
-        local suffix = kind == "herb" and "_green" or ""
+        local suffix = (kind == "herb" and "_green") or ((kind == "quest" or kind == "chest") and "_blue") or ""
         glow.flame:SetTexture(ART .. "fire_flame" .. suffix .. ".tga")
         glow.flameBack:SetTexture(ART .. "fire_cluster" .. suffix .. ".tga")
         for _, ember in ipairs(glow.embers) do
@@ -909,6 +919,17 @@ local function Refresh()
         glow.appear = 0 -- swell in again for a newly picked node
         glow.ready = glow.unable and 0 or 1
         glow:Show()
+    end
+
+    -- Arrival sound: the game has picked a real herb or ore you can gather, i.e. the
+    -- moment its glow comes up. Once per node (a different node plays it again).
+    if (kind == "herb" or kind == "ore") and not glow.unable and addonTable.Sounds then
+        local okGuid, guid = pcall(UnitGUID, SOFT)
+        if not okGuid or Secret(guid) or type(guid) ~= "string" then guid = "?" end
+        if NodeHighlight.soundFor ~= guid then
+            NodeHighlight.soundFor = guid
+            glow.soundPending = true -- played by Animate once the glow is fully bright
+        end
     end
 end
 
