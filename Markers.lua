@@ -63,18 +63,26 @@ local function LiveStateOf(mapID, x, y)
     local entry = liveState[NodeKey(mapID, x, y)]
     if entry and GetTime() - entry.t <= LIVE_TTL then
         if not entry.live then return "gone" end
-        if entry.rare and not (XalsXRDB and XalsXRDB.liveScanRare == false) then return "rare" end
-        return "live"
+        -- A live node is no longer drawn with a glow or a pulse (removed 2026-11-12):
+        -- it keeps its normal marker. The scan still uses it for routes.
+        return nil
     end
     return nil
 end
 
 -- results: { [nodeKey] = true (live) / false (checked, gone) } for nodes on mapID.
 -- rare: optional { [nodeKey] = true } for live nodes that are rare herbs/ore.
+-- A node you gathered, or stood at without finding anything, can't come back as
+-- live for a while: a scan reading it as live again straight after is the game
+-- still showing a dot, not a new node.
+local DEAD_SECONDS = 180
+local deadUntil = {}
+
 function Markers:SetLiveResults(mapID, results, rare)
     local now = GetTime()
     for key, live in pairs(results) do
-        liveState[key] = { live = live, t = now, mapID = mapID, rare = rare and rare[key] or nil }
+        if live and deadUntil[key] and now < deadUntil[key] then live = false end
+        liveState[key] = { live = live, t = now, mapID = mapID, rare = live and rare and rare[key] or nil }
     end
     self:UpdatePins()
     -- Put the markers back to normal once these results run out.
@@ -103,6 +111,7 @@ function Markers:MarkGathered(mapID, x, y)
     end
     if bestKey then
         local entry = liveState[bestKey]
+        deadUntil[bestKey] = now + DEAD_SECONDS
         entry.live, entry.rare, entry.t = false, nil, now
         self:UpdatePins()
     end
@@ -117,6 +126,7 @@ function Markers:ExpectGatherAt(mapID, x, y)
     C_Timer.After(EXPECT_GATHER_SECONDS, function()
         local entry = liveState[key]
         if entry and entry.live then
+            deadUntil[key] = GetTime() + DEAD_SECONDS
             entry.live, entry.rare, entry.t = false, nil, GetTime()
             Markers:UpdatePins()
         end
@@ -148,6 +158,7 @@ spotWatcher:SetScript("OnUpdate", function(_, elapsed)
             if yards and yards <= AT_SPOT_YARDS then
                 atSpotSince[key] = atSpotSince[key] or now
                 if now - atSpotSince[key] >= AT_SPOT_SECONDS then
+                    deadUntil[key] = now + DEAD_SECONDS
                     entry.live, entry.rare, entry.t = false, nil, now
                     atSpotSince[key] = nil
                     changed = true
@@ -304,6 +315,10 @@ end
 -- only if that API is ever unavailable.
 local DEFAULT_PROXIMITY_DISTANCE_YARDS = 15
 local FALLBACK_RADIUS_PERCENT = 65
+local IS_FOREVER = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+-- Opacity of a marker within the hide distance: gone on other clients, dimmed
+-- (not hidden) on WoW Forever. Beyond that distance markers are fully drawn.
+local NEAR_ALPHA = IS_FOREVER and 0.35 or 0
 
 local function ProximityTick(elapsed)
     proximityTimer = proximityTimer + elapsed
@@ -345,7 +360,7 @@ local function ProximityTick(elapsed)
             if shouldBeNear ~= pin.isNear or liveNear ~= pin.liveNear then
                 pin.isNear = shouldBeNear
                 pin.liveNear = liveNear
-                SetPinAppearance(pin, pin.nodeType, pin.isRouteTarget, nil, shouldBeNear and 0 or nil)
+                SetPinAppearance(pin, pin.nodeType, pin.isRouteTarget, nil, shouldBeNear and NEAR_ALPHA or nil)
             end
         end
     end
@@ -418,7 +433,7 @@ function Markers:UpdatePins()
     local targetNode = PathPlanner:CurrentStop()
     
     -- Load pins on the minimap (only for the player's current map)
-    if playerMapID and XalsXRDB[playerMapID] then
+    if playerMapID and XalsXRDB[playerMapID] and XalsXRDB.showMinimapMarkers ~= false then
         for _, node in ipairs(XalsXRDB[playerMapID]) do
             if node.x and node.y and node.type and TypeIsVisible(node.type) then
                 local mPin = AcquireMinimapPin()
@@ -439,7 +454,7 @@ function Markers:UpdatePins()
                 -- that was already correctly hidden would flicker back to visible
                 -- every time one of those unrelated events fired. Re-apply whatever
                 -- near/far state it already had instead of discarding it.
-                SetPinAppearance(mPin, node.type, isTarget, nil, mPin.isNear and 0 or nil)
+                SetPinAppearance(mPin, node.type, isTarget, nil, mPin.isNear and NEAR_ALPHA or nil)
                 
                 -- floatOnEdge = isTarget: the active route target clamps to the
                 -- minimap's edge when out of view range instead of disappearing,
@@ -453,7 +468,7 @@ function Markers:UpdatePins()
     end
     
     -- Load pins on the world map (only for the map currently being viewed)
-    if WorldMapFrame and WorldMapFrame:IsShown() then
+    if WorldMapFrame and WorldMapFrame:IsShown() and XalsXRDB.showWorldMapMarkers ~= false then
         local worldMapID = WorldMapFrame:GetMapID()
         if worldMapID and XalsXRDB[worldMapID] then
             for _, node in ipairs(XalsXRDB[worldMapID]) do
