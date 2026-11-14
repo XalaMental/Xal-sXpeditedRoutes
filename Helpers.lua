@@ -305,7 +305,7 @@ end
 -- rather than comparing raw normalized map coordinates against a flat threshold -
 -- 0.01 of a zone's coordinate space is a very different real distance in a small
 -- zone than a huge one, which made the old fixed threshold feel inconsistent.
-Helpers.DEFAULT_DUPLICATE_YARDS = 15
+Helpers.DEFAULT_DUPLICATE_YARDS = 5
 Helpers.FALLBACK_YARDS_PER_UNIT = 4000 -- rough approximation used only without HereBeDragons, shared across every fallback distance calc in the addon
 
 function Helpers.GetDuplicateYards()
@@ -510,9 +510,12 @@ end
 -- candidates that are already in the right neighborhood.
 local ROUGH_REJECT_RADIUS = 0.05 -- generous normalized-coordinate radius; a genuine match is always well inside this at any sane zone scale
 
-function Helpers.FindNearbyNodeIndex(nodeList, Core, mapID, x, y, thresholdYards)
+-- gatherType is optional: when given, only a saved node of the SAME kind (ore
+-- vs herb vs wood) counts as a match, so an herb beside a vein doesn't hide it.
+function Helpers.FindNearbyNodeIndex(nodeList, Core, mapID, x, y, thresholdYards, gatherType)
     for i, entry in ipairs(nodeList) do
-        if math.abs(entry.x - x) <= ROUGH_REJECT_RADIUS and math.abs(entry.y - y) <= ROUGH_REJECT_RADIUS then
+        if (gatherType == nil or entry.type == nil or entry.type == gatherType)
+            and math.abs(entry.x - x) <= ROUGH_REJECT_RADIUS and math.abs(entry.y - y) <= ROUGH_REJECT_RADIUS then
             if Helpers.NodeDistanceYards(Core, mapID, x, y, entry.x, entry.y) < thresholdYards then
                 return i
             end
