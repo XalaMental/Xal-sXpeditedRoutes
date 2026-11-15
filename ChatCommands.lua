@@ -176,7 +176,8 @@ SlashCmdList["XALMORASXR"] = function(msg)
             print("|cff00ccffXal's XR:|r Sounds module not loaded.")
         else
             print("|cff00ccffXal's XR:|r Sounds available on this client: " .. #Sounds.KEYS)
-            for _, event in ipairs({ "arrive", "finish" }) do
+            local forever = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+            for _, event in ipairs(forever and { "arrive", "newnode", "finish" } or { "newnode", "finish" }) do
                 local key = Sounds:GetKey(event)
                 print(string.format("|cff00ccffXal's XR:|r %s: %s, sound %s (id %s)", event,
                     Sounds:IsEnabled(event) and "on" or "OFF", tostring(key), tostring(key and Sounds.IDS[key])))
@@ -267,7 +268,7 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr pinalpha <30-100>|r - Sets marker opacity as a percentage.")
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
-        print("  |cff00ff00/xxr sound|r - Plays the arrival and finish sounds and shows what each is set to.")
+        print("  |cff00ff00/xxr sound|r - Plays the arrival, new-node and finish sounds and shows what each is set to.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
         print("  |cff00ff00/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
         print("  |cff00ff00/xxr arrowstyle <name>|r - Sets the compass arrow style (custom3, custom4, blizzard).")
