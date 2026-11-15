@@ -34,7 +34,7 @@ local function GetStatsString()
                 and mapID ~= "helperButtonPosition" and mapID ~= "showGlow"
                 and mapID ~= "proximityDistanceYards"
                 and mapID ~= "arrowProgressColor" and mapID ~= "pinAlpha"
-                and mapID ~= "duplicateDistanceYards" and mapID ~= "duplicateDistanceMigrated" and mapID ~= "showMinimapMarkers" and mapID ~= "sounds" and mapID ~= "showWorldMapMarkers" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and mapID ~= "freshnessMinutes"
+                and mapID ~= "duplicateDistanceYards" and mapID ~= "duplicateDistanceMigrated" and mapID ~= "showMinimapMarkers" and mapID ~= "sounds" and mapID ~= "places" and mapID ~= "showWorldMapMarkers" and mapID ~= "compassArrowStyle" and mapID ~= "arrowScale" and mapID ~= "tomtomSyncEnabled" and mapID ~= "freshnessMinutes"
                 and mapID ~= "showHaulSummary" and mapID ~= "haulFramePosition" and mapID ~= "haulShowIcons" and mapID ~= "haulFontScale"
                 and mapID ~= "haulGatherTimer" and mapID ~= "haulRouteTimer" and mapID ~= "arrowTextScale"
                 and mapID ~= "dungeonCoords" and mapID ~= "dungeonButtonEnabled" and mapID ~= "dungeonButtonSide"
@@ -497,7 +497,7 @@ local function BuildFloatingButtonPanel()
     -- Off by default (explicit request 2026-08-16) - the button stays fully
     -- visible at all times unless this is turned on.
     local fadeHeader = AddSection(floatingPanel, div3, "Fade when idle")
-    local _, fadeCheck = AddToggle(floatingPanel, fadeHeader, -10,
+    local fadeDesc, fadeCheck = AddToggle(floatingPanel, fadeHeader, -10,
         "Fade the button when you're not near it",
         "Off by default. The button stays fully visible unless this is on.",
         function(self)
@@ -506,7 +506,51 @@ local function BuildFloatingButtonPanel()
         end)
     floatingPanel.fadeCheck = fadeCheck
 
+    -- Places: its own little floating icon (Places.lua) with a list of nearest-place shortcuts.
+    local Places = addonTable.Places
+    if Places and not Places.supported then Places = nil end -- WoW: Forever only
+    local placesChecks = {}
+    local placesShowCheck, placesRouterCheck
+    if Places then
+        local placesDiv = AddDivider(floatingPanel, fadeDesc, -14)
+        local placesHeader = AddSection(floatingPanel, placesDiv, "Places button")
+        local placesIntro = AddNote(floatingPanel, placesHeader, -10,
+            "A small separate icon. Click it for a list; pick a place and your arrow points at the nearest one on your continent. Positions are not verified in the game yet.")
+        local showDesc
+        showDesc, placesShowCheck = AddToggle(floatingPanel, placesIntro, -10,
+            "Show the Places button",
+            "Drag it anywhere to move it.",
+            function(self) Places:SetButtonShown(self:GetChecked() and true or false) end)
+        local resetPlacesBtn = CreateButton(floatingPanel, showDesc, 0, -10, "Reset Places Position", 200, function()
+            Places:ResetButtonPosition()
+        end)
+        local routerDesc
+        routerDesc, placesRouterCheck = AddToggle(floatingPanel, resetPlacesBtn, -14,
+            "Use Shortest Path Forever's route",
+            "If you have Shortest Path Forever, it plans the walking route (round mountains, through gates, flights and boats) and draws it, and our straight arrow stays off. Without it, or with this off, you get our straight arrow.",
+            function(self) Places:SetUseRouter(self:GetChecked() and true or false) end)
+        local listHeader = AddNote(floatingPanel, routerDesc, -14,
+            "Show these in the list:")
+        local anchor = listHeader
+        for _, cat in ipairs(Places.CATEGORIES) do
+            local key = cat.key
+            local desc, check = AddToggle(floatingPanel, anchor, -8, cat.label,
+                key == "prof" and "Alchemy, Blacksmithing, Cooking and the rest, one list." or "Nearest one on your continent.",
+                function(self) Places:SetEnabled(key, self:GetChecked() and true or false) end)
+            placesChecks[key] = check
+            anchor = desc
+        end
+    end
+
     local RefreshFloatingPanel = function()
+        if Places then
+            if placesShowCheck then placesShowCheck:SetChecked(Places:ButtonShown()) end
+            if placesRouterCheck then
+                local saved = XalsXRDB and XalsXRDB.places
+                placesRouterCheck:SetChecked(not (saved and saved.noRouter))
+            end
+            for key, check in pairs(placesChecks) do check:SetChecked(Places:IsEnabled(key)) end
+        end
         helperButtonCheck:SetChecked(not (XalsXRDB and XalsXRDB.showHelperButton == false))
         scaleSlider:Sync(math.floor(((XalsXRDB and XalsXRDB.helperButtonScale) or 1) * 100 + 0.5))
         fadeCheck:SetChecked(XalsXRDB and XalsXRDB.helperButtonFadeWhenIdle == true)
@@ -686,12 +730,27 @@ local function BuildMarkersPanel()
     local div1 = AddDivider(markersPanel, worldDesc, -14)
 
     local styleHeader = AddSection(markersPanel, div1, "Marker style")
-    local styleButtons, styleGrid = AddPickerGrid(markersPanel, styleHeader, -10,
-        Markers.PIN_STYLES, Markers.PIN_STYLE_LABELS, 2, 165, 22,
+    local styleNote = AddNote(markersPanel, styleHeader, -8,
+        "How a saved node looks on the map. Each button shows the marker itself in Mining red. Every style keeps its middle open, so the game's own node dot still shows through.")
+    local styleButtons, styleGrid = AddPickerGrid(markersPanel, styleNote, -10,
+        Markers.PIN_STYLES, Markers.PIN_STYLE_LABELS, 2, 165, 40,
         function(key)
             XalsXRDB.pinStyle = key
             Markers:UpdatePins()
         end)
+    -- A small picture of each style beside its name, drawn by the same code the map uses,
+    -- so what you see here is what you get on the map.
+    local MarkerRenderer = addonTable.MarkerRenderer
+    for styleKey, styleBtn in pairs(styleButtons) do
+        local preview = CreateFrame("Frame", nil, styleBtn)
+        preview:SetSize(30, 30)
+        preview:SetPoint("LEFT", styleBtn, "LEFT", 10, 0)
+        MarkerRenderer.EnsureParts(preview)
+        MarkerRenderer.SetAppearance(preview, "mine", false, 24, styleKey, 1)
+        styleBtn.label:ClearAllPoints()
+        styleBtn.label:SetPoint("LEFT", preview, "RIGHT", 14, 0)
+        styleBtn.label:SetJustifyH("LEFT")
+    end
     pinStyleButtons = styleButtons
 
     local div2 = AddDivider(markersPanel, styleGrid, -14)
