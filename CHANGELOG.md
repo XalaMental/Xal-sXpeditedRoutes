@@ -1,5 +1,21 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.9.0 - November 15, 2026
+
+---
+
+Gathering means a lot of running back to town, and I kept wondering where the nearest forge or mailbox actually was. So this update adds a Places button: a little separate icon, and you pick a forge, an anvil, a mailbox, an inn, a bank, a trainer and so on, and your arrow points at the nearest one on your continent. If you have Shortest Path Forever it plans the walking route for you. I also got tired of the addon needing HereBeDragons on Forever, so on Forever the markers now come from the addon's own map layer and nothing extra is needed. And since a plain X doesn't suit everybody, there are nine more marker styles to choose from. I haven't been able to walk every zone to check where each place sits yet, so if one is in the wrong spot, leave a comment here or tell me on Discord and I'll fix it. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Places button (WoW: Forever)** - a small separate icon with a list: forge, anvil, cooking fire, mailbox, inn, flight master, bank, auction house, repair vendor, class trainer and each profession's trainer. Pick one and your arrow points at the nearest one on your continent. Switch any kind off, or hide the button, on the Floating page. `/xxr go forge` (or `anvil`, `mailbox`, a profession and so on) does the same from chat.
+- **Shortest Path Forever (optional)** - if you have it installed, it plans and draws the walking route to a place. Without it the game's own waypoint, TomTom or the dungeon compass is used.
+- **Nine more marker styles** - Ring, Bullseye, Crosshair, Dotted ring, Brackets, Diamond, Sparkle, Hex gem and Pin join Hollow X and Hollow star, each with a small picture on the Map Markers page and an open middle so the game's own node dot still shows through. The Gather button follows the style you pick.
+- **Own map layer (WoW: Forever)** - the minimap and world map markers no longer need HereBeDragons on Forever. Every other version still uses it.
+- **New commands** - `/xxr go <place>`, `/xxr forge` and `/xxr maplayer` (shows which map layer is running and how many markers it holds).
+
+### ⚙️ Under the hood
+- The Places positions cover about 48 Classic zones in the addon's own data format. They haven't all been checked in the game yet.
+
 ## 2.8.0 - November 15, 2026
 
 ---
