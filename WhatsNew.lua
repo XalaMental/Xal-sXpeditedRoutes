@@ -27,19 +27,15 @@ local Brand = addonTable.BrandStyle
 -- ── Update this block every release to match CHANGELOG.md ──────
 -- (no "version" field here on purpose - see note above)
 W.WHATS_NEW = {
-    date = "November 13, 2026",
+    date = "November 15, 2026",
     intro = "",
     sections = {
         { heading = "New", items = {
-            "Sounds (WoW: Forever): an optional sound when you get to a herb or ore, and another when you finish a route. Pick them on the Waypoint page.",
-            "Two new switches on the Map Markers page hide your node markers on the minimap or the world map.",
-            "Quest objects and chests now glow violet-blue, so they can't be mistaken for herbs and ore.",
-            "About 580 more Classic herb and ore nodes (WoW: Forever).",
+            "A sound when a brand-new node is saved to your database, on every version. Pick it on the Waypoint page.",
+            "The finish-a-route sound now works on every version too. (Not tested on Retail, MoP Classic or Classic Era yet - tell me if one doesn't play.)",
         } },
         { heading = "Fixed", items = {
-            "The live scan (WoW: Forever) isn't working: Blizzard's November update stopped addons reading the minimap's node dots. It stays in until a workaround is found, and live nodes no longer glow.",
-            "Markers stay fully drawn until you're within the hide distance, then dim instead of disappearing (WoW: Forever).",
-            "Ore veins next to each other, or next to a herb, are saved separately now (duplicate distance is 5 yards and only counts the same kind).",
+            "The arrival sound setting is only shown on WoW: Forever, where it works.",
         } },
     },
 }
