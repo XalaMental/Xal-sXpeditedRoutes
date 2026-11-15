@@ -40,7 +40,7 @@ local EXCLUDED_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
+    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, places = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
@@ -169,6 +169,43 @@ SlashCmdList["XALMORASXR"] = function(msg)
         end
     elseif command == "share" then
         if addonTable.Sync then addonTable.Sync:PrintStatus() end
+    elseif command == "maplayer" then
+        -- Says which map layer is running and how many marker pins it holds right now.
+        local layer = addonTable.ForeverMapLayer
+        local Engine = addonTable.Engine
+        if Engine.ownMapLayer and layer then
+            local mini, miniShown, world, worldShown = layer.Counts()
+            print(string.format("|cff00ccffXal's XR:|r Own map layer (no HereBeDragons): ON. Minimap pins %d (showing %d), world map pins %d (showing %d).",
+                mini, miniShown, world, worldShown))
+        elseif Engine.HBD then
+            print("|cff00ccffXal's XR:|r Using HereBeDragons for the map layer.")
+        else
+            print("|cff00ccffXal's XR:|r No map layer is running, so no markers are drawn.")
+        end
+        -- And what decides whether markers are asked for at all.
+        local Helpers = addonTable.Helpers
+        local mapID = C_Map.GetBestMapForUnit("player")
+        local saved = mapID and XalsXRDB[mapID]
+        local count = type(saved) == "table" and #saved or 0
+        print(string.format("|cff00ccffXal's XR:|r Icons %s, minimap markers %s, world map markers %s. Your zone map is %s with %d saved node(s).",
+            XalsXRDB.showPins == false and "HIDDEN" or "shown",
+            XalsXRDB.showMinimapMarkers == false and "OFF" or "on",
+            XalsXRDB.showWorldMapMarkers == false and "OFF" or "on",
+            tostring(mapID), count))
+        print(string.format("|cff00ccffXal's XR:|r Node types this character can gather: mining %s, herbs %s, lumber %s.",
+            Helpers.HasGatheringProfession(Helpers.MINING_SKILL_LINE, Helpers.MINING_NAMES) and "yes" or "no",
+            Helpers.HasGatheringProfession(Helpers.HERBALISM_SKILL_LINE, Helpers.HERBALISM_NAMES) and "yes" or "no",
+            Helpers.HasLumberjacking() and "yes" or "no"))
+    elseif command == "go" or command == "forge" then
+        -- Points your arrow at the nearest place on your continent: /xxr go forge | anvil | fire | mailbox | inn |
+        -- flight | bank | auction | repair | class | <profession>. "/xxr forge" is a shortcut (add "anvil").
+        if addonTable.Places and addonTable.Places.GoByWord then
+            if command == "forge" then
+                addonTable.Places:GoByWord(subcommand == "anvil" and "anvil" or "forge")
+            else
+                addonTable.Places:GoByWord(table.concat(parts, " ", 2))
+            end
+        end
     elseif command == "sound" then
         -- Plays the arrival and finish sounds and says what each one is set to.
         local Sounds = addonTable.Sounds
@@ -263,11 +300,13 @@ SlashCmdList["XALMORASXR"] = function(msg)
         print("  |cff00ff00/xxr stats|r - Shows the total number of saved nodes.")
         print("  |cff00ff00/xxr cleanup|r - Cleans up duplicate nodes in the database.")
         print("  |cff00ff00/xxr pinstyle|r - Lists available map marker styles.")
-        print("  |cff00ff00/xxr pinstyle <name>|r - Sets the map marker style (hollowx or star).")
+        print("  |cff00ff00/xxr pinstyle <name>|r - Sets the map marker style (hollowx, star, ring, bullseye, crosshair, dottedring, brackets, diamond, sparkle, hexgem or pin).")
         print("  |cff00ff00/xxr pinsize <8-28>|r - Sets the map marker size in pixels.")
         print("  |cff00ff00/xxr pinalpha <30-100>|r - Sets marker opacity as a percentage.")
         print("  |cff00ff00/xxr glow|r - Toggles the colored glow behind markers.")
         print("  |cff00ff00/xxr proximity <20-500>|r - Sets the distance (yards) at which markers hide - always on.")
+        print("  |cff00ff00/xxr maplayer|r - Shows which map layer is running and how many marker pins it holds.")
+        print("  |cff00ff00/xxr go <place>|r - Points your arrow at the nearest forge, anvil, fire, mailbox, inn, flight, bank, auction, repair, class trainer or a profession's trainer on your continent.")
         print("  |cff00ff00/xxr sound|r - Plays the arrival, new-node and finish sounds and shows what each is set to.")
         print("  |cff00ff00/xxr dupdistance <5-50>|r - Sets how close two nodes must be to count as the same one.")
         print("  |cff00ff00/xxr freshness <0-60>|r - Skips nodes gathered within this many minutes when building a route (0 = off).")
