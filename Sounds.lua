@@ -49,8 +49,9 @@ end
 -- Per event: the saved setting names and the defaults. Settings live in one table,
 -- XalsXRDB.sounds, written only once the player changes something.
 local EVENTS = {
-    arrive = { on = true, key = "MAP_PING" },
-    finish = { on = true, key = "IG_QUEST_LIST_COMPLETE" },
+    arrive = { on = true, key = "MAP_PING" },                           -- Forever only (needs the Node Highlight)
+    newnode = { on = true, key = "IG_MAINMENU_OPTION_CHECKBOX_ON" },    -- a brand-new node saved; every version
+    finish = { on = true, key = "IG_QUEST_LIST_COMPLETE" },             -- a route completed; every version
 }
 
 local function Saved()
