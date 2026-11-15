@@ -96,7 +96,7 @@ local NON_MAP_KEYS = {
     pinStyle = true, pinSize = true, showHelperButton = true,
     helperButtonPosition = true, showGlow = true, proximityDistanceYards = true,
     arrowProgressColor = true, pinAlpha = true,
-    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
+    duplicateDistanceYards = true, duplicateDistanceMigrated = true, showMinimapMarkers = true, sounds = true, places = true, showWorldMapMarkers = true, compassArrowStyle = true, arrowScale = true, tomtomSyncEnabled = true,
     freshnessMinutes = true, showHaulSummary = true, haulFramePosition = true,
     haulShowIcons = true, haulFontScale = true, haulGatherTimer = true, haulRouteTimer = true,
     arrowTextScale = true, dungeonCoords = true, dungeonButtonEnabled = true, dungeonButtonSide = true,
