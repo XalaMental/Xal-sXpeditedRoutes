@@ -619,9 +619,16 @@ local function BuildWaypointPanel()
             soundControls[event] = { check = check, buttons = buttons }
             soundAnchor = AddDivider(waypointPanel, grid, -14)
         end
-        AddSoundBlock("arrive", "Sound when you arrive at a node",
-            "Play a sound when you get to a node",
-            "Plays once when you get to a herb or ore you can gather - once its Node Highlight glow has fully come up. Needs Node Highlight turned on. Pick a sound below to hear it.")
+        -- The arrival sound rides on the Node Highlight, which only exists on WoW: Forever,
+        -- so the setting is only offered there.
+        if WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT then
+            AddSoundBlock("arrive", "Sound when you arrive at a node",
+                "Play a sound when you get to a node",
+                "Plays once when you get to a herb or ore you can gather - once its Node Highlight glow has fully come up. Needs Node Highlight turned on. Pick a sound below to hear it.")
+        end
+        AddSoundBlock("newnode", "Sound when a new node is saved",
+            "Play a sound when a new node is saved",
+            "Plays when a node you gather is added to your database for the first time. Gathering the same node again stays quiet. Pick a sound below to hear it.")
         AddSoundBlock("finish", "Sound when you finish a route",
             "Play a sound when you finish a route",
             "Plays when you reach the last stop (or skip it) and the route is complete.")
