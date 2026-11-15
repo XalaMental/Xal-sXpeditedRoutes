@@ -8,16 +8,16 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 
 ## Requirements
 
-**Requires [HereBeDragons](https://www.curseforge.com/wow/addons/herebedragons) for minimap and world map markers to show at all** - not bundled, install it separately. Without it, recording, routing, the compass and the floating helper button still work, but no pins are drawn. See "HereBeDragons Dependency" below.
+**On Retail, MoP Classic and Classic Era, [HereBeDragons](https://www.curseforge.com/wow/addons/herebedragons) is needed for minimap and world map markers to show at all** - not bundled, install it separately. Without it, recording, routing, the compass and the floating helper button still work, but no pins are drawn. See "HereBeDragons Dependency" below. **On WoW: Forever nothing extra is needed:** the addon draws its markers with its own map layer.
 
-[TomTom](https://www.curseforge.com/wow/addons/tomtom) is optional and only adds the route hand-off described below. The live node scan also works best alone: other addons that scan the minimap the same way (Lueur, NodeSight, GatherCompass) fight over it if more than one runs at once.
+[TomTom](https://www.curseforge.com/wow/addons/tomtom) is optional and only adds the route hand-off described below. Shortest Path Forever is optional too (Forever only): it plans and draws the walking route to a place from the Places button. The live node scan also works best alone: other addons that scan the minimap the same way (Lueur, NodeSight, GatherCompass) fight over it if more than one runs at once.
 
 ## Key features
 
 *   **Automatic recording** of every herb, ore and lumber node you gather, saved to your own `SavedVariables`. Re-gathering a saved node nudges its marker onto the real spot.
 *   **Route optimization:** a greedy nearest-first route improved with a 2-opt pass, using real distances in yards when HereBeDragons is installed. Nearby nodes group into one stop.
 *   **Compass and trail line:** a movable arrow with the distance to your next stop, auto-advance, skip, and a line on the minimap pointing at your next stop.
-*   **Map and minimap markers:** hollow X or star, adjustable size and opacity, with your route target marked. Markers for node types your character can't gather are hidden.
+*   **Map and minimap markers:** eleven styles (Hollow X, Hollow star, Ring, Bullseye, Crosshair, Dotted ring, Brackets, Diamond, Sparkle, Hex gem, Pin), each with an open middle so the game's own node dot still shows, adjustable size and opacity, with your route target marked. The Gather button follows the style you pick. Markers for node types your character can't gather are hidden.
 *   **Floating helper button:** one click starts or updates a route; Mining, Herbalism and Lumberjacking each get an icon and combine into one route.
 *   **Gather Tally:** a live window tallying what you gather on a run, with optional timers.
 *   **TomTom hand-off:** if TomTom is installed its arrow follows your route (on by default when TomTom is present).
@@ -31,6 +31,8 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 *   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects and chests glow too, in violet-blue. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
 *   **Live node scan (off by default) - not working right now:** it was built to find which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Blizzard's November 2026 WoW Forever update stopped addons from reading those dots, so the scan can't see any live nodes. It stays in, with a note on the Live Nodes page, until a workaround is found. Live nodes no longer glow or pulse.
 *   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. This depends on the scan, so it's on hold with it.
+*   **Places button:** a small separate icon with a list of places - forge, anvil, cooking fire, mailbox, inn, flight master, bank, auction house, repair vendor, class trainer and each profession's trainer. Pick one and your arrow points at the nearest one on your continent. Each kind can be switched off on the Floating page. With Shortest Path Forever installed it plans and draws the walking route; without it the game's own waypoint, TomTom or the dungeon compass is used. Positions come from about 48 Classic zones and may not be perfect yet.
+*   **Own map layer:** markers on the minimap and world map are drawn by the addon itself on Forever, so HereBeDragons isn't needed there.
 *   **Arrival sound:** an optional sound when you get to a herb or ore, once its glow is fully up. Forever only, since it uses the Node Highlight.
 *   **Built-in Classic nodes:** about 22,600 herb and ore nodes across 46 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
 
@@ -39,7 +41,7 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 Open them with `/xxr options`, the minimap button, or Escape -> Options -> AddOns -> Xal's Xpedited Routes. The window has a sidebar with these pages:
 
 *   **General** - the skin, minimap button, Lumberjacking (Retail), auto-advance distance
-*   **Floating** - the helper button
+*   **Floating** - the helper button, and (Forever) the Places button with a switch for each kind of place
 *   **Waypoint** - compass arrow style, scale, progress coloring, trail line, the arrival (Forever), new-node and finish sounds
 *   **Map Markers** - switches to show or hide the markers on the minimap and on the world map, marker style, size, opacity, glow, the distance at which markers hide when you're close (15 yards by default; on Forever they dim there instead of disappearing)
 *   **Gather Tally** - the live window and timers, the dungeon button
@@ -83,6 +85,8 @@ Use `/xxr` or `/xalmoras`:
 *   `/xxr route`, `/xxr route stop`, `/xxr route skip`
 *   `/xxr haul` - open the Gather Tally
 *   `/xxr scan` - run a live node scan (Forever; not working right now, see above); `/xxr scan debug` prints what each check found
+*   `/xxr go <place>` - point your arrow at the nearest forge, anvil, fire, mailbox, inn, flight, bank, auction, repair, class trainer or a profession's trainer (Forever); `/xxr forge` is a shortcut
+*   `/xxr maplayer` - show which map layer is running and how many markers it holds
 *   `/xxr sound` - play the arrival, new-node and finish sounds and show what each is set to
 *   `/xxr share` - show node sharing status
 *   `/xxr dungeon` - waypoint a Season 2 Mythic+ dungeon entrance
@@ -112,7 +116,7 @@ Modules load in this order (see the `.toc` files):
 *   `Sounds.lua` - the arrival, new-node and finish sounds
 *   `Beacon.lua`, `DungeonBeacon.lua` - the two compasses; `MarkerRenderer.lua`, `Markers.lua` - marker drawing, pooling and the live look
 *   `QuickButton.lua`, `TomTomBridge.lua`, `SettingsPanel.lua`, `RunTracker.lua`, `DungeonNav.lua`, `MinimapButton.lua`
-*   Forever only: `NodeHighlight.lua`, `ForeverNodeData.lua` and `ForeverImport.lua` (the built-in nodes), `LiveScan.lua`
+*   Forever only: `NodeHighlight.lua`, `ForeverNodeData.lua` and `ForeverImport.lua` (the built-in nodes), `LiveScan.lua`, `ForeverMapLayer.lua` (the own map layer), `Places.lua` and `PlacesData.lua` (the Places button and its positions)
 *   `Sync.lua` - node sharing; `ChatCommands.lua` - slash commands
 
 ## HereBeDragons dependency
@@ -121,6 +125,7 @@ This addon bundles `LibStub`, `CallbackHandler-1.0`, `LibDataBroker-1.1` and `Li
 
 *   **Without it:** recording, routing, the compass and the helper button work; distances fall back to an approximation; map and minimap pins are not drawn.
 *   **With it:** pins on both maps and more accurate distances everywhere.
+*   **On WoW: Forever** it isn't used at all: the addon's own map layer does the same job.
 
 No configuration needed - it's detected automatically.
 
