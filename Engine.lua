@@ -240,7 +240,15 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             -- is simply skipped until it's available.
             Engine.HBD = LibStub("HereBeDragons-2.0", true)
             Engine.HBDPins = LibStub("HereBeDragons-Pins-2.0", true)
-            
+
+            -- WoW: Forever uses our own map layer (ForeverMapLayer.lua), built on the game's
+            -- own map calls: no HereBeDragons needed there. Everywhere else stays as above.
+            local layer = addonTable.ForeverMapLayer
+            if layer and layer.Available() then
+                Engine.HBD, Engine.HBDPins = layer.HBD, layer.HBDPins
+                Engine.ownMapLayer = true
+            end
+
             print("|cff00ccffXal's XR|r loaded successfully.")
             print("|cff888888Xal's XR:|r Route keybinds available in Options -> Key Bindings (not set by default).")
             if not (Engine.HBD and Engine.HBDPins) then
