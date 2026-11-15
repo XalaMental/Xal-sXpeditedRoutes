@@ -380,6 +380,17 @@ function Helpers.ZoneVector(mapID, ax, ay, bx, by)
     return math.sqrt(dx * dx + dy * dy), dx, dy
 end
 
+-- A zone map's real size in yards: { w =, h = }, or nil when the client can't tell.
+function Helpers.ZoneSize(mapID)
+    if not mapID then return nil end
+    local size = zoneSizeCache[mapID]
+    if size == nil then
+        size = MeasureZoneYards(mapID) or false
+        zoneSizeCache[mapID] = size
+    end
+    return size or nil
+end
+
 function Helpers.NodeDistanceYards(Core, mapID, x1, y1, x2, y2)
     local zd = Helpers.ZoneVector(mapID, x1, y1, x2, y2)
     if zd then return zd end
