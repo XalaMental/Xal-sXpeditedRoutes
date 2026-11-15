@@ -22,6 +22,7 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 *   **Gather Tally:** a live window tallying what you gather on a run, with optional timers.
 *   **TomTom hand-off:** if TomTom is installed its arrow follows your route (on by default when TomTom is present).
 *   **Dungeon Nav (Xperimental):** waypoints to Season 2 Mythic+ entrances, with portal routing through Silvermoon for three of them.
+*   **Sounds (every version):** an optional sound when a brand-new node is saved to your database and another when you finish a route. Each has its own switch and about twenty of the game's own sounds to choose from on the Waypoint page. (Not tested on Retail, MoP Classic or Classic Era yet - tell me on Discord if one doesn't play.)
 *   **Skins:** six color skins (Crimson original, Ember, Bronze ledger, Midnight, Indigo slate, Parchment) that switch right away.
 *   **Node sharing (off by default):** swap newly found nodes with other players running the addon.
 
@@ -30,7 +31,7 @@ Works on Retail, WoW: Forever, MoP Classic and Classic Era. Lumberjacking is Ret
 *   **Node Highlight:** the herb or ore the game has picked for your Interact key glows as you approach (green for herbs, orange for ore), and quest objects and chests glow too, in violet-blue. Nine looks: Fire, Beam, Pulse, Sparkle, Spotlight, Rune Circle, Storm Cloud, Target Lock, Halo and Rays. Only the one object in front of you glows - that's the game's limit - and it reaches about 15 yards.
 *   **Live node scan (off by default) - not working right now:** it was built to find which of your saved herb and ore nodes are really there by asking the game's own minimap dots. Blizzard's November 2026 WoW Forever update stopped addons from reading those dots, so the scan can't see any live nodes. It stays in, with a note on the Live Nodes page, until a workaround is found. Live nodes no longer glow or pulse.
 *   **Route from live nodes:** after a scan, a route through the live nodes, nearest first. This depends on the scan, so it's on hold with it.
-*   **Sounds:** an optional sound when you get to a herb or ore (once its glow is fully up) and another when you finish a route. Each can be switched off and set to any of about twenty of the game's own sounds on the Waypoint page.
+*   **Arrival sound:** an optional sound when you get to a herb or ore, once its glow is fully up. Forever only, since it uses the Node Highlight.
 *   **Built-in Classic nodes:** about 22,600 herb and ore nodes across 46 Classic zones are added the first time you log in on Forever. They never replace or remove your own.
 
 ## Settings
@@ -39,7 +40,7 @@ Open them with `/xxr options`, the minimap button, or Escape -> Options -> AddOn
 
 *   **General** - the skin, minimap button, Lumberjacking (Retail), auto-advance distance
 *   **Floating** - the helper button
-*   **Waypoint** - compass arrow style, scale, progress coloring, trail line, the arrival and finish sounds
+*   **Waypoint** - compass arrow style, scale, progress coloring, trail line, the arrival (Forever), new-node and finish sounds
 *   **Map Markers** - switches to show or hide the markers on the minimap and on the world map, marker style, size, opacity, glow, the distance at which markers hide when you're close (15 yards by default; on Forever they dim there instead of disappearing)
 *   **Gather Tally** - the live window and timers, the dungeon button
 *   **Node Highlight** (Forever) - on/off, quest and chest glows, look, range
@@ -82,7 +83,7 @@ Use `/xxr` or `/xalmoras`:
 *   `/xxr route`, `/xxr route stop`, `/xxr route skip`
 *   `/xxr haul` - open the Gather Tally
 *   `/xxr scan` - run a live node scan (Forever; not working right now, see above); `/xxr scan debug` prints what each check found
-*   `/xxr sound` - play the arrival and finish sounds and show what each is set to
+*   `/xxr sound` - play the arrival, new-node and finish sounds and show what each is set to
 *   `/xxr share` - show node sharing status
 *   `/xxr dungeon` - waypoint a Season 2 Mythic+ dungeon entrance
 *   `/xxr stats`, `/xxr cleanup`
@@ -108,7 +109,7 @@ Modules load in this order (see the `.toc` files):
 *   `Bootstrap.lua` - namespace; `BrandStyle.lua` and `XalsSkins.lua` - colors, widgets and the shared skins; `WhatsNew.lua` - the once-per-update splash
 *   `Helpers.lua`, `Engine.lua` - safe API wrappers, startup, saved settings; `API.lua` - the public node-import API used by Xal's Routes Data
 *   `NodeLogger.lua` - recording and position fine-tuning; `PathPlanner.lua` - routes, including routes from live nodes
-*   `Sounds.lua` - the arrival and finish sounds
+*   `Sounds.lua` - the arrival, new-node and finish sounds
 *   `Beacon.lua`, `DungeonBeacon.lua` - the two compasses; `MarkerRenderer.lua`, `Markers.lua` - marker drawing, pooling and the live look
 *   `QuickButton.lua`, `TomTomBridge.lua`, `SettingsPanel.lua`, `RunTracker.lua`, `DungeonNav.lua`, `MinimapButton.lua`
 *   Forever only: `NodeHighlight.lua`, `ForeverNodeData.lua` and `ForeverImport.lua` (the built-in nodes), `LiveScan.lua`
