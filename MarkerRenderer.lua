@@ -53,12 +53,41 @@ local SHAPES = {
     },
 }
 
--- Display order + labels for the Settings panel
-MarkerRenderer.PIN_STYLES = { "hollowx", "star" }
+-- Round styles are real smooth pictures (white with a dark outline baked in, tinted per
+-- node type), not built from straight pieces, so they don't look like a lumpy polygon.
+local TEXTURE_STYLES = {
+    ring = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerRing",
+    bullseye = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerBullseye",
+    crosshair = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerCrosshair",
+    dottedring = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerDottedRing",
+    brackets = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerBrackets",
+    diamond = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerDiamond",
+    sparkle = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerSparkle",
+    hexgem = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerHexGem",
+    pin = "Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\MarkerPin",
+}
+
+-- Display order + labels for the Settings panel. Every style keeps its middle open, so the
+-- game's own node dot still shows through.
+MarkerRenderer.PIN_STYLES = { "hollowx", "star", "ring", "bullseye", "crosshair", "dottedring",
+    "brackets", "diamond", "sparkle", "hexgem", "pin" }
 MarkerRenderer.PIN_STYLE_LABELS = {
     hollowx = "Hollow X",
     star = "Hollow star",
+    ring = "Ring",
+    bullseye = "Bullseye",
+    crosshair = "Crosshair",
+    dottedring = "Dotted ring",
+    brackets = "Brackets",
+    diamond = "Diamond",
+    sparkle = "Sparkle",
+    hexgem = "Hex gem",
+    pin = "Pin",
 }
+
+-- The shape data only (no settings), so the Gather button can draw the same selected style.
+MarkerRenderer.SHAPES = SHAPES
+MarkerRenderer.TEXTURE_STYLES = TEXTURE_STYLES
 
 -- Creates the (initially hidden) texture parts a pin needs to render any style.
 -- Safe to call repeatedly - only builds them once per frame.
@@ -70,6 +99,10 @@ function MarkerRenderer.EnsureParts(pin)
     pin.glowTex = pin:CreateTexture(nil, "BACKGROUND")
     pin.glowTex:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
     pin.glowTex:Hide()
+
+    -- The picture the round styles (ring, solid dot, ring with dot) are drawn with.
+    pin.shapeTex = pin:CreateTexture(nil, "ARTWORK")
+    pin.shapeTex:Hide()
 
     pin.segTex = {}
     for i = 1, MAX_SEGMENTS do
@@ -112,6 +145,7 @@ end
 function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, isTarget, alphaOverride, liveState)
     MarkerRenderer.EnsureParts(pin)
     for _, tex in ipairs(pin.segTex) do tex:Hide() end
+    pin.shapeTex:Hide()
     pin.dotTex:Hide()
 
     local alphaMult = alphaOverride or (XalsXRDB and XalsXRDB.pinAlpha) or 1
@@ -164,13 +198,22 @@ function MarkerRenderer.Draw(pin, styleKey, color, size, thickness, nodeType, is
     end
     pin.glowTex:SetAlpha(1)
 
-    local shape = SHAPES[styleKey] or SHAPES.hollowx
-    local half = size / 2
-    local pts = shape.points
-    local n = #pts
-    for i = 1, n do
-        local p1, p2 = pts[i], pts[(i % n) + 1]
-        PlaceSegment(pin, pin.segTex[i], p1[1] * half, p1[2] * half, p2[1] * half, p2[2] * half, thickness, color, alphaMult)
+    if TEXTURE_STYLES[styleKey] then
+        pin.shapeTex:ClearAllPoints()
+        pin.shapeTex:SetSize(size, size)
+        pin.shapeTex:SetPoint("CENTER", pin, "CENTER", 0, 0)
+        pin.shapeTex:SetTexture(TEXTURE_STYLES[styleKey])
+        pin.shapeTex:SetVertexColor(color[1], color[2], color[3], 0.95 * alphaMult)
+        pin.shapeTex:Show()
+    else
+        local shape = SHAPES[styleKey] or SHAPES.hollowx
+        local half = size / 2
+        local pts = shape.points
+        local n = #pts
+        for i = 1, n do
+            local p1, p2 = pts[i], pts[(i % n) + 1]
+            PlaceSegment(pin, pin.segTex[i], p1[1] * half, p1[2] * half, p2[1] * half, p2[2] * half, thickness, color, alphaMult)
+        end
     end
 
     if isTarget then
