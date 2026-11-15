@@ -54,6 +54,8 @@ local function SaveNode(uiMapID, x, y, gatherType)
     end
     local NODE_LABELS = { mine = "Vein", herb = "Herb", lumber = "Tree" }
     print("|cff00ff00Xal's XR:|r " .. (NODE_LABELS[gatherType] or "Node") .. " saved to your database.")
+    -- Only a genuinely new node plays this: gathering the same vein again just fine-tunes it.
+    if addonTable.Sounds then addonTable.Sounds:Play("newnode") end
     if addonTable.Markers.UpdatePins then
         addonTable.Markers:UpdatePins()
     end
