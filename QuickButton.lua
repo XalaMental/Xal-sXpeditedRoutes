@@ -297,6 +297,9 @@ local function EnsureCompactXParts(slot)
     glow:SetTexture("Interface\\AddOns\\XalsXpeditedRoutes\\Textures\\Glow")
     glow:Hide()
     slot.compactGlow = glow
+    -- The picture used by the round marker styles.
+    slot.compactShape = slot:CreateTexture(nil, "ARTWORK")
+    slot.compactShape:Hide()
 end
 
 -- Positions+rotates a texture to form a line from (x1,y1) to (x2,y2), both
@@ -321,11 +324,29 @@ end
 local function DrawCompactX(slot, color, size, thickness, isTarget, glowColor)
     EnsureCompactXParts(slot)
     local half = size / 2
-    local n = #COMPACT_X_POINTS
-    for i = 1, n do
-        local p1, p2 = COMPACT_X_POINTS[i], COMPACT_X_POINTS[(i % n) + 1]
-        PlaceCompactSegment(slot, slot.compactSeg[i],
-            p1[1] * half, p1[2] * half, p2[1] * half, p2[2] * half, thickness, color)
+    -- The shape follows the marker style picked on the Map Markers page (only the shape:
+    -- the colors, solid look and no opacity/glow settings stay this button's own).
+    local styleKey = (XalsXRDB and XalsXRDB.pinStyle) or "hollowx"
+    local MR = addonTable.MarkerRenderer
+    local textureStyle = MR and MR.TEXTURE_STYLES and MR.TEXTURE_STYLES[styleKey]
+    local shape = MR and MR.SHAPES and MR.SHAPES[styleKey]
+    local pts = shape and shape.points or COMPACT_X_POINTS
+    for _, seg in ipairs(slot.compactSeg) do seg:Hide() end
+    slot.compactShape:Hide()
+    if textureStyle then
+        slot.compactShape:ClearAllPoints()
+        slot.compactShape:SetSize(size, size)
+        slot.compactShape:SetPoint("CENTER", slot, "CENTER", 0, 0)
+        slot.compactShape:SetTexture(textureStyle)
+        slot.compactShape:SetVertexColor(color[1], color[2], color[3], 1)
+        slot.compactShape:Show()
+    else
+        local n = #pts
+        for i = 1, n do
+            local p1, p2 = pts[i], pts[(i % n) + 1]
+            PlaceCompactSegment(slot, slot.compactSeg[i],
+                p1[1] * half, p1[2] * half, p2[1] * half, p2[2] * half, thickness, color)
+        end
     end
     if isTarget and glowColor then
         local glowSize = size * 2.2
