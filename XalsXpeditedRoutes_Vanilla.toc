@@ -15,7 +15,7 @@
 ## SavedVariables: XalsXRDB
 ## SavedVariablesPerCharacter: XalsXRCharDB
 ## IconTexture: Interface\AddOns\XalsXpeditedRoutes\Textures\AddonIcon
-## OptionalDeps: HereBeDragons
+## OptionalDeps: HereBeDragons, ShortestPathForever
 
 
 libs\LibStub\LibStub.lua
