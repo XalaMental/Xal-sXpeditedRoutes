@@ -1,5 +1,18 @@
 # Xal's Xpedited Routes - Changelog
 
+## 2.8.0 - November 15, 2026
+
+---
+
+When I'm out farming I'm not always staring at the screen, so I wanted the addon to tell me the things I'd otherwise miss. This update adds a sound for when a brand-new node gets saved to your database, next to the finish-the-route sound, and both of those now work on every version of the game, not just Forever. The arrive-at-a-node sound stays Forever-only because it rides on the glow, so it's hidden anywhere it can't work. I haven't been able to test the new sounds on Retail, MoP Classic or Classic Era, so if one doesn't play for you, leave a comment here or come tell me on Discord and I'll sort it out. Thanks for being part of the Xal family - hope it makes your farming a lot easier.
+
+### 🆕 New
+- **Sound for a new node** - an optional sound when a node you gather is saved to your database for the first time. Gathering the same node again stays quiet. It has its own switch and about twenty of the game's own sounds to pick from on the Waypoint page, on every version.
+- **Sound for finishing a route** - now offered on every version, with the same switch and sound picker. (Not tested on Retail, MoP Classic or Classic Era yet.)
+
+### 🔧 Fixed
+- **Arrival sound setting on other versions** - the "sound when you arrive at a node" setting only works on Forever, so it's now hidden everywhere else instead of sitting there doing nothing.
+
 ## 2.7.4 - November 13, 2026
 
 ---
