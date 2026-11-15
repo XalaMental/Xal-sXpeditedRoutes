@@ -31,11 +31,11 @@ W.WHATS_NEW = {
     intro = "",
     sections = {
         { heading = "New", items = {
-            "A sound when a brand-new node is saved to your database, on every version. Pick it on the Waypoint page.",
-            "The finish-a-route sound now works on every version too. (Not tested on Retail, MoP Classic or Classic Era yet - tell me if one doesn't play.)",
-        } },
-        { heading = "Fixed", items = {
-            "The arrival sound setting is only shown on WoW: Forever, where it works.",
+            "Places button (WoW: Forever): a small separate icon. Pick a forge, anvil, cooking fire, mailbox, inn, flight master, bank, auction house, repair vendor or a trainer, and your arrow points at the nearest one on your continent. Turn any of them off on the Floating page.",
+            "Shortest Path Forever (optional): if you have it, it plans the walking route to a place and draws it.",
+            "Eleven marker styles: Ring, Bullseye, Crosshair, Dotted ring, Brackets, Diamond, Sparkle, Hex gem and Pin join Hollow X and Hollow star. Pick one on the Map Markers page; the Gather button follows it.",
+            "On Forever the markers now use the addon's own map layer, so HereBeDragons isn't needed there.",
+            "/xxr go <place> and /xxr maplayer.",
         } },
     },
 }
