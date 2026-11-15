@@ -9,7 +9,7 @@
 ## SavedVariables: XalsXRDB
 ## SavedVariablesPerCharacter: XalsXRCharDB
 ## IconTexture: Interface\AddOns\XalsXpeditedRoutes\Textures\AddonIcon
-## OptionalDeps: HereBeDragons
+## OptionalDeps: HereBeDragons, ShortestPathForever
 
 
 libs\LibStub\LibStub.lua
@@ -23,6 +23,7 @@ XalsSkins.lua
 WhatsNew.lua
 Helpers.lua
 Engine.lua
+ForeverMapLayer.lua
 API.lua
 NodeLogger.lua
 Sounds.lua
@@ -36,6 +37,8 @@ TomTomBridge.lua
 SettingsPanel.lua
 RunTracker.lua
 DungeonNav.lua
+PlacesData.lua
+Places.lua
 MinimapButton.lua
 NodeHighlight.lua
 ForeverNodeData.lua
